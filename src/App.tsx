@@ -41,22 +41,33 @@ function App() {
     return <Loader fullScreen />;
   }
 
-  // Check if user is logged in and redirect accordingly
-  const defaultRedirect = session ? (
-    // Check user role in session to redirect to the right dashboard
-    <Navigate to="/customer" replace />
-  ) : (
-    <Navigate to="/login" replace />
-  );
+  // Determine user role for redirect
+  let userRole: string | null = null;
+  if (session && session.user && session.user.user_metadata && session.user.user_metadata.role) {
+    userRole = session.user.user_metadata.role;
+  }
+
+  // Default redirect based on session and role
+  let defaultRedirect = <Navigate to="/login" replace />;
+  if (session) {
+    // If userRole is available, redirect accordingly
+    if (userRole === 'admin') {
+      defaultRedirect = <Navigate to="/admin" replace />;
+    } else if (userRole === 'driver') {
+      defaultRedirect = <Navigate to="/driver" replace />;
+    } else {
+      defaultRedirect = <Navigate to="/customer" replace />;
+    }
+  }
 
   return (
     <Suspense fallback={<Loader fullScreen />}>
       <Routes>
-        {/* Landing Page Route */}
-        <Route path="/" element={<LandingPage />} />
-        {/* Auth Routes */}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+        {/* Landing Page Route - only for logged out users */}
+        <Route path="/" element={session ? defaultRedirect : <LandingPage />} />
+        {/* Auth Routes - only for logged out users */}
+        <Route path="/login" element={session ? defaultRedirect : <LoginPage />} />
+        <Route path="/register" element={session ? defaultRedirect : <RegisterPage />} />
 
         {/* Admin Routes */}
         <Route path="/admin" element={<AdminLayout />}>
