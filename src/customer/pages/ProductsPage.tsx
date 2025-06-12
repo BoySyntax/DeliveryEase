@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { Search, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import ProductCard from '../components/ProductCard';
 import Input from '../../ui/components/Input';
@@ -20,6 +20,8 @@ type Product = {
   image_url: string;
   category_id: string;
   quantity?: number;
+  unit?: string;
+  unit_quantity?: number;
 };
 
 export default function ProductsPage() {
@@ -29,6 +31,7 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [loadingCategories, setLoadingCategories] = useState(true);
+  const [addingToCart, setAddingToCart] = useState<string | null>(null);
 
   const categoryId = searchParams.get('category') || '';
   const searchQuery = searchParams.get('search') || '';
@@ -113,6 +116,7 @@ export default function ProductsPage() {
   };
 
   const handleAddToCart = async (productId: string) => {
+    setAddingToCart(productId);
     try {
       // Get user's cart or create new one
       const { data: { user } } = await supabase.auth.getUser();
@@ -167,6 +171,8 @@ export default function ProductsPage() {
     } catch (error) {
       console.error('Error adding to cart:', error);
       toast.error('Failed to add item to cart');
+    } finally {
+      setAddingToCart(null);
     }
   };
 
@@ -176,15 +182,14 @@ export default function ProductsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row gap-4">
+      <div className="flex flex-row gap-2 items-center mb-2 justify-center">
         <Input
           placeholder="Search products..."
-          icon={<Search size={18} />}
+          icon={<Search size={16} />}
           value={searchQuery}
           onChange={(e) => handleSearch(e.target.value)}
-          className="md:w-64"
+          className="w-[220px] h-8 py-1 text-xs rounded-md border-gray-300 focus:border-primary-500 focus:ring-primary-500 shadow-sm pl-8"
         />
-        
         <Select
           options={[
             { value: '', label: 'All Categories' },
@@ -195,12 +200,12 @@ export default function ProductsPage() {
           ]}
           value={categoryId}
           onChange={(e) => handleCategoryChange(e.target.value)}
-          className="md:w-48"
+          className="w-[180px] h-8 px-2 py-1 text-xs rounded-md border-gray-300 focus:border-primary-500 focus:ring-primary-500 shadow-sm"
         />
       </div>
 
       {loadingProducts ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 gap-4">
           {[...Array(8)].map((_, index) => (
             <div key={index} className="animate-pulse">
               <div className="aspect-square bg-gray-200 rounded-lg mb-4"></div>
@@ -214,7 +219,7 @@ export default function ProductsPage() {
           <p className="text-gray-500">No products found</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 gap-5">
           {products.map((product) => (
             <ProductCard
               key={product.id}
@@ -223,7 +228,11 @@ export default function ProductsPage() {
               price={product.price}
               imageUrl={product.image_url}
               quantity={product.quantity}
+              unit={product.unit}
+              unit_quantity={product.unit_quantity}
               onAddToCart={() => handleAddToCart(product.id)}
+              loading={addingToCart === product.id}
+              className="border border-gray-200"
             />
           ))}
         </div>

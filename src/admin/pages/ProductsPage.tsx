@@ -17,6 +17,9 @@ type Product = {
   image_url: string;
   category_id: string;
   quantity?: number;
+  unit?: string;
+  unit_quantity?: number;
+  featured?: boolean;
   category: {
     name: string;
   };
@@ -108,6 +111,20 @@ export default function ProductsPage() {
     setShowForm(true);
   };
 
+  const handleToggleFeatured = async (product: Product) => {
+    const newFeatured = !product.featured;
+    const { error } = await supabase
+      .from('products')
+      .update({ featured: newFeatured })
+      .eq('id', product.id);
+    if (error) {
+      toast.error('Failed to update featured status');
+      return;
+    }
+    setProducts((prev) => prev.map((p) => p.id === product.id ? { ...p, featured: newFeatured } : p));
+    toast.success(`Product ${newFeatured ? 'marked as' : 'removed from'} featured`);
+  };
+
   if (loading) {
     return <Loader label="Loading products..." />;
   }
@@ -150,14 +167,14 @@ export default function ProductsPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {products.map((product) => (
           <Card key={product.id}>
             <div className="relative w-full aspect-square min-h-[200px] bg-gray-100 rounded-t-lg overflow-hidden flex items-center justify-center">
               <img
                 src={product.image_url}
                 alt={product.name}
-                className="max-w-full max-h-full w-auto h-auto object-contain mx-auto my-auto"
+                className="object-contain w-full h-full"
                 style={{ display: 'block' }}
                 onError={(e) => {
                   if (e.currentTarget.src !== window.location.origin + '/placeholder.png') {
@@ -165,22 +182,36 @@ export default function ProductsPage() {
                   }
                 }}
               />
+              {product.featured && (
+                <span className="absolute top-2 left-2 bg-yellow-400 text-xs font-bold px-2 py-1 rounded">Featured</span>
+              )}
             </div>
-            <CardContent className="p-4">
-              <h3 className="text-lg font-medium text-gray-900">{product.name}</h3>
-              <p className="text-sm text-gray-500 mt-1">
+            <CardContent className="p-2 sm:p-4">
+              <h3 className="text-base sm:text-lg font-medium text-gray-900">{product.name}</h3>
+              <p className="text-xs sm:text-sm text-gray-500 mt-1">
                 Category: {product.category.name}
               </p>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-xs sm:text-sm text-gray-500 mt-1">
                 Quantity: {product.quantity ?? 0}
               </p>
               <p className="text-primary-600 font-semibold mt-2">
                 {formatCurrency(product.price)}
+                {product.unit ? ` per ${product.unit}` : ''}
+                {product.unit && product.unit !== 'piece' && product.unit_quantity ? ` (${product.unit_quantity} pcs)` : ''}
               </p>
-              <p className="text-sm text-gray-600 mt-2 line-clamp-2">
+              <p className="text-xs sm:text-sm text-gray-600 mt-2 line-clamp-2">
                 {product.description}
               </p>
-              
+              <div className="flex items-center mt-2">
+                <input
+                  type="checkbox"
+                  checked={!!product.featured}
+                  onChange={() => handleToggleFeatured(product)}
+                  id={`featured-toggle-${product.id}`}
+                  className="mr-2"
+                />
+                <label htmlFor={`featured-toggle-${product.id}`} className="text-xs">Featured</label>
+              </div>
               <div className="mt-4 flex space-x-2">
                 <Button
                   variant="outline"
@@ -237,14 +268,20 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
     image_url: product?.image_url || '',
     category_id: product?.category_id || (categories[0]?.id ?? ''),
     quantity: product?.quantity?.toString() || '',
+    unit: product?.unit || '',
+    unit_quantity: product?.unit_quantity?.toString() || '',
+    featured: product?.featured ?? false,
   });
   const [saving, setSaving] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setForm({ ...form, [name]: value });
+    const { name, value, type, checked } = e.target;
+    setForm({
+      ...form,
+      [name]: type === 'checkbox' ? checked : value,
+    });
   };
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -308,6 +345,9 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
       price,
       quantity,
       image_url: imageUrl,
+      unit: form.unit,
+      unit_quantity: form.unit && form.unit !== 'piece' ? parseInt(form.unit_quantity, 10) : null,
+      featured: !!form.featured,
     };
 
     console.log('Payload:', payload);
@@ -376,6 +416,36 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
           required
           className="w-full border p-2 rounded"
         />
+        <select
+          name="unit"
+          value={form.unit}
+          onChange={handleChange}
+          required
+          className="w-full border p-2 rounded"
+        >
+          <option value="">Select unit</option>
+          <option value="piece">Piece</option>
+          <option value="box">Box</option>
+          <option value="bag">Bag</option>
+          <option value="pack">Pack</option>
+          <option value="set">Set</option>
+          <option value="kg">Kg</option>
+          <option value="liter">Liter</option>
+          <option value="dozen">Dozen</option>
+          <option value="other">Other</option>
+        </select>
+        {form.unit && form.unit !== 'piece' && (
+          <input
+            name="unit_quantity"
+            placeholder={`How many pcs per ${form.unit}?`}
+            value={form.unit_quantity}
+            onChange={handleChange}
+            type="number"
+            min="1"
+            required
+            className="w-full border p-2 rounded"
+          />
+        )}
         <input
           type="file"
           accept="image/*"
@@ -408,6 +478,17 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
             ))
           )}
         </select>
+        <div className="flex items-center">
+          <input
+            type="checkbox"
+            name="featured"
+            id="featured"
+            checked={!!form.featured}
+            onChange={handleChange}
+            className="mr-2"
+          />
+          <label htmlFor="featured" className="text-sm">Featured product</label>
+        </div>
         <div className="flex justify-end space-x-2">
           <button
             type="button"

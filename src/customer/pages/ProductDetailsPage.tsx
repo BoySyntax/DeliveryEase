@@ -17,6 +17,8 @@ type Product = {
   quantity: number;
   category_id: string;
   created_at: string | null;
+  unit?: string;
+  unit_quantity?: number;
 };
 
 export default function ProductDetailsPage() {
@@ -164,6 +166,8 @@ export default function ProductDetailsPage() {
             <h1 className="text-3xl font-bold text-gray-900">{product.name}</h1>
             <p className="text-2xl font-semibold text-primary mt-2">
               {formatCurrency(product.price)}
+              {product.unit ? ` per ${product.unit}` : ''}
+              {product.unit && product.unit !== 'piece' && product.unit_quantity ? ` (${product.unit_quantity} pcs)` : ''}
             </p>
           </div>
 

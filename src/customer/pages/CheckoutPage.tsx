@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { ArrowLeft, Upload } from 'lucide-react';
@@ -8,6 +8,7 @@ import Button from '../../ui/components/Button';
 import Input from '../../ui/components/Input';
 import { formatCurrency } from '../../lib/utils';
 import Loader from '../../ui/components/Loader';
+import instapayQR from '../../assets/instapay-qr.png';
 
 type CheckoutForm = {
   addressId: string;
@@ -40,6 +41,7 @@ type Address = {
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [uploadingProof, setUploadingProof] = useState(false);
@@ -48,6 +50,9 @@ export default function CheckoutPage() {
   const [loadingAddresses, setLoadingAddresses] = useState(true);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const { register, handleSubmit, formState: { errors }, setValue } = useForm<CheckoutForm>();
+
+  const params = new URLSearchParams(location.search);
+  const isSingleProductCheckout = !!params.get('product');
 
   useEffect(() => {
     async function loadCartAndAddresses() {
@@ -62,38 +67,56 @@ export default function CheckoutPage() {
           return;
         }
 
-        // Load Cart Items
-        const { data: cart, error: cartError } = await supabase
-          .from('carts')
-          .select('id')
-          .eq('customer_id', user.id)
-          .single();
+        // Check for direct product checkout via query params
+        const productId = params.get('product');
+        const qty = parseInt(params.get('qty') || '1', 10);
+        if (productId) {
+          // Single product checkout
+          const { data: product, error: productError } = await supabase
+            .from('products')
+            .select('id, name, price, quantity')
+            .eq('id', productId)
+            .single();
+          if (productError || !product) {
+            toast.error('Product not found');
+            navigate('/customer/products');
+            return;
+          }
+          setCartItems([{ product, quantity: qty }]);
+        } else {
+          // Load Cart Items
+          const { data: cart, error: cartError } = await supabase
+            .from('carts')
+            .select('id')
+            .eq('customer_id', user.id)
+            .single();
 
-        if (cartError) throw new Error('Error fetching cart: ' + cartError.message);
+          if (cartError) throw new Error('Error fetching cart: ' + cartError.message);
 
-        if (!cart) {
-          navigate('/customer/cart');
-          return;
-        }
+          if (!cart) {
+            navigate('/customer/cart');
+            return;
+          }
 
-        const { data: items, error: itemsError } = await supabase
-          .from('cart_items')
-          .select(`
-            id,
-            quantity,
-            product:products (
+          const { data: items, error: itemsError } = await supabase
+            .from('cart_items')
+            .select(`
               id,
-              name,
-              price,
-              quantity
-            )
-          `)
-          .eq('cart_id', cart.id);
+              quantity,
+              product:products (
+                id,
+                name,
+                price,
+                quantity
+              )
+            `)
+            .eq('cart_id', cart.id);
 
-        if (itemsError) throw new Error('Error fetching cart items: ' + itemsError.message);
+          if (itemsError) throw new Error('Error fetching cart items: ' + itemsError.message);
 
-        if (items) {
-          setCartItems(items);
+          if (items) {
+            setCartItems(items);
+          }
         }
 
         // Load User Addresses and Filter by Mindanao
@@ -123,7 +146,7 @@ export default function CheckoutPage() {
     }
 
     loadCartAndAddresses();
-  }, [navigate, setValue]);
+  }, [navigate, setValue, location.search]);
 
   const total = cartItems.reduce(
     (sum, item) => sum + item.product.price * item.quantity,
@@ -131,6 +154,11 @@ export default function CheckoutPage() {
   );
 
   const onSubmit = async (data: CheckoutForm) => {
+    // Check for payment proof before proceeding
+    if (!selectedFile) {
+      toast.error('Please upload a payment proof before placing your order.');
+      return;
+    }
     setLoading(true);
     try {
       // Check user authentication
@@ -148,38 +176,44 @@ export default function CheckoutPage() {
           return;
       }
 
-      // Get cart items with product details (re-fetch to ensure latest data)
-      const { data: cart, error: cartError } = await supabase
-        .from('carts')
-        .select('id')
-        .eq('customer_id', user.id)
-        .single();
+      // If single-product checkout, skip cart fetch and use cartItems
+      const productId = params.get('product');
+      let itemsToOrder = cartItems;
+      if (!productId) {
+        // Get cart items with product details (re-fetch to ensure latest data)
+        const { data: cart, error: cartError } = await supabase
+          .from('carts')
+          .select('id')
+          .eq('customer_id', user.id)
+          .single();
 
-      if (cartError) throw new Error('Error fetching cart: ' + cartError.message);
+        if (cartError) throw new Error('Error fetching cart: ' + cartError.message);
 
-      const { data: cartItems, error: itemsError } = await supabase
-        .from('cart_items')
-        .select(`
-          id,
-          quantity,
-          product:products (
+        const { data: cartItemsData, error: itemsError } = await supabase
+          .from('cart_items')
+          .select(`
             id,
-            name,
-            price,
-            quantity
-          )
-        `)
-        .eq('cart_id', cart.id);
+            quantity,
+            product:products (
+              id,
+              name,
+              price,
+              quantity
+            )
+          `)
+          .eq('cart_id', cart.id);
 
-      if (itemsError) throw new Error('Error fetching cart items: ' + itemsError.message);
+        if (itemsError) throw new Error('Error fetching cart items: ' + itemsError.message);
 
-      if (!cartItems || cartItems.length === 0) {
-        toast.error('Your cart is empty');
-        return;
+        if (!cartItemsData || cartItemsData.length === 0) {
+          toast.error('Your cart is empty');
+          return;
+        }
+        itemsToOrder = cartItemsData;
       }
 
       // Validate stock availability
-      const outOfStockItems = cartItems.filter(
+      const outOfStockItems = itemsToOrder.filter(
         item => !item.product.quantity || item.quantity > item.product.quantity
       );
 
@@ -190,7 +224,7 @@ export default function CheckoutPage() {
       }
 
       // Calculate total
-      const total = cartItems.reduce(
+      const total = itemsToOrder.reduce(
         (sum, item) => sum + item.product.price * item.quantity,
         0
       );
@@ -221,7 +255,7 @@ export default function CheckoutPage() {
       if (orderError) throw new Error('Error creating order: ' + orderError.message);
 
       // Create order items
-      const orderItems = cartItems.map(item => ({
+      const orderItems = itemsToOrder.map(item => ({
         order_id: order.id,
         product_id: item.product.id,
         quantity: item.quantity,
@@ -236,7 +270,7 @@ export default function CheckoutPage() {
       if (itemsInsertError) throw new Error('Error creating order items: ' + itemsInsertError.message);
 
       // Update product quantities
-      for (const item of cartItems) {
+      for (const item of itemsToOrder) {
         const { error: updateError } = await supabase
           .from('products')
           .update({ 
@@ -247,13 +281,21 @@ export default function CheckoutPage() {
         if (updateError) throw new Error('Error updating product quantity: ' + updateError.message);
       }
 
-      // Clear cart
-      const { error: clearCartError } = await supabase
-        .from('cart_items')
-        .delete()
-        .eq('cart_id', cart.id);
-
-      if (clearCartError) throw new Error('Error clearing cart: ' + clearCartError.message);
+      // If not single-product checkout, clear cart
+      if (!productId) {
+        const { data: cart, error: cartError } = await supabase
+          .from('carts')
+          .select('id')
+          .eq('customer_id', user.id)
+          .single();
+        if (cart && !cartError) {
+          const { error: clearCartError } = await supabase
+            .from('cart_items')
+            .delete()
+            .eq('cart_id', cart.id);
+          if (clearCartError) throw new Error('Error clearing cart: ' + clearCartError.message);
+        }
+      }
 
       // Handle file upload if a file was selected
       if (selectedFile) {
@@ -364,7 +406,7 @@ export default function CheckoutPage() {
     }
   };
 
-  if (loadingCart || loadingAddresses) {
+  if ((loadingCart || loadingAddresses) && !isSingleProductCheckout) {
     return <Loader label={loadingCart ? "Loading cart..." : "Loading addresses..."} />;
   }
 
@@ -372,7 +414,7 @@ export default function CheckoutPage() {
     return <Loader label="Processing order..." />;
   }
 
-  if (cartItems.length === 0) {
+  if (cartItems.length === 0 && !isSingleProductCheckout) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500">Your cart is empty</p>
@@ -387,133 +429,84 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-2xl mx-auto">
       <Button
         variant="ghost"
         icon={<ArrowLeft size={18} />}
         onClick={() => navigate('/customer/cart')}
         className="mb-6"
       >
-        Back to Cart
+        {!isSingleProductCheckout && 'Back to Cart'}
       </Button>
 
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="space-y-6">
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Delivery Information
-            </h2>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              {userAddresses.length > 0 ? (
-                <div className="space-y-4">
-                  <label className="block text-lg font-semibold text-gray-900">Select Delivery Address</label>
-                  {userAddresses.map(address => (
-                    <div 
-                      key={address.id} 
-                      className="bg-gray-50 p-4 rounded-lg border border-gray-200 flex items-start space-x-3"
-                    >
-                      <input
-                        type="radio"
-                        id={`address-${address.id}`}
-                        value={address.id}
-                        {...register('addressId', { required: 'Please select an address' })}
-                        className="mt-1 h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
-                      />
-                      <label htmlFor={`address-${address.id}`} className="flex-1 cursor-pointer">
-                        <p className="text-sm font-medium text-gray-900">
-                          {address.full_name} {address.phone ? `(+63) ${address.phone}` : ''}
-                        </p>
-                        <p className="text-sm text-gray-500 mt-1">
-                          {address.street_address}<br/>
-                          {address.barangay}, {address.city}, {address.province}, {address.region} {address.postal_code}
-                        </p>
-                        {address.label && (
-                          <span className="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            {address.label}
-                          </span>
-                        )}
-                      </label>
-                    </div>
-                  ))}
-                  {errors.addressId && (
-                    <p className="mt-1 text-sm text-red-600">{errors.addressId.message}</p>
-                  )}
-                  <Button
-                    variant="outline"
-                    fullWidth
-                    onClick={() => navigate('/customer/add-address')}
-                  >
-                    Add a new address
-                  </Button>
-                </div>
-              ) : (
-                <div className="text-center text-gray-500">
-                  No addresses found in Mindanao. Please add an address in your profile.
-                  <Button
-                    variant="outline"
-                    className="mt-4"
-                    onClick={() => navigate('/customer/add-address')}
-                  >
-                    Add Address
-                  </Button>
-                </div>
-              )}
-              
-              <Input
-                label="Order Notes (Optional)"
-                error={errors.notes?.message}
-                {...register('notes')}
-              />
-
-              <Button
-                type="submit"
-                fullWidth
-                isLoading={loading}
-                disabled={userAddresses.length === 0 || loading}
-              >
-                Place Order
-              </Button>
-            </form>
-          </div>
-
-          {/* Payment Proof Selection Section */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="space-y-4">
-              {/* Hidden file input */}
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/jpg"
-                onChange={handleFileSelect} // Use the new handler for selection
-                className="hidden"
-                id="proof-upload"
-                disabled={loading || uploadingProof} // Disable while placing order or uploading
-              />
-              {/* Label acts as the clickable button */}
-              <label 
-                htmlFor="proof-upload"
-                className={`block w-full p-4 border border-dashed rounded-lg text-center ${(loading || uploadingProof) ? 'cursor-not-allowed opacity-50 bg-gray-100' : 'cursor-pointer hover:border-primary-600'}`}
-              >
-                <div className="flex flex-col items-center">
-                  <Upload size={24} className={`text-gray-400 ${(selectedFile || loading || uploadingProof) ? '' : 'group-hover:text-primary-600'}`} />
-                  {selectedFile ? (
-                    <p className="mt-2 text-sm text-gray-600 font-medium">Selected file: {selectedFile.name}</p>
-                  ) : (
-                    <>
-                      <p className="mt-2 text-sm text-gray-600 font-medium">Click to select payment proof (Optional)</p>
-                      <p className="text-xs text-gray-500">JPEG, PNG, JPG up to 5MB</p>
-                    </>
-                  )}
-                </div>
-              </label>
-            </div>
-          </div>
-        </div>
-
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {/* 2. Delivery Information */}
         <div className="bg-white rounded-lg shadow-sm p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            Delivery Information
+          </h2>
+          {userAddresses.length > 0 ? (
+            <div className="space-y-4">
+              <label className="block text-lg font-semibold text-gray-900">Select Delivery Address</label>
+              {userAddresses.map(address => (
+                <div 
+                  key={address.id} 
+                  className="bg-gray-50 p-4 rounded-lg border border-gray-200 flex items-start space-x-3"
+                >
+                  <input
+                    type="radio"
+                    id={`address-${address.id}`}
+                    value={address.id}
+                    {...register('addressId', { required: 'Please select an address' })}
+                    className="mt-1 h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
+                  />
+                  <label htmlFor={`address-${address.id}`} className="flex-1 cursor-pointer">
+                    <p className="text-sm font-medium text-gray-900">
+                      {address.full_name} {address.phone ? `(+63) ${address.phone}` : ''}
+                    </p>
+                    <p className="text-sm text-gray-500 mt-1">
+                      {address.street_address}<br/>
+                      {address.barangay}, {address.city}, {address.province}, {address.region} {address.postal_code}
+                    </p>
+                    {address.label && (
+                      <span className="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        {address.label}
+                      </span>
+                    )}
+                  </label>
+                </div>
+              ))}
+              {errors.addressId && (
+                <p className="mt-1 text-sm text-red-600">{errors.addressId.message}</p>
+              )}
+              <Button
+                variant="outline"
+                fullWidth
+                onClick={() => navigate('/customer/add-address')}
+                type="button"
+              >
+                Add a new address
+              </Button>
+            </div>
+          ) : (
+            <div className="text-center text-gray-500">
+              No addresses found in Mindanao. Please add an address in your profile.
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => navigate('/customer/add-address')}
+                type="button"
+              >
+                Add Address
+              </Button>
+            </div>
+          )}
+        </div>
+        {/* 1. Order Summary at the top (now second) */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
             Order Summary
           </h2>
-          
           <div className="divide-y">
             {cartItems.map((item) => (
               <div key={item.product.id} className="py-3 flex justify-between">
@@ -527,7 +520,6 @@ export default function CheckoutPage() {
               </div>
             ))}
           </div>
-
           <div className="border-t mt-4 pt-4">
             <div className="flex justify-between">
               <span className="text-base font-medium text-gray-900">Total</span>
@@ -537,7 +529,134 @@ export default function CheckoutPage() {
             </div>
           </div>
         </div>
-      </div>
+        {/* QR Code and Payment Proof - Combined Modern Flex Container */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6 flex flex-row items-stretch gap-6 overflow-hidden">
+          {/* Left: QR Code and Payment Info */}
+          <div className="flex flex-col items-center justify-center w-1/2">
+            <div className="flex items-center bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 mb-4 w-full max-w-xs">
+              <svg className="w-5 h-5 text-blue-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 20a8 8 0 100-16 8 8 0 000 16z" /></svg>
+              <span className="text-sm text-blue-800 font-medium">Scan the QR to pay. Please pay the exact amount.</span>
+            </div>
+            <img
+              src={instapayQR}
+              alt="InstaPay QR Code"
+              className="w-48 h-48 md:w-56 md:h-56 lg:w-64 lg:h-64 object-contain mb-2"
+            />
+            <a
+              href={instapayQR}
+              download="instapay-qr.png"
+              className="mt-2 inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-primary-500 to-blue-500 text-white rounded-full shadow-lg hover:from-blue-600 hover:to-primary-600 transition font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2"
+              style={{ minWidth: '180px' }}
+            >
+              <svg xmlns='http://www.w3.org/2000/svg' className='h-5 w-5' fill='none' viewBox='0 0 24 24' stroke='currentColor' strokeWidth={2}>
+                <path strokeLinecap='round' strokeLinejoin='round' d='M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4' />
+              </svg>
+              Download QR
+            </a>
+            <p className="text-gray-500 text-sm">Transfer fees may apply.</p>
+            <p className="text-primary-600 font-bold text-lg tracking-wider mt-1">JA****A O.</p>
+          </div>
+          {/* Divider for large screens */}
+          <div className="hidden md:block w-px bg-gray-200 mx-6"></div>
+          {/* Right: Proof of Payment Upload */}
+          <div className="flex flex-col justify-center w-1/2">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+              Proof of Payment
+            </h2>
+            <div className="space-y-4">
+              {/* Modern drag-and-drop upload area */}
+              <div
+                className={`relative flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-6 transition-all duration-200 ${
+                  loading || uploadingProof
+                    ? 'bg-gray-100 opacity-60 cursor-not-allowed'
+                    : 'bg-gray-50 hover:border-primary-500 hover:bg-blue-50 cursor-pointer'
+                }`}
+                style={{ minHeight: '160px' }}
+                onClick={() => {
+                  if (!loading && !uploadingProof) document.getElementById('proof-upload')?.click();
+                }}
+                onDragOver={e => {
+                  e.preventDefault();
+                  if (!loading && !uploadingProof) e.currentTarget.classList.add('border-primary-500', 'bg-blue-50');
+                }}
+                onDragLeave={e => {
+                  e.preventDefault();
+                  if (!loading && !uploadingProof) e.currentTarget.classList.remove('border-primary-500', 'bg-blue-50');
+                }}
+                onDrop={e => {
+                  e.preventDefault();
+                  if (!loading && !uploadingProof && e.dataTransfer.files[0]) {
+                    const fileInput = document.getElementById('proof-upload') as HTMLInputElement;
+                    if (fileInput) {
+                      const dt = new DataTransfer();
+                      dt.items.add(e.dataTransfer.files[0]);
+                      fileInput.files = dt.files;
+                      fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                  }
+                }}
+              >
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/jpg"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  id="proof-upload"
+                  disabled={loading || uploadingProof}
+                />
+                <div className="flex flex-col items-center w-full">
+                  <Upload size={32} className={`mb-2 ${loading || uploadingProof ? 'text-gray-300' : 'text-primary-500 group-hover:text-primary-600'}`} />
+                  {selectedFile ? (
+                    <>
+                      <p className="text-sm text-gray-700 font-medium mb-2">Selected file: {selectedFile.name}</p>
+                      {selectedFile.type.startsWith('image/') && (
+                        <img
+                          src={URL.createObjectURL(selectedFile)}
+                          alt="Preview"
+                          className="rounded-lg border max-h-32 mb-2 object-contain shadow"
+                          style={{ maxWidth: '180px' }}
+                        />
+                      )}
+                      <button
+                        type="button"
+                        className="mt-1 text-xs text-red-500 hover:underline"
+                        onClick={e => {
+                          e.stopPropagation();
+                          setSelectedFile(null);
+                        }}
+                        disabled={loading || uploadingProof}
+                      >
+                        Remove
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-base text-gray-700 font-semibold mb-1">Click or drag file to upload</p>
+                      <p className="text-xs text-gray-500">JPEG, PNG, JPG up to 5MB</p>
+                    </>
+                  )}
+                  {(loading || uploadingProof) && (
+                    <p className="mt-2 text-sm text-blue-500 font-medium flex items-center gap-2">
+                      <svg className="animate-spin h-4 w-4 mr-1 text-blue-500" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg>
+                      Uploading...
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* 5. Place Order Button */}
+        <div className="bg-white rounded-lg shadow-sm p-6 flex justify-end">
+          <Button
+            type="submit"
+            isLoading={loading}
+            disabled={userAddresses.length === 0 || loading}
+          >
+            Place Order
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }

@@ -1,10 +1,11 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Package, Tags, Users, ShoppingBag, LogOut } from 'lucide-react';
+import { LayoutDashboard, Package, Tags, Users, ShoppingBag, LogOut, Truck } from 'lucide-react';
 import { useProfile } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import Loader from '../ui/components/Loader';
 import { cn } from '../lib/utils';
 import Button from '../ui/components/Button';
+import logo from '../assets/logo.png';
 
 export default function AdminLayout() {
   const { profile, loading } = useProfile();
@@ -39,7 +40,7 @@ export default function AdminLayout() {
       <div className="hidden md:flex md:flex-shrink-0">
         <div className="flex flex-col w-64 bg-white shadow-lg">
           <div className="flex items-center h-16 px-4 bg-primary-500 text-white font-semibold">
-            <ShoppingBag className="h-6 w-6 mr-2" />
+            <img src={logo} alt="DeliveryEase Logo" width={32} height={32} style={{objectFit: 'contain', marginRight: 8}} />
             <span className="text-lg">DeliveryEase Admin</span>
           </div>
           
@@ -80,7 +81,7 @@ export default function AdminLayout() {
       <div className="md:hidden bg-white shadow-sm fixed top-0 left-0 right-0 z-10">
         <div className="flex items-center justify-between h-16 px-4">
           <div className="flex items-center">
-            <ShoppingBag className="h-6 w-6 text-primary-500" />
+            <img src={logo} alt="DeliveryEase Logo" width={32} height={32} style={{objectFit: 'contain', marginRight: 8}} />
             <span className="ml-2 text-lg font-semibold">DeliveryEase</span>
           </div>
           

@@ -100,6 +100,13 @@ export default {
           '100%': { transform: 'translateY(0)', opacity: '1' },
         },
       },
+      screens: {
+        'xs': '414px', // custom for iPhone 11 and up
+        'sm': '640px',
+        'md': '768px',
+        'lg': '1024px',
+        // ...other breakpoints
+      },
     },
   },
   plugins: [],

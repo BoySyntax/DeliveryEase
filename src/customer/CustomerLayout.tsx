@@ -1,10 +1,11 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { ShoppingBag, Home, Package, User, ShoppingCart, Bell } from 'lucide-react';
+import { ShoppingBag, Home, Package, User, ShoppingCart, Bell, Truck } from 'lucide-react';
 import { useProfile } from '../lib/auth';
 import Loader from '../ui/components/Loader';
 import { cn } from '../lib/utils';
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import logo from '../assets/logo.png';
 
 export default function CustomerLayout() {
   const { profile, loading } = useProfile();
@@ -12,22 +13,49 @@ export default function CustomerLayout() {
 
   // Notification badge for orders
   const [orderNotifCount, setOrderNotifCount] = useState(0);
+  const [cartCount, setCartCount] = useState(0);
   useEffect(() => {
     async function fetchOrderNotif() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const { data, error } = await supabase
         .from('orders')
-        .select('id, order_status_code')
+        .select('id')
         .eq('customer_id', user.id)
         .eq('notification_dismissed', false)
-        .in('order_status_code', ['pending', 'verified', 'out_for_delivery']);
+        .eq('notification_read', false);
       if (!error && data) {
         setOrderNotifCount(data.length);
       }
     }
+    async function fetchCartCount() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      // Get user's cart
+      const { data: cart } = await supabase
+        .from('carts')
+        .select('id')
+        .eq('customer_id', user.id)
+        .single();
+      if (!cart) {
+        setCartCount(0);
+        return;
+      }
+      // Get cart items count
+      const { data: items, error } = await supabase
+        .from('cart_items')
+        .select('id')
+        .eq('cart_id', cart.id);
+      if (!error && items) {
+        setCartCount(items.length);
+      }
+    }
     fetchOrderNotif();
-    const interval = setInterval(fetchOrderNotif, 5000);
+    fetchCartCount();
+    const interval = setInterval(() => {
+      fetchOrderNotif();
+      fetchCartCount();
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -56,8 +84,8 @@ export default function CustomerLayout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             <div className="flex items-center">
-              <ShoppingBag className="h-8 w-8 text-primary-500" />
-              <span className="ml-2 text-xl font-semibold text-gray-900">DeliveryEase</span>
+              <img src={logo} alt="DeliveryEase Logo" width={56} height={56} style={{objectFit: 'contain', marginRight: 8}} />
+              <span className="ml-0 text-lg font-semibold text-gray-900">DeliveryEase</span>
             </div>
             
             <div className="hidden sm:flex space-x-4">
@@ -65,6 +93,7 @@ export default function CustomerLayout() {
                 <NavLink
                   key={item.path}
                   to={item.path}
+                  end={item.path === '/customer'}
                   className={({ isActive }) => cn(
                     'px-3 py-2 rounded-md text-sm font-medium',
                     isActive
@@ -72,6 +101,14 @@ export default function CustomerLayout() {
                       : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'
                   )}
                 >
+                  <span className="relative">
+                    {item.icon}
+                    {(item.label === 'Cart' && cartCount > 0) && (
+                      <span className="absolute -top-2 -right-2 min-w-[1.1rem] h-5 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold shadow z-10">
+                        {cartCount}
+                      </span>
+                    )}
+                  </span>
                   {item.label}
                 </NavLink>
               ))}
@@ -94,6 +131,7 @@ export default function CustomerLayout() {
             <NavLink
               key={item.path}
               to={item.path}
+              end={item.path === '/customer'}
               className={({ isActive }) => cn(
                 'flex flex-1 flex-col items-center py-3',
                 isActive
@@ -106,6 +144,11 @@ export default function CustomerLayout() {
                 {(item.label === 'Notifications' && orderNotifCount > 0) && (
                   <span className="absolute -top-1 -right-2 min-w-[1.1rem] h-5 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold shadow z-10">
                     {orderNotifCount}
+                  </span>
+                )}
+                {(item.label === 'Cart' && cartCount > 0) && (
+                  <span className="absolute -top-1 -right-2 min-w-[1.1rem] h-5 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold shadow z-10">
+                    {cartCount}
                   </span>
                 )}
               </span>

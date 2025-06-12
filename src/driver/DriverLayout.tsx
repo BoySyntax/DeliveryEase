@@ -10,6 +10,7 @@ import { useProfile } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import Loader from '../ui/components/Loader';
 import { cn } from '../lib/utils';
+import logo from '../assets/logo.png';
 
 export default function DriverLayout() {
   const { profile, loading } = useProfile();
@@ -43,7 +44,7 @@ export default function DriverLayout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             <div className="flex items-center">
-              <ShoppingBag className="h-8 w-8 text-primary-500" />
+              <img src={require('../assets/logo.png')} alt="DeliveryEase Logo" width={32} height={32} style={{objectFit: 'contain', marginRight: 8}} />
               <span className="ml-2 text-xl font-semibold text-gray-900">DeliveryEase</span>
             </div>
             

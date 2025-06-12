@@ -270,11 +270,6 @@ export default function ProfilePage() {
                 <span className="text-gray-500 text-sm">Full Name</span>
                 <div className="font-semibold">{profile?.name || 'Not provided'}</div>
               </div>
-
-              <div>
-                <span className="text-gray-500 text-sm">Role</span>
-                <div className="font-semibold capitalize">{profile?.role}</div>
-              </div>
             </div>
           )}
         </div>
@@ -381,7 +376,7 @@ export default function ProfilePage() {
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="text-red-600 border-red-200 hover:bg-red-50"
+                      className="text-red-600 border-gray-200 hover:bg-red-50"
                       onClick={() => handleDeleteAddress(address.id)}
                       disabled={deletingAddressId === address.id}
                     >

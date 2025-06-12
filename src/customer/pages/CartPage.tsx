@@ -168,47 +168,48 @@ export default function CartPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="max-w-4xl mx-auto px-2 sm:px-4 py-8 overflow-x-hidden">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Shopping Cart</h1>
       
-      <div className="space-y-4">
+      <div className="space-y-3">
         {cartItems.map((item) => (
-          <div key={item.id} className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
+          <div key={item.id} className="flex items-center gap-3 p-3 bg-white rounded-xl shadow-md mb-3">
             <img
               src={item.product.image_url}
               alt={item.product.name}
-              className="w-24 h-24 object-cover rounded"
+              className="w-16 h-16 object-cover rounded-lg flex-shrink-0 border"
             />
-            <div className="flex-1">
-              <h3 className="font-medium text-gray-900">{item.product.name}</h3>
-              <p className="text-primary font-medium mt-1">
-                {formatCurrency(item.product.price)}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
-                disabled={item.quantity <= 1 || updatingItem === item.id}
-              >
-                <Minus size={18} />
-              </Button>
-              <span className="w-8 text-center">{item.quantity}</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
-                disabled={item.quantity >= (item.product.quantity || 0) || updatingItem === item.id}
-              >
-                <Plus size={18} />
-              </Button>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-gray-900 text-base truncate">{item.product.name}</h3>
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-primary font-bold">{formatCurrency(item.product.price)}</span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
+                    disabled={item.quantity <= 1 || updatingItem === item.id}
+                  >
+                    <Minus size={16} />
+                  </Button>
+                  <span className="w-8 text-center">{item.quantity}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
+                    disabled={item.quantity >= (item.product.quantity || 0) || updatingItem === item.id}
+                  >
+                    <Plus size={16} />
+                  </Button>
+                </div>
+              </div>
             </div>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => handleRemoveItem(item.id)}
               disabled={removingItem === item.id}
+              className="ml-2"
             >
               {removingItem === item.id ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

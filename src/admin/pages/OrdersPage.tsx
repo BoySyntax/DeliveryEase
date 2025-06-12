@@ -184,9 +184,15 @@ export default function OrdersPage() {
   // Delivery status update handlers
   const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
+      // If status is verified or rejected, reset notification_read and notification_dismissed
+      const updateFields: any = { order_status_code: newStatus };
+      if (newStatus === 'verified' || newStatus === 'rejected') {
+        updateFields.notification_read = false;
+        updateFields.notification_dismissed = false;
+      }
       const { error } = await supabase
         .from('orders')
-        .update({ order_status_code: newStatus })
+        .update(updateFields)
         .eq('id', orderId);
       if (error) throw error;
       await loadData(); // Reload from database to ensure UI matches backend
