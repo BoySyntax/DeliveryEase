@@ -124,6 +124,7 @@ export default function CheckoutPage() {
           .from('addresses')
           .select('*')
           .eq('customer_id', user.id); // Removed .eq('region', 'Mindanao')
+        console.log('Fetched addresses:', addresses);
 
         if (addressesError) throw new Error('Error fetching addresses: ' + addressesError.message);
 
@@ -489,7 +490,7 @@ export default function CheckoutPage() {
             </div>
           ) : (
             <div className="text-center text-gray-500">
-              No addresses found in Mindanao. Please add an address in your profile.
+              No addresses found. Please add an address in your profile.
               <Button
                 variant="outline"
                 className="mt-4"
