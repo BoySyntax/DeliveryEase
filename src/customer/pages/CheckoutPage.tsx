@@ -119,12 +119,11 @@ export default function CheckoutPage() {
           }
         }
 
-        // Load User Addresses and Filter by Mindanao
+        // Load User Addresses (show all, not just Mindanao)
         const { data: addresses, error: addressesError } = await supabase
           .from('addresses')
           .select('*')
-          .eq('customer_id', user.id)
-          .eq('region', 'Mindanao'); // Filter by Mindanao region
+          .eq('customer_id', user.id); // Removed .eq('region', 'Mindanao')
 
         if (addressesError) throw new Error('Error fetching addresses: ' + addressesError.message);
 
