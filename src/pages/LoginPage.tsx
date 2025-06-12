@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
@@ -18,6 +18,34 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const { register, handleSubmit, formState: { errors } } = useForm<LoginFormData>();
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        const userName = session.user.user_metadata.full_name || session.user.user_metadata.name || session.user.email;
+        // Check if profile exists
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('id, role, name')
+          .eq('id', session.user.id)
+          .single();
+        if (!profile) {
+          // Create profile with role 'customer' and Google name
+          await supabase.from('profiles').insert([
+            {
+              id: session.user.id,
+              name: userName,
+              role: 'customer',
+            },
+          ]);
+        } else if (profile.name !== userName) {
+          // Sync name if changed in Google
+          await supabase.from('profiles').update({ name: userName }).eq('id', session.user.id);
+        }
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   const onSubmit = async (data: LoginFormData) => {
     setLoading(true);
