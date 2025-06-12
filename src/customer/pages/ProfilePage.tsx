@@ -219,6 +219,12 @@ export default function ProfilePage() {
   return (
     <div className="flex justify-center items-center min-h-[60vh]">
       <div className="bg-white rounded-lg shadow p-8 w-full max-w-lg space-y-8"> {/* Added space-y-8 */}
+        {/* User Name Display */}
+        <div className="flex flex-col items-center mb-6">
+          <span className="text-gray-500 text-sm">Full Name</span>
+          <div className="font-semibold text-xl">{profile?.name || 'Not provided'}</div>
+        </div>
+
         {/* Profile Information Section */}
         <div className="space-y-6"> {/* Added space-y-6 */}
           <div className="flex justify-between items-center">
