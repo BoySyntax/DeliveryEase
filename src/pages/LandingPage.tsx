@@ -1,10 +1,45 @@
 import { motion } from 'framer-motion';
 import { Truck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
 import logo from '../assets/logo.png';
+import Loader from '../ui/components/Loader';
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    const checkAuthAndRedirect = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        // Get user's role from profiles table
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single();
+
+        // Redirect based on role
+        if (profile?.role === 'admin') {
+          navigate('/admin', { replace: true });
+        } else if (profile?.role === 'driver') {
+          navigate('/driver', { replace: true });
+        } else {
+          navigate('/customer', { replace: true });
+        }
+      } else {
+        setCheckingAuth(false);
+      }
+    };
+
+    checkAuthAndRedirect();
+  }, [navigate]);
+
+  if (checkingAuth) {
+    return <Loader fullScreen />;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 flex flex-col items-center justify-center p-4">

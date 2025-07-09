@@ -79,26 +79,36 @@ port = 54324
 
 [storage]
 enabled = true
-# The maximum file size allowed (e.g. "5MB", "500KB").
 file_size_limit = "50MiB"
+
+[storage.cors]
+allowed_origins = ["*"]
+allowed_methods = ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"]
+allowed_headers = ["*"]
+exposed_headers = ["Content-Range", "Range"]
+max_age_seconds = 3600
 
 [storage.image_transformation]
 enabled = true
 
-# Uncomment to configure local storage buckets
-# [storage.buckets.images]
-# public = false
-# file_size_limit = "50MiB"
-# allowed_mime_types = ["image/png", "image/jpeg"]
-# objects_path = "./images"
+# Configure storage buckets
+[storage.buckets.profile-images]
+public = true
+file_size_limit = "5MiB"
+allowed_mime_types = ["image/png", "image/jpeg", "image/jpg"]
+
+[storage.buckets.payment-proof]
+public = false
+file_size_limit = "5MiB"
+allowed_mime_types = ["image/png", "image/jpeg", "image/jpg"]
 
 [auth]
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://127.0.0.1:3000"
+site_url = "http://127.0.0.1:3008"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+additional_redirect_urls = ["http://127.0.0.1:3008", "http://localhost:3008"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # If disabled, the refresh token will never expire.
@@ -273,3 +283,9 @@ s3_region = "env(S3_REGION)"
 s3_access_key = "env(S3_ACCESS_KEY)"
 # Configures AWS_SECRET_ACCESS_KEY for S3 bucket
 s3_secret_key = "env(S3_SECRET_KEY)"
+
+# [auth.external.google]
+# enabled = true
+# client_id = "env(SUPABASE_AUTH_GOOGLE_CLIENT_ID)"
+# secret = "env(SUPABASE_AUTH_GOOGLE_CLIENT_SECRET)"
+# redirect_uri = "http://127.0.0.1:3008/auth/callback"

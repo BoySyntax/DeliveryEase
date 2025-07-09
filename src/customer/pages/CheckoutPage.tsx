@@ -302,12 +302,10 @@ export default function CheckoutPage() {
         setUploadingProof(true);
         let uploadedFileName: string | null = null;
         try {
+          // Generate a unique file path including receipts folder
+          const fileExtension = selectedFile.name.split('.').pop();
           const timestamp = new Date().getTime();
-          const fileExt = selectedFile.name.split('.').pop();
-          // Use the order ID for the final file name
-          const fileName = `order-${order.id}-${timestamp}.${fileExt}`;
-          uploadedFileName = fileName;
-          const filePath = `receipts/${fileName}`;
+          const filePath = `receipts/order-${order.id}/${timestamp}.${fileExtension}`;
 
           console.log('Starting payment proof upload during order placement:', {
             bucket: 'payment-proof',
@@ -316,12 +314,17 @@ export default function CheckoutPage() {
             fileSize: selectedFile.size
           });
 
+          // Convert file to ArrayBuffer for proper binary upload
+          const arrayBuffer = await selectedFile.arrayBuffer();
+          const fileData = new Uint8Array(arrayBuffer);
+
           // Upload file to storage
-          const { error: uploadError } = await supabase.storage
+          const { error: uploadError, data: uploadData } = await supabase.storage
             .from('payment-proof')
-            .upload(filePath, selectedFile, {
+            .upload(filePath, fileData, {
               cacheControl: '3600',
-              upsert: true
+              upsert: false,  // Don't allow overwriting
+              contentType: selectedFile.type
             });
 
           if (uploadError) {
@@ -331,30 +334,37 @@ export default function CheckoutPage() {
 
           console.log('Payment proof file uploaded successfully.');
 
-          // Get the public URL
-          const { data: { publicUrl } } = supabase.storage
+          // Get the URL for storage in the database
+          const { data: urlData } = await supabase.storage
             .from('payment-proof')
-            .getPublicUrl(filePath);
+            .createSignedUrl(filePath, 60 * 60 * 24 * 7); // 7 days expiry
 
-          console.log('Generated public URL:', publicUrl);
+          if (!urlData?.signedUrl) {
+            throw new Error('Failed to generate signed URL for payment proof');
+          }
+
+          console.log('Generated signed URL:', urlData.signedUrl);
 
           // Save proof details to database
           const { error: proofError } = await supabase
             .from('payment_proofs')
             .insert([{
               order_id: order.id,
-              file_url: publicUrl,
+              file_url: filePath,
               uploaded_at: new Date().toISOString()
             }]);
 
           if (proofError) {
             console.error('Database insert error (payment_proofs) during order placement:', proofError);
-            // Note: File is uploaded, but DB record failed. Admin can manually link.
-            toast.error('Payment proof uploaded, but failed to save details in database. Please contact support.');
-          } else {
-            console.log('Payment proof details saved to database.');
-            toast.success('Order placed and payment proof uploaded successfully!');
+            // Clean up the uploaded file since DB insert failed
+            await supabase.storage
+              .from('payment-proof')
+              .remove([filePath]);
+            throw new Error('Failed to save payment proof details');
           }
+
+          console.log('Payment proof details saved to database.');
+          toast.success('Order placed and payment proof uploaded successfully!');
         } catch (uploadError) {
           console.error('Error during payment proof upload process:', uploadError);
           toast.error(uploadError instanceof Error ? uploadError.message : 'Failed to upload payment proof');
@@ -508,8 +518,8 @@ export default function CheckoutPage() {
             Order Summary
           </h2>
           <div className="divide-y">
-            {cartItems.map((item) => (
-              <div key={item.product.id} className="py-3 flex justify-between">
+            {cartItems.map((item, idx) => (
+              <div key={`${item.product.id}-${idx}`} className="py-3 flex justify-between">
                 <div>
                   <p className="text-sm text-gray-900">{item.product.name}</p>
                   <p className="text-sm text-gray-500">Qty: {item.quantity}</p>

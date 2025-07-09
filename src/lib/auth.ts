@@ -12,19 +12,23 @@ export const useSession = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
     });
 
+    // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   return { session, loading };
@@ -37,9 +41,14 @@ export const useProfile = () => {
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
+    let ignore = false;
+
     const fetchProfile = async () => {
       if (!session?.user) {
-        setLoading(false);
+        if (!ignore) {
+          setProfile(null);
+          setLoading(false);
+        }
         return;
       }
 
@@ -50,21 +59,32 @@ export const useProfile = () => {
           .eq('id', session.user.id)
           .single();
 
-        if (error) {
-          throw error;
-        }
+        if (error) throw error;
 
-        setProfile(data);
+        if (!ignore) {
+          setProfile(data);
+          setError(null);
+        }
       } catch (err) {
-        setError(err instanceof Error ? err : new Error('Failed to fetch profile'));
+        console.error('Error fetching profile:', err);
+        if (!ignore) {
+          setError(err instanceof Error ? err : new Error('Failed to fetch profile'));
+          setProfile(null);
+        }
       } finally {
-        setLoading(false);
+        if (!ignore) {
+          setLoading(false);
+        }
       }
     };
 
     if (!sessionLoading) {
       fetchProfile();
     }
+
+    return () => {
+      ignore = true;
+    };
   }, [session, sessionLoading]);
 
   return { profile, loading: loading || sessionLoading, error };

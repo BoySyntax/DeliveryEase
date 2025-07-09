@@ -120,46 +120,52 @@ export default function HomePage() {
         return;
       }
 
-      let { data: cart } = await supabase
+      // Get or create cart in a single query
+      const { data: cart, error: cartError } = await supabase
         .from('carts')
         .select('id')
         .eq('customer_id', user.id)
         .single();
 
+      let cartId: string;
+      
       if (!cart) {
-        const { data: newCart, error: cartError } = await supabase
+        const { data: newCart, error: createError } = await supabase
           .from('carts')
           .insert([{ customer_id: user.id }])
           .select()
           .single();
 
-        if (cartError) throw cartError;
-        cart = newCart;
+        if (createError) throw createError;
+        if (!newCart) throw new Error('Failed to create cart');
+        cartId = newCart.id;
+      } else {
+        cartId = cart.id;
       }
 
-      // Check if item already exists in cart
+      // First try to get existing item
       const { data: existingItem } = await supabase
         .from('cart_items')
-        .select('id, quantity')
-        .eq('cart_id', cart.id)
+        .select('quantity')
+        .eq('cart_id', cartId)
         .eq('product_id', productId)
-        .single();
+        .maybeSingle();
 
+      // Add or update cart item
       if (existingItem) {
-        // Update quantity
-        await supabase
+        // Update the quantity of the existing item
+        const { error: updateError } = await supabase
           .from('cart_items')
           .update({ quantity: existingItem.quantity + 1 })
-          .eq('id', existingItem.id);
+          .eq('cart_id', cartId)
+          .eq('product_id', productId);
+        if (updateError) throw updateError;
       } else {
-        // Add new item
-        await supabase
+        // Insert new cart item
+        const { error: insertError } = await supabase
           .from('cart_items')
-          .insert([{
-            cart_id: cart.id,
-            product_id: productId,
-            quantity: 1
-          }]);
+          .insert({ cart_id: cartId, product_id: productId, quantity: 1 });
+        if (insertError) throw insertError;
       }
 
       toast.success('Added to cart');

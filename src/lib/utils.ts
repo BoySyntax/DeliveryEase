@@ -39,3 +39,35 @@ export const ORDER_STATUS_LABELS = {
   approved: 'Approved',
   rejected: 'Rejected',
 };
+
+/**
+ * Cleans and validates image URLs, particularly for Supabase storage
+ * Removes problematic query parameters and ensures valid URL format
+ */
+export function cleanImageUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  
+  try {
+    const urlObj = new URL(url);
+    
+    // Remove image transformation parameters that might cause loading issues
+    urlObj.searchParams.delete('quality');
+    urlObj.searchParams.delete('width');
+    urlObj.searchParams.delete('height');
+    urlObj.searchParams.delete('resize');
+    
+    // Convert render URLs to direct URLs if needed
+    if (urlObj.pathname.includes('/render/image/')) {
+      const pathMatch = urlObj.pathname.match(/\/render\/image\/public\/(.+)/);
+      if (pathMatch) {
+        // Reconstruct as direct URL
+        urlObj.pathname = `/storage/v1/object/public/${pathMatch[1]}`;
+      }
+    }
+    
+    return urlObj.toString();
+  } catch (error) {
+    console.error('Invalid image URL:', url, error);
+    return null;
+  }
+}

@@ -6,9 +6,119 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export type Database = {
+export interface Database {
   public: {
     Tables: {
+      delivery_zones: {
+        Row: {
+          id: string
+          name: string
+          region: string
+          province: string
+          city: string
+          barangay: string[]
+        }
+        Insert: {
+          id?: string
+          name: string
+          region: string
+          province: string
+          city: string
+          barangay: string[]
+        }
+        Update: {
+          id?: string
+          name?: string
+          region?: string
+          province?: string
+          city?: string
+          barangay?: string[]
+        }
+        Relationships: []
+      }
+      order_batches: {
+        Row: {
+          id: string
+          created_at: string
+          status: 'pending' | 'assigned' | 'delivering' | 'delivered'
+          driver_id: string | null
+          total_weight: number
+          max_weight: number
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          status?: 'pending' | 'assigned' | 'delivering' | 'delivered'
+          driver_id?: string | null
+          total_weight?: number
+          max_weight?: number
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          status?: 'pending' | 'assigned' | 'delivering' | 'delivered'
+          driver_id?: string | null
+          total_weight?: number
+          max_weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_batches_driver_id_fkey"
+            columns: ["driver_id"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      addresses: {
+        Row: {
+          id: string
+          customer_id: string
+          full_name: string
+          phone: string
+          region: string
+          province: string
+          city: string
+          barangay: string
+          postal_code: string
+          street_address: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          customer_id: string
+          full_name: string
+          phone: string
+          region: string
+          province: string
+          city: string
+          barangay: string
+          postal_code: string
+          street_address: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          customer_id?: string
+          full_name?: string
+          phone?: string
+          region?: string
+          province?: string
+          city?: string
+          barangay?: string
+          postal_code?: string
+          street_address?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "addresses_customer_id_fkey"
+            columns: ["customer_id"]
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       cart_items: {
         Row: {
           cart_id: string
@@ -130,48 +240,88 @@ export type Database = {
       }
       orders: {
         Row: {
+          id: string
           created_at: string
           customer_id: string
           driver_id: string | null
-          id: string
           status: Database["public"]["Enums"]["order_status"]
           total: number
           approval_status: 'pending' | 'approved' | 'rejected'
           delivery_status: Database["public"]["Enums"]["order_status"]
+          batch_id: string | null
+          total_weight: number
+          delivery_address: {
+            region: string
+            province: string
+            city: string
+            barangay: string
+            street_address: string
+            postal_code: string
+          } | null
+          notification_read: boolean
+          notification_dismissed: boolean
         }
         Insert: {
+          id?: string
           created_at?: string
           customer_id: string
           driver_id?: string | null
-          id?: string
           status?: Database["public"]["Enums"]["order_status"]
           total: number
           approval_status?: 'pending' | 'approved' | 'rejected'
           delivery_status?: Database["public"]["Enums"]["order_status"]
+          batch_id?: string | null
+          total_weight?: number
+          delivery_address?: {
+            region: string
+            province: string
+            city: string
+            barangay: string
+            street_address: string
+            postal_code: string
+          } | null
+          notification_read?: boolean
+          notification_dismissed?: boolean
         }
         Update: {
+          id?: string
           created_at?: string
           customer_id?: string
           driver_id?: string | null
-          id?: string
           status?: Database["public"]["Enums"]["order_status"]
           total?: number
           approval_status?: 'pending' | 'approved' | 'rejected'
           delivery_status?: Database["public"]["Enums"]["order_status"]
+          batch_id?: string | null
+          total_weight?: number
+          delivery_address?: {
+            region: string
+            province: string
+            city: string
+            barangay: string
+            street_address: string
+            postal_code: string
+          } | null
+          notification_read?: boolean
+          notification_dismissed?: boolean
         }
         Relationships: [
           {
             foreignKeyName: "orders_customer_id_fkey"
             columns: ["customer_id"]
-            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "orders_driver_id_fkey"
             columns: ["driver_id"]
-            isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_batch_id_fkey"
+            columns: ["batch_id"]
+            referencedRelation: "order_batches"
             referencedColumns: ["id"]
           }
         ]
@@ -215,6 +365,10 @@ export type Database = {
           name: string
           price: number
           quantity: number
+          featured: boolean
+          weight: number
+          unit: string | null
+          unit_quantity: number | null
         }
         Insert: {
           category_id: string
@@ -225,6 +379,10 @@ export type Database = {
           name: string
           price: number
           quantity: number
+          featured?: boolean
+          weight: number
+          unit?: string | null
+          unit_quantity?: number | null
         }
         Update: {
           category_id?: string
@@ -235,6 +393,10 @@ export type Database = {
           name?: string
           price?: number
           quantity?: number
+          featured?: boolean
+          weight?: number
+          unit?: string | null
+          unit_quantity?: number | null
         }
         Relationships: [
           {
@@ -277,10 +439,50 @@ export type Database = {
       }
     }
     Views: {
+      order_batches_with_drivers: {
+        Row: {
+          id: string
+          created_at: string
+          status: string
+          driver_id: string | null
+          driver_name: string | null
+          total_weight: number
+          max_weight: number
+        }
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: "order_batches_orders_fkey"
+            columns: ["id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["batch_id"]
+          }
+        ]
+      }
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_all_batch_summaries: {
+        Args: {
+          p_barangay: string | null
+        }
+        Returns: {
+          id: string
+          created_at: string
+          status: string
+          delivery_status: string
+          driver_id: string | null
+          total_weight: number
+          barangay: string
+          estimated_delivery_time: string | null
+          actual_delivery_time: string | null
+          notes: string | null
+          driver_name: string | null
+          order_count: number
+        }[]
+      }
     }
     Enums: {
       order_status: "pending" | "assigned" | "delivering" | "delivered"

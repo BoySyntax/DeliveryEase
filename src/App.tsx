@@ -1,19 +1,22 @@
-import { lazy, Suspense } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
-import { useSession } from './lib/auth';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { supabase } from './lib/supabase';
+import { Session } from '@supabase/supabase-js';
 import Loader from './ui/components/Loader';
 
 // Lazy-loaded components
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const LandingPage = lazy(() => import('./pages/LandingPage'));
+const AuthCallback = lazy(() => import('./pages/auth/callback'));
 
 // Admin routes
 const AdminLayout = lazy(() => import('./admin/AdminLayout'));
 const AdminDashboard = lazy(() => import('./admin/pages/DashboardPage'));
 const AdminProducts = lazy(() => import('./admin/pages/ProductsPage'));
 const AdminCategories = lazy(() => import('./admin/pages/CategoriesPage'));
-const AdminOrders = lazy(() => import('./admin/pages/OrdersPage'));
+const AdminVerifyOrders = lazy(() => import('./admin/pages/VerifyOrdersPage'));
+const AdminBatchOrders = lazy(() => import('./admin/pages/BatchOrdersPage'));
 const AdminDrivers = lazy(() => import('./admin/pages/DriversPage'));
 
 // Customer routes
@@ -34,52 +37,73 @@ const DriverDashboard = lazy(() => import('./driver/pages/DashboardPage'));
 const DriverOrders = lazy(() => import('./driver/pages/OrdersPage'));
 const DriverProfile = lazy(() => import('./driver/pages/ProfilePage'));
 
-function App() {
-  const { session, loading } = useSession();
+// Protected Route Component
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState<Session | null>(null);
+  const location = useLocation();
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   if (loading) {
     return <Loader fullScreen />;
   }
 
-  // Determine user role for redirect
-  let userRole: string | null = null;
-  if (session && session.user && session.user.user_metadata && session.user.user_metadata.role) {
-    userRole = session.user.user_metadata.role;
+  if (!session) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Default redirect based on session and role
-  let defaultRedirect = <Navigate to="/login" replace />;
-  if (session) {
-    // If userRole is available, redirect accordingly
-    if (userRole === 'admin') {
-      defaultRedirect = <Navigate to="/admin" replace />;
-    } else if (userRole === 'driver') {
-      defaultRedirect = <Navigate to="/driver" replace />;
-    } else {
-      defaultRedirect = <Navigate to="/customer" replace />;
-    }
-  }
+  return <>{children}</>;
+}
 
+function App() {
   return (
     <Suspense fallback={<Loader fullScreen />}>
       <Routes>
-        {/* Landing Page Route - only for logged out users */}
-        <Route path="/" element={session ? defaultRedirect : <LandingPage />} />
-        {/* Auth Routes - only for logged out users */}
-        <Route path="/login" element={session ? defaultRedirect : <LoginPage />} />
-        <Route path="/register" element={session ? defaultRedirect : <RegisterPage />} />
+        {/* Public Routes */}
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
 
+        {/* Protected Routes */}
         {/* Admin Routes */}
-        <Route path="/admin" element={<AdminLayout />}>
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <AdminLayout />
+            </ProtectedRoute>
+          }
+        >
           <Route index element={<AdminDashboard />} />
           <Route path="products" element={<AdminProducts />} />
           <Route path="categories" element={<AdminCategories />} />
-          <Route path="orders" element={<AdminOrders />} />
+          <Route path="verify-orders" element={<AdminVerifyOrders />} />
+          <Route path="batch-orders" element={<AdminBatchOrders />} />
           <Route path="drivers" element={<AdminDrivers />} />
         </Route>
 
         {/* Customer Routes */}
-        <Route path="/customer" element={<CustomerLayout />}>
+        <Route
+          path="/customer"
+          element={
+            <ProtectedRoute>
+              <CustomerLayout />
+            </ProtectedRoute>
+          }
+        >
           <Route index element={<CustomerHome />} />
           <Route path="products" element={<CustomerProducts />} />
           <Route path="products/:id" element={<CustomerProductDetails />} />
@@ -92,14 +116,21 @@ function App() {
         </Route>
 
         {/* Driver Routes */}
-        <Route path="/driver" element={<DriverLayout />}>
+        <Route
+          path="/driver"
+          element={
+            <ProtectedRoute>
+              <DriverLayout />
+            </ProtectedRoute>
+          }
+        >
           <Route index element={<DriverDashboard />} />
           <Route path="orders" element={<DriverOrders />} />
           <Route path="profile" element={<DriverProfile />} />
         </Route>
 
-        {/* Default redirect based on auth state */}
-        <Route path="*" element={defaultRedirect} />
+        {/* Catch all route - redirect to login */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </Suspense>
   );

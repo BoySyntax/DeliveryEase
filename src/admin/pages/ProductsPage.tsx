@@ -16,10 +16,11 @@ type Product = {
   price: number;
   image_url: string;
   category_id: string;
-  quantity?: number;
-  unit?: string;
-  unit_quantity?: number;
-  featured?: boolean;
+  quantity: number;
+  unit: string | null;
+  unit_quantity: number | null;
+  featured: boolean;
+  weight: number;
   category: {
     name: string;
   };
@@ -192,7 +193,14 @@ export default function ProductsPage() {
                 Category: {product.category.name}
               </p>
               <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                Quantity: {product.quantity ?? 0}
+                Quantity: {product.quantity ?? 0} {product.unit || 'pieces'}
+              </p>
+              <p className="text-xs sm:text-sm text-gray-500 mt-1">
+                Weight per {product.unit || 'piece'}: {product.weight} kg
+                {product.unit_quantity ? ` (${product.unit_quantity} pcs per ${product.unit})` : ''}
+              </p>
+              <p className="text-xs sm:text-sm text-gray-500 mt-1">
+                Total Weight: {(product.weight * product.quantity).toFixed(2)} kg
               </p>
               <p className="text-primary-600 font-semibold mt-2">
                 {formatCurrency(product.price)}
@@ -261,26 +269,33 @@ type ProductFormProps = {
 };
 
 function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps) {
-  const [form, setForm] = useState({
+  const [formData, setFormData] = useState({
     name: product?.name || '',
     description: product?.description || '',
-    price: product?.price?.toString() || '',
-    image_url: product?.image_url || '',
-    category_id: product?.category_id || (categories[0]?.id ?? ''),
-    quantity: product?.quantity?.toString() || '',
+    price: product?.price || 0,
+    category_id: product?.category_id || '',
+    quantity: product?.quantity || 0,
+    weight: product?.weight || 0.5,  // Default weight in kg
     unit: product?.unit || '',
-    unit_quantity: product?.unit_quantity?.toString() || '',
-    featured: product?.featured ?? false,
+    unit_quantity: product?.unit_quantity || 1,
+    featured: product?.featured || false,
+    image_url: product?.image_url || ''
   });
   const [saving, setSaving] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Calculate total weight
+  const totalWeight = formData.weight * formData.quantity;
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value, type, checked } = e.target;
-    setForm({
-      ...form,
-      [name]: type === 'checkbox' ? checked : value,
+    const target = e.target as HTMLInputElement;
+    const { name, value, type } = target;
+    const checked = type === 'checkbox' ? target.checked : undefined;
+    
+    setFormData({
+      ...formData,
+      [name]: checked !== undefined ? checked : value,
     });
   };
 
@@ -295,13 +310,13 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
     setSaving(true);
 
     // Validate form
-    if (!form.name || !form.description || !form.price || !form.category_id || !form.quantity) {
+    if (!formData.name || !formData.description || !formData.price || !formData.category_id || !formData.quantity) {
       toast.error('Please fill in all required fields.');
       setSaving(false);
       return;
     }
-    const price = parseFloat(form.price);
-    const quantity = parseInt(form.quantity, 10);
+    const price = parseFloat(formData.price.toString());
+    const quantity = parseInt(formData.quantity.toString(), 10);
     if (isNaN(price) || price < 0) {
       toast.error('Please enter a valid price.');
       setSaving(false);
@@ -313,41 +328,80 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
       return;
     }
 
-    let imageUrl = form.image_url;
+    let imageUrl = formData.image_url;
 
     // If a new file is selected, upload it
     if (file) {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}.${fileExt}`;
-      // Remove any leading slash from fileName
-      const { data, error } = await supabase.storage
-        .from('product-image')
-        .upload(fileName, file, { upsert: true });
+      try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}.${fileExt}`;
 
-      if (error) {
+        // Create a new blob with explicit type
+        const blob = new Blob([file], { type: file.type });
+        const formData = new FormData();
+        formData.append('file', blob, fileName);
+
+        console.log('Attempting upload:', {
+          fileName,
+          fileType: file.type,
+          fileSize: file.size,
+          blobType: blob.type
+        });
+
+        // Get the Supabase URL and anon key
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+        // Get the current session
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+          throw new Error('Authentication required');
+        }
+
+        // Upload using fetch
+        const response = await fetch(
+          `${supabaseUrl}/storage/v1/object/product-images/${fileName}`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'apikey': supabaseAnonKey
+            },
+            body: formData
+          }
+        );
+
+        if (!response.ok) {
+          const error = await response.json();
+          console.error('Upload response:', error);
+          throw new Error(error.message || 'Upload failed');
+        }
+
+        // Get the public URL
+        const { data: publicUrlData } = supabase.storage
+          .from('product-images')
+          .getPublicUrl(fileName);
+
+        imageUrl = publicUrlData.publicUrl;
+        console.log('Upload successful:', imageUrl);
+      } catch (error: any) {
         console.error('Upload error:', error);
-        toast.error(error.message || 'Failed to upload image');
+        toast.error(error?.message || 'Failed to upload image');
         setSaving(false);
         return;
       }
-
-      // Get public URL (permanent, not signed)
-      const { data: publicUrlData } = supabase
-        .storage
-        .from('product-image')
-        .getPublicUrl(fileName);
-
-      imageUrl = publicUrlData.publicUrl;
     }
 
     const payload = {
-      ...form,
+      ...formData,
       price,
       quantity,
       image_url: imageUrl,
-      unit: form.unit,
-      unit_quantity: form.unit && form.unit !== 'piece' ? parseInt(form.unit_quantity, 10) : null,
-      featured: !!form.featured,
+      unit: formData.unit || null,
+      unit_quantity: formData.unit && formData.unit !== 'piece' ? parseInt(formData.unit_quantity.toString(), 10) : null,
+      featured: !!formData.featured,
+      weight: parseFloat(formData.weight.toString()),
     };
 
     console.log('Payload:', payload);
@@ -379,132 +433,149 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
         className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md space-y-4"
       >
         <h2 className="text-xl font-semibold mb-2">{product ? 'Edit' : 'Add'} Product</h2>
-        <input
+        <Input
+          label="Name"
           name="name"
-          placeholder="Name"
-          value={form.name}
+          value={formData.name}
           onChange={handleChange}
           required
-          className="w-full border p-2 rounded"
         />
+        
         <textarea
           name="description"
-          placeholder="Description"
-          value={form.description}
+          value={formData.description}
           onChange={handleChange}
+          placeholder="Product description"
+          className="w-full p-2 border rounded"
           required
-          className="w-full border p-2 rounded"
         />
-        <input
-          name="price"
-          placeholder="Price"
-          value={form.price}
-          onChange={handleChange}
-          type="number"
-          min="0"
-          step="0.01"
-          required
-          className="w-full border p-2 rounded"
-        />
-        <input
-          name="quantity"
-          placeholder="Quantity"
-          value={form.quantity}
-          onChange={handleChange}
-          type="number"
-          min="0"
-          required
-          className="w-full border p-2 rounded"
-        />
-        <select
-          name="unit"
-          value={form.unit}
-          onChange={handleChange}
-          required
-          className="w-full border p-2 rounded"
-        >
-          <option value="">Select unit</option>
-          <option value="piece">Piece</option>
-          <option value="box">Box</option>
-          <option value="bag">Bag</option>
-          <option value="pack">Pack</option>
-          <option value="set">Set</option>
-          <option value="kg">Kg</option>
-          <option value="liter">Liter</option>
-          <option value="dozen">Dozen</option>
-          <option value="other">Other</option>
-        </select>
-        {form.unit && form.unit !== 'piece' && (
-          <input
-            name="unit_quantity"
-            placeholder={`How many pcs per ${form.unit}?`}
-            value={form.unit_quantity}
+
+        <div className="grid grid-cols-2 gap-4">
+          <Input
+            label="Price"
+            name="price"
+            type="number"
+            min="0"
+            step="0.01"
+            value={formData.price}
             onChange={handleChange}
+            required
+          />
+          
+          <Select
+            label="Unit"
+            name="unit"
+            value={formData.unit}
+            onChange={handleChange}
+            options={[
+              { value: '', label: 'Select unit' },
+              { value: 'piece', label: 'Piece' },
+              { value: 'box', label: 'Box' },
+              { value: 'bag', label: 'Bag' },
+              { value: 'pack', label: 'Pack' },
+              { value: 'set', label: 'Set' },
+              { value: 'dozen', label: 'Dozen' },
+              { value: 'other', label: 'Other' }
+            ]}
+            required
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Input
+            label="Weight per unit (kg)"
+            name="weight"
+            type="number"
+            min="0.1"
+            step="0.1"
+            value={formData.weight}
+            onChange={handleChange}
+            required
+          />
+          
+          <Input
+            label="Quantity"
+            name="quantity"
+            type="number"
+            min="0"
+            value={formData.quantity}
+            onChange={handleChange}
+            required
+          />
+        </div>
+
+        {formData.unit && formData.unit !== 'piece' && (
+          <Input
+            label={`How many pieces per ${formData.unit}?`}
+            name="unit_quantity"
             type="number"
             min="1"
+            value={formData.unit_quantity}
+            onChange={handleChange}
             required
-            className="w-full border p-2 rounded"
           />
         )}
+
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <p className="text-sm font-medium text-gray-700">Summary:</p>
+          <p className="text-sm text-gray-600">
+            Weight per {formData.unit || 'piece'}: {formData.weight} kg
+          </p>
+          <p className="text-sm text-gray-600">
+            Quantity: {formData.quantity} {formData.unit || 'pieces'}
+          </p>
+          <p className="text-sm font-medium text-gray-700">
+            Total Weight: {totalWeight.toFixed(2)} kg
+          </p>
+        </div>
+
+        <Select
+          label="Category"
+          name="category_id"
+          value={formData.category_id}
+          onChange={handleChange}
+          options={categories.map(cat => ({
+            value: cat.id,
+            label: cat.name
+          }))}
+          required
+        />
+
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            name="featured"
+            checked={formData.featured}
+            onChange={(e) => setFormData({ ...formData, featured: e.target.checked })}
+            className="rounded border-gray-300"
+          />
+          <label htmlFor="featured">Featured Product</label>
+        </div>
+
         <input
           type="file"
           accept="image/*"
           onChange={handleFileChange}
-          ref={fileInputRef}
-          className="w-full border p-2 rounded"
+          className="w-full"
         />
-        {form.image_url && !file && (
-          <img
-            src={form.image_url}
-            alt="Current"
-            className="w-24 h-24 object-cover mt-2 rounded"
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).src = '/placeholder.png';
-            }}
-          />
+
+        {formData.image_url && (
+          <div className="relative w-32 h-32">
+            <img
+              src={formData.image_url}
+              alt="Product preview"
+              className="w-full h-full object-contain"
+            />
+          </div>
         )}
-        <select
-          name="category_id"
-          value={form.category_id}
-          onChange={handleChange}
-          required
-          className="w-full border p-2 rounded"
-        >
-          {categories.length === 0 ? (
-            <option value="">No categories available</option>
-          ) : (
-            categories.map((cat) => (
-              <option key={cat.id} value={cat.id}>{cat.name}</option>
-            ))
-          )}
-        </select>
-        <div className="flex items-center">
-          <input
-            type="checkbox"
-            name="featured"
-            id="featured"
-            checked={!!form.featured}
-            onChange={handleChange}
-            className="mr-2"
-          />
-          <label htmlFor="featured" className="text-sm">Featured product</label>
-        </div>
-        <div className="flex justify-end space-x-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 border rounded"
-            disabled={saving}
-          >
+
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            type="submit"
-            className="px-4 py-2 bg-primary-600 text-white rounded"
-            disabled={saving}
-          >
-            {saving ? 'Saving...' : product ? 'Save Changes' : 'Add Product'}
-          </button>
+          </Button>
+          <Button type="submit">
+            {product ? 'Update' : 'Create'} Product
+          </Button>
         </div>
       </form>
     </div>

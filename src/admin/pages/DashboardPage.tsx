@@ -5,6 +5,8 @@ import Loader from '../../ui/components/Loader';
 import { formatCurrency } from '../../lib/utils';
 import { Package, ShoppingBag, Truck, Users } from 'lucide-react';
 
+type OrderStatus = 'pending' | 'assigned' | 'delivering' | 'delivered';
+
 type DashboardStats = {
   totalOrders: number;
   totalProducts: number;
@@ -16,6 +18,10 @@ type DashboardStats = {
     delivering: number;
     delivered: number;
   };
+};
+
+type OrderStatusResponse = {
+  status: OrderStatus;
 };
 
 export default function DashboardPage() {
@@ -55,7 +61,7 @@ export default function DashboardPage() {
       // Get orders by status
       const { data: ordersByStatus } = await supabase
         .from('orders')
-        .select('status');
+        .select('status') as { data: OrderStatusResponse[] | null };
 
       const statusCounts = {
         pending: 0,
@@ -65,7 +71,9 @@ export default function DashboardPage() {
       };
 
       ordersByStatus?.forEach((order) => {
-        statusCounts[order.status]++;
+        if (order.status in statusCounts) {
+          statusCounts[order.status]++;
+        }
       });
 
       setStats({

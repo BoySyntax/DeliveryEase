@@ -10,7 +10,7 @@ import { toast } from 'react-hot-toast';
 type Order = {
   id: string;
   created_at: string;
-  status: 'assigned' | 'delivering' | 'delivered';
+  order_status_code: string;
   total: number;
   customer: {
     name: string;
@@ -22,6 +22,10 @@ type Order = {
       name: string;
     };
   }[];
+  status: {
+    label: string;
+    color: string | null;
+  } | null;
 };
 
 export default function OrdersPage() {
@@ -46,10 +50,11 @@ export default function OrdersPage() {
             quantity,
             price,
             product:products(name)
-          )
+          ),
+          status:order_status(*)
         `)
         .eq('driver_id', user.id)
-        .in('status', ['assigned', 'delivering'])
+        .in('order_status_code', ['assigned', 'delivering'])
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -62,11 +67,11 @@ export default function OrdersPage() {
     }
   }
 
-  const handleUpdateStatus = async (orderId: string, newStatus: 'delivering' | 'delivered') => {
+  const handleUpdateStatus = async (orderId: string, newStatus: string) => {
     try {
       const { error } = await supabase
         .from('orders')
-        .update({ status: newStatus })
+        .update({ order_status_code: newStatus })
         .eq('id', orderId);
 
       if (error) throw error;
@@ -84,86 +89,67 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Active Orders</h1>
-
-      <div className="space-y-4">
-        {orders.map((order) => (
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-2xl font-bold mb-6">My Orders</h1>
+      <div className="grid gap-6">
+        {orders.map(order => (
           <Card key={order.id}>
             <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex justify-between items-start mb-4">
                 <div>
-                  <p className="text-sm text-gray-500">
+                  <h2 className="text-lg font-semibold mb-2">
                     Order #{order.id.slice(0, 8)}
+                  </h2>
+                  <p className="text-gray-600 mb-2">
+                    Customer: {order.customer.name}
+                  </p>
+                  <div className="inline-block px-3 py-1 rounded-full text-sm mb-4"
+                    style={{
+                      backgroundColor: order.status?.color || '#eee',
+                      color: '#1a1a1a'
+                    }}>
+                    {order.status?.label || order.order_status_code}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-lg font-semibold">
+                    {formatCurrency(order.total)}
                   </p>
                   <p className="text-sm text-gray-500">
                     {new Date(order.created_at).toLocaleDateString()}
-                  </p>
-                  <p className="text-sm font-medium mt-1">
-                    Customer: {order.customer.name}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      ORDER_STATUS_COLORS[order.status]
-                    }`}
-                  >
-                    {ORDER_STATUS_LABELS[order.status]}
-                  </span>
-                  <p className="text-xl font-bold text-primary-600 mt-2">
-                    {formatCurrency(order.total)}
                   </p>
                 </div>
               </div>
 
               <div className="border-t pt-4">
-                <h4 className="text-sm font-medium text-gray-900 mb-2">
-                  Order Items
-                </h4>
-                <div className="space-y-2">
+                <h3 className="font-semibold mb-2">Items:</h3>
+                <ul className="space-y-2">
                   {order.items.map((item, index) => (
-                    <div
-                      key={index}
-                      className="flex justify-between text-sm"
-                    >
-                      <span className="text-gray-600">
-                        {item.quantity}x {item.product.name}
-                      </span>
-                      <span className="font-medium">
-                        {formatCurrency(item.price * item.quantity)}
-                      </span>
-                    </div>
+                    <li key={index} className="flex justify-between">
+                      <span>{item.product.name} × {item.quantity}</span>
+                      <span>{formatCurrency(item.price * item.quantity)}</span>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </div>
 
-              <div className="border-t mt-4 pt-4">
-                <div className="flex justify-end space-x-2">
-                  {order.status === 'assigned' && (
-                    <Button
-                      onClick={() => handleUpdateStatus(order.id, 'delivering')}
-                    >
-                      Start Delivery
-                    </Button>
-                  )}
-                  {order.status === 'delivering' && (
-                    <Button
-                      onClick={() => handleUpdateStatus(order.id, 'delivered')}
-                    >
-                      Mark as Delivered
-                    </Button>
-                  )}
-                </div>
+              <div className="mt-6 flex justify-end space-x-4">
+                {order.order_status_code === 'assigned' && (
+                  <Button onClick={() => handleUpdateStatus(order.id, 'delivering')}>
+                    Start Delivery
+                  </Button>
+                )}
+                {order.order_status_code === 'delivering' && (
+                  <Button onClick={() => handleUpdateStatus(order.id, 'delivered')}>
+                    Mark as Delivered
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
         ))}
-
         {orders.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-500">No active orders</p>
-          </div>
+          <p className="text-center text-gray-500">No active orders found.</p>
         )}
       </div>
     </div>

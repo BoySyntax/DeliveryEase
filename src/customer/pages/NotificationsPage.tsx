@@ -1,188 +1,243 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import Loader from '../../ui/components/Loader';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { Package, Truck, CheckCircle, XCircle, Clock, User, AlertCircle } from 'lucide-react';
 
 // Types
-interface Order {
+interface OrderNotification {
   id: string;
-  created_at: string | null;
-  order_status_code: string | null;
-  status: {
-    label: string;
-    color: string | null;
-  } | null;
-  notification_read?: boolean;
+  created_at: string;
+  approval_status: 'pending' | 'approved' | 'rejected';
+  delivery_status: 'pending' | 'assigned' | 'delivering' | 'delivered';
+  batch_id: string | null;
+  total: number;
+}
+
+interface NotificationDisplay {
+  id: string;
+  title: string;
+  message: string;
+  timestamp: string;
+  icon: React.ReactNode;
+  color: string;
+  urgency: 'high' | 'medium' | 'low';
 }
 
 export default function NotificationsPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<OrderNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-  const [selected, setSelected] = useState<string[]>([]);
-  const allSelected = orders.length > 0 && selected.length === orders.length;
 
   useEffect(() => {
-    async function fetchOrders() {
-      setLoading(true);
+    loadNotifications();
+    
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(loadNotifications, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  async function loadNotifications() {
+    try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return setLoading(false);
+      if (!user) return;
 
       const { data, error } = await supabase
         .from('orders')
-        .select('id, created_at, order_status_code, notification_read, status:order_status(label, color)')
+        .select(`
+          id,
+          created_at,
+          approval_status,
+          delivery_status,
+          batch_id,
+          total
+        `)
         .eq('customer_id', user.id)
-        .eq('notification_dismissed', false)
-        .order('created_at', { ascending: false });
-      if (!error && data) {
-        setOrders(data);
-      }
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+      
+      setOrders(data || []);
+    } catch (error) {
+      console.error('Error loading notifications:', error);
+    } finally {
       setLoading(false);
     }
-    fetchOrders();
-  }, []);
+  }
 
-  // Delete notification from UI and persist in DB
-  const handleDelete = async (id: string) => {
-    const { error } = await supabase
-      .from('orders')
-      .update({ notification_dismissed: true })
-      .eq('id', id);
-    if (!error) {
-      setOrders(orders => orders.filter(order => order.id !== id));
-    } else {
-      alert('Failed to delete notification: ' + error.message);
+  // Convert order data to display notifications
+  function createNotificationDisplay(order: OrderNotification): NotificationDisplay | null {
+    const orderId = order.id.slice(0, 8);
+
+    // Show delivery status notifications and approval status notifications
+    if (order.approval_status === 'rejected') {
+      return {
+        id: order.id,
+        title: 'Order Rejected',
+        message: `Order #${orderId} has been rejected. Please check your payment proof or contact support.`,
+        timestamp: order.created_at,
+        icon: <XCircle className="w-5 h-5" />,
+        color: 'text-red-600 bg-red-50 border-red-200',
+        urgency: 'high'
+      };
     }
-  };
 
-  // Handle notification click: mark as read and navigate
-  const handleNotificationClick = async (id: string) => {
-    await supabase
-      .from('orders')
-      .update({ notification_read: true })
-      .eq('id', id);
-    setOrders(orders =>
-      orders.map(order =>
-        order.id === id ? { ...order, notification_read: true } : order
-      )
-    );
+    if (order.delivery_status === 'delivered') {
+      return {
+        id: order.id,
+        title: 'Order Delivered',
+        message: `Order #${orderId} has been successfully delivered! Thank you for choosing DeliveryEase.`,
+        timestamp: order.created_at,
+        icon: <CheckCircle className="w-5 h-5" />,
+        color: 'text-green-600 bg-green-50 border-green-200',
+        urgency: 'medium'
+      };
+    }
+
+    if (order.delivery_status === 'delivering') {
+      return {
+        id: order.id,
+        title: 'Out for Delivery',
+        message: `Order #${orderId} is now out for delivery. Your order will arrive soon!`,
+        timestamp: order.created_at,
+        icon: <Truck className="w-5 h-5" />,
+        color: 'text-blue-600 bg-blue-50 border-blue-200',
+        urgency: 'high'
+      };
+    }
+
+    if (order.delivery_status === 'assigned') {
+      return {
+        id: order.id,
+        title: 'Driver Assigned',
+        message: `Order #${orderId} has been assigned to a driver and will be out for delivery soon.`,
+        timestamp: order.created_at,
+        icon: <User className="w-5 h-5" />,
+        color: 'text-purple-600 bg-purple-50 border-purple-200',
+        urgency: 'medium'
+      };
+    }
+
+    // Show notification for batched orders (approved + has batch_id)
+    if (order.approval_status === 'approved' && order.batch_id) {
+      return {
+        id: order.id,
+        title: 'Order Batched for Delivery',
+        message: `Order #${orderId} has been processed and added to a delivery batch. Waiting for driver assignment.`,
+        timestamp: order.created_at,
+        icon: <Package className="w-5 h-5" />,
+        color: 'text-green-600 bg-green-50 border-green-200',
+        urgency: 'medium'
+      };
+    }
+
+    // Show notification for approved orders (without batch)
+    if (order.approval_status === 'approved') {
+      return {
+        id: order.id,
+        title: 'Payment Verified',
+        message: `Order #${orderId} payment has been verified. Your order is being prepared for delivery.`,
+        timestamp: order.created_at,
+        icon: <CheckCircle className="w-5 h-5" />,
+        color: 'text-green-600 bg-green-50 border-green-200',
+        urgency: 'medium'
+      };
+    }
+
+    // Return null only for pending approval status
+    return null;
+  }
+
+  // Handle notification click
+  const handleNotificationClick = (id: string) => {
     navigate(`/customer/orders/${id}`);
-  };
-
-  // Handle select all
-  const handleSelectAll = () => {
-    if (allSelected) {
-      setSelected([]);
-    } else {
-      setSelected(orders.map(order => order.id));
-    }
-  };
-
-  // Handle select one
-  const handleSelect = (id: string) => {
-    setSelected(prev => prev.includes(id) ? prev.filter(sid => sid !== id) : [...prev, id]);
-  };
-
-  // Bulk delete selected
-  const handleDeleteSelected = async () => {
-    if (selected.length === 0) return;
-    const { error } = await supabase
-      .from('orders')
-      .update({ notification_dismissed: true })
-      .in('id', selected);
-    if (!error) {
-      setOrders(orders => orders.filter(order => !selected.includes(order.id)));
-      setSelected([]);
-    } else {
-      alert('Failed to delete selected notifications: ' + error.message);
-    }
   };
 
   if (loading) return <Loader label="Loading notifications..." />;
 
+  const displayNotifications = orders.map(createNotificationDisplay).filter(n => n !== null);
+  const urgentCount = displayNotifications.filter(n => n.urgency === 'high').length;
+
   return (
-    <div className="max-w-2xl mx-auto py-8 px-4">
-      <h1 className="text-2xl font-semibold mb-6">Order Notifications</h1>
-      {orders.length > 0 && (
-        <div className="flex items-center mb-4 gap-4">
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={allSelected}
-              onChange={handleSelectAll}
-              className="form-checkbox h-4 w-4 text-primary-600 border-gray-300 rounded"
-            />
-            <span className="text-sm">Select All</span>
-          </label>
-          <button
-            onClick={handleDeleteSelected}
-            disabled={selected.length === 0}
-            className={`ml-2 px-3 py-1 rounded bg-red-500 text-white text-sm font-medium shadow hover:bg-red-600 transition disabled:opacity-50 disabled:cursor-not-allowed`}
-          >
-            Delete Selected
-          </button>
+    <div className="max-w-3xl mx-auto p-4">
+      {/* Header */}
+      <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Order Notifications</h1>
+            <p className="text-gray-600 mt-1">
+              Stay updated on your delivery progress
+              {urgentCount > 0 && (
+                <span className="ml-2 px-2 py-1 bg-red-100 text-red-800 text-xs font-medium rounded-full">
+                  {urgentCount} urgent
+                </span>
+              )}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={loadNotifications}
+              className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+            >
+              Refresh
+            </button>
+          </div>
         </div>
-      )}
-      {orders.length === 0 ? (
-        <div className="text-center text-gray-500">No notifications.</div>
+      </div>
+
+      {/* Notifications List */}
+      {displayNotifications.length === 0 ? (
+        <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
+          <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No notifications</h3>
+          <p className="text-gray-600">You haven't placed any orders yet. Start shopping to see updates here!</p>
+        </div>
       ) : (
-        <ul className="space-y-4">
-          {orders.map(order => {
-            let statusMsg = '';
-            if (order.status?.label) {
-              statusMsg = `Your order #${order.id.slice(0, 8)} has been ${order.status.label.toLowerCase()}.`;
-            } else {
-              statusMsg = `Your order #${order.id.slice(0, 8)} status: ${order.order_status_code ?? ''}`;
-            }
-            return (
-              <li key={order.id} className="relative group">
-                <input
-                  type="checkbox"
-                  checked={selected.includes(order.id)}
-                  onChange={() => handleSelect(order.id)}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-primary-600 border-gray-300 rounded"
-                  style={{ zIndex: 2 }}
-                />
-                <div
-                  onClick={() => handleNotificationClick(order.id)}
-                  className={`block rounded-lg shadow p-4 transition cursor-pointer ${
-                    !order.notification_read
-                      ? 'bg-blue-50 border-l-4 border-blue-500 font-semibold'
-                      : 'bg-white'
-                  } hover:bg-blue-100 pl-8`}
-                  title="View order details"
-                  role="button"
-                  tabIndex={0}
-                  onKeyPress={e => { if (e.key === 'Enter') handleNotificationClick(order.id); }}
+        <div className="space-y-3">
+          {displayNotifications.map((notification) => (
+            <div key={notification.id} className="group relative">
+              <div className={`bg-white rounded-lg shadow-sm border-l-4 p-4 transition-all duration-200 hover:shadow-md cursor-pointer ${notification.color}`}>
+                {/* Content */}
+                <div 
+                  className="flex items-start gap-3"
+                  onClick={() => handleNotificationClick(notification.id)}
                 >
-                  {/* Dot indicator for unread */}
-                  {!order.notification_read && (
-                    <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-2 align-middle"></span>
-                  )}
-                  <div className="text-sm text-gray-900 mb-1">{statusMsg}</div>
-                  <div className="flex items-center">
-                    <span
-                      className="inline-block px-2 py-1 rounded-full text-xs font-semibold mr-2"
-                      style={{ backgroundColor: order.status?.color || '#eee', color: '#222' }}
-                    >
-                      {order.status?.label || (order.order_status_code ?? '')}
-                    </span>
-                    <span className="text-xs text-gray-400">
-                      {order.created_at ? new Date(order.created_at).toLocaleString() : 'N/A'}
-                    </span>
+                  <div className={`p-2 rounded-full ${notification.color.replace('text-', 'bg-').replace('bg-', 'bg-').replace('-600', '-100')}`}>
+                    {notification.icon}
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="text-sm font-semibold text-gray-900">
+                        {notification.title}
+                      </h3>
+                      {notification.urgency === 'high' && (
+                        <span className="inline-block w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                      )}
+                    </div>
+                    
+                    <p className="text-sm text-gray-700 mb-2">
+                      {notification.message}
+                    </p>
+                    
+                    <div className="flex items-center gap-4 text-xs text-gray-500">
+                      <span>{new Date(notification.timestamp).toLocaleString()}</span>
+                      <span className={`px-2 py-1 rounded-full ${
+                        notification.urgency === 'high' ? 'bg-red-100 text-red-700' :
+                        notification.urgency === 'medium' ? 'bg-blue-100 text-blue-700' :
+                        'bg-gray-100 text-gray-700'
+                      }`}>
+                        {notification.urgency === 'high' ? 'Urgent' : 
+                         notification.urgency === 'medium' ? 'Important' : 'Info'}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <button
-                  onClick={() => handleDelete(order.id)}
-                  className="absolute top-2 right-2 text-gray-400 hover:text-red-500 bg-white rounded-full p-1 shadow group-hover:visible invisible"
-                  title="Delete notification"
-                >
-                  &times;
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

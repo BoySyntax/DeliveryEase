@@ -66,47 +66,47 @@ export default function ProductDetailsPage() {
         return;
       }
 
-      let { data: cart } = await supabase
+      // Get or create cart in a single query
+      const { data: cart, error: cartError } = await supabase
         .from('carts')
         .select('id')
         .eq('customer_id', user.id)
         .single();
 
+      let cartId: string;
+      
       if (!cart) {
-        const { data: newCart, error: cartError } = await supabase
+        const { data: newCart, error: createError } = await supabase
           .from('carts')
           .insert([{ customer_id: user.id }])
           .select()
           .single();
 
-        if (cartError) throw cartError;
-        cart = newCart;
+        if (createError) throw createError;
+        if (!newCart) throw new Error('Failed to create cart');
+        cartId = newCart.id;
+      } else {
+        cartId = cart.id;
       }
 
-      // Check if item already exists in cart
+      // First try to get existing item
       const { data: existingItem } = await supabase
         .from('cart_items')
-        .select('id, quantity')
-        .eq('cart_id', cart.id)
+        .select('quantity')
+        .eq('cart_id', cartId)
         .eq('product_id', product.id)
-        .single();
+        .maybeSingle();
 
-      if (existingItem) {
-        // Update quantity
-        await supabase
-          .from('cart_items')
-          .update({ quantity: existingItem.quantity + quantity })
-          .eq('id', existingItem.id);
-      } else {
-        // Add new item
-        await supabase
-          .from('cart_items')
-          .insert([{
-            cart_id: cart.id,
-            product_id: product.id,
-            quantity: quantity
-          }]);
-      }
+      // Add or update cart item
+      const { error: upsertError } = await supabase
+        .from('cart_items')
+        .upsert({
+          cart_id: cartId,
+          product_id: product.id,
+          quantity: existingItem ? existingItem.quantity + quantity : quantity
+        });
+
+      if (upsertError) throw upsertError;
 
       toast.success('Added to cart');
     } catch (error) {
