@@ -6,6 +6,7 @@ import { Card, CardContent } from '../../ui/components/Card';
 import { Database } from '../../lib/database.types';
 import Loader from '../../ui/components/Loader';
 import { toast } from 'react-hot-toast';
+import { checkBatchAutoAssignment } from '../../lib/batch-auto-assignment';
 
 type OrderStatus = Database['public']['Enums']['order_status'];
 
@@ -92,6 +93,75 @@ function ProductImage({ imageUrl, productName }: { imageUrl: string | null | und
       className="w-10 h-10 object-cover rounded"
       onError={handleImageError}
     />
+  );
+}
+
+// Customer Address Display component
+function CustomerAddressDisplay({ customerId }: { customerId: string }) {
+  const [address, setAddress] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchAddress() {
+      try {
+        const { data, error } = await supabase
+          .from('addresses')
+          .select('*')
+          .eq('customer_id', customerId)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (error) throw error;
+        setAddress(data?.[0] || null);
+      } catch (error) {
+        console.error('Error fetching address:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    if (customerId) {
+      fetchAddress();
+    }
+  }, [customerId]);
+
+  if (loading) {
+    return (
+      <div className="space-y-2">
+        <h3 className="text-sm font-medium">Delivery Address</h3>
+        <div className="text-xs text-gray-500">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!address) {
+    return (
+      <div className="space-y-2">
+        <h3 className="text-sm font-medium">Delivery Address</h3>
+        <div className="text-xs text-red-500">No address available</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <h3 className="text-sm font-medium">Delivery Address</h3>
+      <div className="text-xs text-gray-600 space-y-1">
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{address.full_name}</span>
+          <span>•</span>
+          <span>{address.phone}</span>
+        </div>
+        <div>{address.street_address}</div>
+        {address.barangay && (
+          <div className="flex items-center gap-1">
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+              📍 {address.barangay}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -199,12 +269,12 @@ export default function VerifyOrdersPage() {
           approval_status: approved ? 'approved' : 'rejected',
           delivery_status: approved ? 'pending' : undefined,
           delivery_address: {
-            region: addressData.region,
-            province: addressData.province,
-            city: addressData.city,
-            barangay: addressData.barangay,
+            full_name: addressData.full_name,
+            phone: addressData.phone,
             street_address: addressData.street_address,
-            postal_code: addressData.postal_code
+            barangay: addressData.barangay || 'Unknown Barangay', // Include barangay for batching
+            latitude: addressData.latitude || null,
+            longitude: addressData.longitude || null
           }
         })
         .eq('id', orderId);
@@ -215,6 +285,15 @@ export default function VerifyOrdersPage() {
       }
 
       toast.success(`Order ${approved ? 'approved' : 'rejected'} successfully`);
+      
+      // Check for auto-assignment if order was approved
+      if (approved) {
+        // Give the database trigger a moment to create/update the batch
+        setTimeout(() => {
+          checkBatchAutoAssignment(orderId);
+        }, 1000);
+      }
+      
       setOrders(orders.filter(order => order.id !== orderId));
     } catch (error) {
       console.error('Error updating order:', error);
@@ -306,6 +385,9 @@ export default function VerifyOrdersPage() {
                     <p className="text-sm text-gray-600">{order.customer?.name}</p>
                   </div>
                 </div>
+
+                {/* Delivery Address Preview */}
+                <CustomerAddressDisplay customerId={order.customer_id} />
 
                 {/* Order Items */}
                 <div className="space-y-2">

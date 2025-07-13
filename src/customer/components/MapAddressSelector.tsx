@@ -24,6 +24,10 @@ declare namespace google {
       lng(): number;
     }
     
+    class LatLngBounds {
+      constructor(sw?: LatLng | { lat: number; lng: number }, ne?: LatLng | { lat: number; lng: number });
+    }
+    
     class Marker {
       constructor(opts: MarkerOptions);
       setMap(map: Map | null): void;
@@ -38,6 +42,12 @@ declare namespace google {
     interface MapOptions {
       center?: LatLng | { lat: number; lng: number };
       zoom?: number;
+      minZoom?: number;
+      maxZoom?: number;
+      restriction?: {
+        latLngBounds: LatLngBounds;
+        strictBounds?: boolean;
+      };
       styles?: any[];
       disableDefaultUI?: boolean;
       zoomControl?: boolean;
@@ -107,24 +117,52 @@ export default function MapAddressSelector({
   const initializeMap = () => {
     if (!mapRef.current) return;
 
-    // Default to Philippines coordinates
-    const defaultCenter = { lat: 14.5995, lng: 120.9842 };
+    // Center on Region 10 (Northern Mindanao) - Cagayan de Oro City
+    const region10Center = { lat: 8.4542, lng: 124.6319 };
+    
+    // Define Region 10 bounds
+    const region10Bounds = new google.maps.LatLngBounds(
+      { lat: 7.5, lng: 123.0 }, // Southwest bound
+      { lat: 9.0, lng: 126.0 }  // Northeast bound
+    );
     
     const map = new google.maps.Map(mapRef.current, {
-      center: defaultCenter,
-      zoom: 15,
+      center: region10Center,
+      zoom: 11, // Zoom level to show Region 10 cities
+      minZoom: 10, // Prevent zooming out too far
+      maxZoom: 18, // Allow detailed view
+      restriction: {
+        latLngBounds: region10Bounds,
+        strictBounds: true, // Restrict panning outside Region 10
+      },
       styles: [
+        // Enhanced map styling for Region 10
         {
           featureType: 'poi',
           elementType: 'labels',
           stylers: [{ visibility: 'off' }]
+        },
+        {
+          featureType: 'administrative.locality',
+          elementType: 'labels.text.fill',
+          stylers: [{ color: '#1e40af' }, { weight: 'bold' }]
+        },
+        {
+          featureType: 'road.highway',
+          elementType: 'geometry',
+          stylers: [{ color: '#f59e0b' }]
+        },
+        {
+          featureType: 'water',
+          elementType: 'geometry',
+          stylers: [{ color: '#0ea5e9' }]
         }
       ],
       disableDefaultUI: true,
       zoomControl: true,
-      mapTypeControl: false,
-      streetViewControl: false,
-      fullscreenControl: false,
+      mapTypeControl: true,
+      streetViewControl: true,
+      fullscreenControl: true,
     });
 
     mapInstanceRef.current = map;
@@ -300,89 +338,162 @@ export default function MapAddressSelector({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-white">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b bg-white">
-        <button
-          onClick={onClose}
-          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-        >
-          <ArrowLeft className="w-6 h-6" />
-        </button>
-        <h1 className="text-lg font-semibold">{title}</h1>
-        <button
-          onClick={onClose}
-          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-        >
-          <X className="w-6 h-6" />
-        </button>
+    <div className="fixed inset-0 z-50 bg-white flex flex-col">
+      {/* Enhanced Header */}
+      <div className="bg-white shadow-lg border-b border-gray-200 flex-shrink-0">
+        <div className="flex items-center justify-between p-3 sm:p-4 lg:p-6">
+          <button
+            onClick={onClose}
+            className="p-2 sm:p-3 hover:bg-gray-50 rounded-lg transition-all duration-200 text-gray-600 hover:text-gray-800"
+          >
+            <ArrowLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+          </button>
+          <div className="text-center flex-1 px-2">
+            <h1 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900">{title}</h1>
+            <p className="text-xs sm:text-sm text-gray-600">📍 Region 10 (Northern Mindanao)</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 sm:p-3 hover:bg-gray-50 rounded-lg transition-all duration-200 text-gray-600 hover:text-gray-800"
+          >
+            <X className="w-5 h-5 sm:w-6 sm:h-6" />
+          </button>
+        </div>
+        
+        {/* Instructions Banner */}
+        <div className="bg-gray-800 text-white px-3 sm:px-4 lg:px-6 py-2 sm:py-3">
+          <p className="text-center text-xs sm:text-sm font-medium">
+            🗺️ <span className="hidden sm:inline">Click anywhere on the map to pin your location • Map restricted to Region 10 for precise delivery</span>
+            <span className="sm:hidden">Tap on map to pin location</span>
+          </p>
+        </div>
       </div>
 
-      {/* Map Container */}
-      <div className="relative flex-1 h-64">
+      {/* Enhanced Map Container */}
+      <div className="relative flex-1 min-h-0">
         <div ref={mapRef} className="w-full h-full" />
         
-        {/* Center Pin Overlay */}
+        {/* Enhanced Center Pin Overlay */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <MapPin className="w-8 h-8 text-red-500 mb-8" />
+          <div className="relative">
+            <MapPin className="w-8 h-8 sm:w-10 sm:h-10 text-red-500 drop-shadow-lg mb-8 sm:mb-10" />
+            <div className="absolute top-10 sm:top-12 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-2 sm:px-3 py-1 rounded-full text-xs font-semibold">
+              Tap here
+            </div>
+          </div>
+        </div>
+        
+        {/* Map Legend - Responsive positioning */}
+        <div className="absolute top-2 sm:top-4 left-2 sm:left-4 bg-white/90 backdrop-blur-sm rounded-lg sm:rounded-xl p-2 sm:p-3 shadow-lg max-w-[150px] sm:max-w-none">
+          <h3 className="font-semibold text-gray-800 text-xs sm:text-sm mb-1 sm:mb-2">🗺️ Region 10</h3>
+          <div className="space-y-0.5 sm:space-y-1 text-xs">
+            <div className="flex items-center gap-1 sm:gap-2"><span>🏙️</span> <span className="truncate">Cagayan de Oro</span></div>
+            <div className="flex items-center gap-1 sm:gap-2"><span>⚡</span> <span className="truncate">Iligan</span></div>
+            <div className="flex items-center gap-1 sm:gap-2"><span>🌿</span> <span className="truncate">Malaybalay</span></div>
+            <div className="hidden sm:flex items-center gap-2"><span>🏔️</span> <span>Valencia</span></div>
+            <div className="hidden sm:flex items-center gap-2"><span>🌊</span> <span>Oroquieta</span></div>
+          </div>
         </div>
       </div>
 
-      {/* Address Input Section */}
-      <div className="p-4 bg-white border-t">
-        <div className="relative mb-4">
-          <input
-            type="text"
-            value={address}
-            onChange={handleAddressInputChange}
-            onKeyPress={handleKeyPress}
-            placeholder="Enter your address"
-            className="w-full p-4 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          {address && (
-            <button
-              onClick={() => setAddress('')}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full"
+      {/* Enhanced Address Input Section */}
+      <div className="bg-white border-t border-gray-200 shadow-lg flex-shrink-0">
+        <div className="p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4 lg:space-y-6 max-h-[50vh] overflow-y-auto">
+          {/* Address Input */}
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2">
+              📍 Type or Select Address
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={address}
+                onChange={handleAddressInputChange}
+                onKeyPress={handleKeyPress}
+                placeholder="Type your address here or click on map... (Press Enter to search)"
+                className="w-full p-3 sm:p-4 border border-gray-200 rounded-lg text-sm sm:text-base focus:outline-none focus:ring-1 focus:ring-gray-400 focus:border-gray-400 transition-all duration-200"
+              />
+              <div className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
+                {address && (
+                  <button
+                    onClick={() => setAddress('')}
+                    className="p-1 sm:p-2 hover:bg-gray-100 rounded-full transition-colors"
+                  >
+                    <X className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                  </button>
+                )}
+                <button
+                  onClick={handleAddressSearch}
+                  className="p-1 sm:p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-600 hover:text-gray-800"
+                  title="Search address"
+                >
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Instructions */}
+          <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border border-gray-200">
+            <h3 className="text-sm sm:text-base font-semibold text-gray-800 mb-2">📋 How to select your location:</h3>
+            <div className="space-y-1 sm:space-y-2 text-xs sm:text-sm text-gray-700">
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-600 text-white rounded-full flex items-center justify-center text-xs font-bold">1</span>
+                <span>Type your address and press Enter to search</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-600 text-white rounded-full flex items-center justify-center text-xs font-bold">2</span>
+                <span>Click anywhere on the map to pin your location</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-600 text-white rounded-full flex items-center justify-center text-xs font-bold">3</span>
+                <span>Or use GPS to find your current position</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-600 text-white rounded-full flex items-center justify-center text-xs font-bold">4</span>
+                <span>Confirm your address when ready</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="space-y-2 sm:space-y-3">
+            <Button
+              onClick={getCurrentLocation}
+              variant="outline"
+              fullWidth
+              className="flex items-center justify-center gap-2 sm:gap-3 py-3 sm:py-4 text-sm sm:text-base lg:text-lg border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg font-semibold transition-all duration-200"
+              disabled={isLoading}
             >
-              <X className="w-5 h-5 text-gray-400" />
-            </button>
-          )}
+              {isLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 sm:h-5 sm:w-5 border-b-2 border-gray-600"></div>
+                  <span className="break-words">Getting your location...</span>
+                </>
+              ) : (
+                <>
+                  <Navigation className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
+                  <span className="break-words">🎯 Use My Current Location</span>
+                </>
+              )}
+            </Button>
+
+            {address && (
+              <Button
+                onClick={handleConfirmAddress}
+                fullWidth
+                className="py-3 sm:py-4 text-sm sm:text-base lg:text-lg bg-gray-900 hover:bg-gray-800 text-white rounded-lg font-semibold transition-all duration-200"
+              >
+                <div className="flex items-center justify-center gap-2 sm:gap-3">
+                  <MapPin className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
+                  <span className="break-words">✅ Confirm This Location</span>
+                </div>
+              </Button>
+            )}
+          </div>
         </div>
-
-        <p className="text-center text-gray-600 mb-4">
-          Enter an address or click on the map to select your location
-          {/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && 
-           location.protocol === 'http:' && (
-            <span className="block text-sm text-orange-600 mt-1">
-              📱 Mobile tip: Tap directly on the map to select your location
-            </span>
-          )}
-        </p>
-
-        <Button
-          onClick={getCurrentLocation}
-          variant="outline"
-          fullWidth
-          className="mb-4 flex items-center justify-center gap-2 py-3"
-          disabled={isLoading}
-        >
-          <Navigation className="w-5 h-5" />
-          {isLoading ? 'Getting location...' : 
-           /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && 
-           location.protocol === 'http:' 
-             ? 'Try current location (may not work on mobile HTTP)'
-             : 'Use my current location'}
-        </Button>
-
-        {address && (
-          <Button
-            onClick={handleConfirmAddress}
-            fullWidth
-            className="py-3"
-          >
-            Confirm Address
-          </Button>
-        )}
       </div>
     </div>
   );

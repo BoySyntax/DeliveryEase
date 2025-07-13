@@ -11,20 +11,17 @@ import { cleanImageUrl } from '../../lib/utils';
 import MapAddressSelector, { loadGoogleMapsScript } from '../components/MapAddressSelector';
 import { MapPin } from 'lucide-react';
 
-// Assuming a similar Address type as defined in CheckoutPage.tsx
-// You might want to create a shared types file for Address.
+// Address type matching the current database schema
 type Address = {
   id: string;
   customer_id: string;
   full_name: string;
   phone: string;
-  region: string;
-  province: string;
-  city: string;
-  barangay: string;
-  postal_code: string;
   street_address: string;
-  label?: string;
+  barangay: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  created_at: string;
 };
 
 
@@ -77,7 +74,7 @@ export default function ProfilePage() {
         }
 
         if (data) {
-          setUserAddresses(data as Address[]); // Cast to Address[]
+          setUserAddresses(data);
         }
       } catch (error) {
         console.error('Error fetching addresses:', error);
@@ -189,11 +186,11 @@ export default function ProfilePage() {
     }
 
     // Validate file type and size
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp'];
     const maxSize = 5 * 1024 * 1024; // 5MB
 
     if (!allowedTypes.includes(file.type)) {
-      toast.error('Please select a valid image file (JPEG, PNG, JPG).');
+      toast.error('Please select a valid image file (JPEG, PNG, JPG, GIF, WEBP).');
       return;
     }
 
@@ -216,113 +213,107 @@ export default function ProfilePage() {
         return;
       }
 
-      // Create a preview using FileReader
-      const reader = new FileReader();
-      reader.onload = async (e) => {
+      // Show preview immediately
+      const previewUrl = URL.createObjectURL(file);
+      setImageUrl(previewUrl);
+
+      // Create unique file path - use payment-proof bucket which works
+      const timestamp = Date.now();
+      const randomId = Math.random().toString(36).substring(2, 8);
+      const fileExt = file.type.split('/')[1]; // Get extension from MIME type
+      const fileName = `avatar_${timestamp}_${randomId}.${fileExt}`;
+      const filePath = `profiles/${user.id}/${fileName}`;
+
+      console.log('Upload details:', {
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        uploadPath: filePath,
+        bucketPath: 'payment-proof'
+      });
+
+      // First, try to delete any existing avatar to free up space
+      if (profile.avatar_url && profile.avatar_url.includes('payment-proof')) {
         try {
-          const base64Preview = e.target?.result as string;
-          setImageUrl(base64Preview); // Show preview immediately
-
-          // Create a unique file name with original extension
-          const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-          const fileName = `${Date.now()}.${fileExt}`;
-          const filePath = `${user.id}/${fileName}`;
-
-          // Convert file to ArrayBuffer for proper binary upload
-          const arrayBuffer = await file.arrayBuffer();
-          const fileData = new Uint8Array(arrayBuffer);
-
-          console.log('Uploading file:', {
-            bucket: 'profile-images',
-            path: filePath,
-            type: file.type,
-            size: file.size
-          });
-
-          // First, try to delete the old profile image if it exists
-          if (profile.avatar_url) {
-            try {
-              const oldPath = new URL(profile.avatar_url).pathname.split('/').slice(-2).join('/');
-              if (oldPath) {
-                await supabase.storage
-                  .from('profile-images')
-                  .remove([oldPath]);
-              }
-            } catch (error) {
-              console.warn('Failed to delete old profile image:', error);
-              // Continue with upload even if delete fails
-            }
-          }
-
-          // Upload to Supabase Storage with proper binary handling
-          const { error: uploadError } = await supabase.storage
-            .from('profile-images')
-            .upload(filePath, fileData, {
-              contentType: file.type,
-              duplex: 'half',
-              upsert: true
-            });
-
-          if (uploadError) {
-            console.error('Upload error:', uploadError);
-            throw uploadError;
-          }
-
-          // Get public URL
-          const { data } = supabase.storage
-            .from('profile-images')
-            .getPublicUrl(filePath);
-
-          if (!data.publicUrl) {
-            throw new Error('Failed to get public URL for uploaded image');
-          }
-
-          console.log('Generated public URL:', data.publicUrl);
-
-          // Update profile with new avatar_url
-          const { error: updateError } = await supabase
-            .from('profiles')
-            .update({ avatar_url: data.publicUrl })
-            .eq('id', profile.id);
-
-          if (updateError) throw updateError;
-
-          // Keep the base64 preview until the next successful upload
-          toast.success('Profile image updated successfully!');
-        } catch (error) {
-          console.error('Image upload error:', error);
-          if (error instanceof Error) {
-            toast.error(error.message);
-          } else if (typeof error === 'object' && error !== null && 'message' in error) {
-            toast.error((error as any).message);
-          } else {
-            toast.error('Failed to upload image. Please try again.');
-          }
-          setImageUrl(null);
-        } finally {
-          setUploadingImage(false);
-          if (fileInputRef.current) fileInputRef.current.value = '';
+          // Extract the file path from the existing URL
+          const urlParts = profile.avatar_url.split('/');
+          const existingPath = urlParts.slice(-3).join('/'); // Get profiles/userId/filename
+          await supabase.storage
+            .from('payment-proof')
+            .remove([existingPath]);
+          console.log('Removed existing avatar:', existingPath);
+        } catch (deleteError) {
+          console.log('Could not delete existing avatar:', deleteError);
+          // Continue with upload even if delete fails
         }
-      };
+      }
 
-      reader.onerror = () => {
-        toast.error('Failed to read image file.');
-        setUploadingImage(false);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-      };
+      // Convert to ArrayBuffer like working payment proofs
+      const arrayBuffer = await file.arrayBuffer();
+      const fileData = new Uint8Array(arrayBuffer);
 
-      reader.readAsDataURL(file);
+      // Upload using payment-proof bucket (which works)
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('payment-proof')
+        .upload(filePath, fileData, {
+          upsert: true,
+          cacheControl: '3600',
+          contentType: file.type
+        });
+
+      if (uploadError) {
+        console.error('Upload failed:', uploadError);
+        throw new Error(`Upload failed: ${uploadError.message}`);
+      }
+
+      console.log('Upload successful:', uploadData);
+
+      // Get signed URL like payment proofs
+      const { data: urlData } = await supabase.storage
+        .from('payment-proof')
+        .createSignedUrl(filePath, 60 * 60 * 24 * 30); // 30 days expiry for profile images
+
+      if (!urlData?.signedUrl) {
+        throw new Error('Failed to generate signed URL');
+      }
+
+      console.log('Generated signed URL:', urlData.signedUrl);
+
+      // Update profile in database
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: urlData.signedUrl })
+        .eq('id', profile.id);
+
+      if (updateError) {
+        console.error('Profile update failed:', updateError);
+        throw new Error(`Profile update failed: ${updateError.message}`);
+      }
+
+      // Clean up preview URL
+      URL.revokeObjectURL(previewUrl);
+      
+      // Set the new image URL from the uploaded file
+      setImageUrl(urlData.signedUrl);
+
+      toast.success('Profile image updated successfully!');
+      
     } catch (error) {
       console.error('Image upload error:', error);
-      if (error instanceof Error) {
-        toast.error(error.message);
-      } else if (typeof error === 'object' && error !== null && 'message' in error) {
-        toast.error((error as any).message);
+      const errorMessage = error instanceof Error ? error.message : 'Image upload failed';
+      toast.error(errorMessage);
+      
+      // Reset image URL on error
+      if (profile?.avatar_url) {
+        setImageUrl(cleanImageUrl(profile.avatar_url));
       } else {
-        toast.error('Failed to upload image. Please try again.');
+        setImageUrl(null);
       }
+    } finally {
       setUploadingImage(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -347,16 +338,7 @@ export default function ProfilePage() {
       }
     }
 
-    const fullAddress = [
-      address.street_address,
-      address.barangay,
-      address.city,
-      address.province,
-      address.region,
-      address.postal_code
-    ].filter(Boolean).join(', ');
-
-    setSelectedAddressText(fullAddress);
+    setSelectedAddressText(address.street_address);
     setEditingAddressId(address.id);
     setIsMapSelectorOpen(true);
   };
@@ -419,18 +401,12 @@ export default function ProfilePage() {
           return;
         }
 
-        // For new addresses, we need to get basic contact info
-        // For now, we'll use default values - you might want to prompt for these
+        // For new addresses, only save fields that exist in the database
         const addressData = {
           customer_id: user.id,
           full_name: profile?.name || 'User',
           phone: '09123456789', // Default - user can edit later
           street_address: newAddress,
-          barangay: 'N/A', // These would normally be parsed from the address
-          city: 'N/A',
-          province: 'N/A', 
-          region: 'N/A',
-          postal_code: '0000',
         };
 
         const { error } = await supabase
@@ -461,7 +437,7 @@ export default function ProfilePage() {
         toast.error('Failed to refresh addresses list');
       }
       if (updatedAddresses) {
-        setUserAddresses(updatedAddresses as Address[]);
+        setUserAddresses(updatedAddresses);
       }
     }
 
@@ -604,7 +580,7 @@ export default function ProfilePage() {
             <h2 className="text-2xl font-bold">Addresses</h2>
             <Button
               variant="outline"
-              onClick={handleAddAddressWithMap}
+              onClick={() => navigate('/customer/add-address')}
             >
               Add New Address
             </Button>
@@ -618,7 +594,7 @@ export default function ProfilePage() {
                 <div 
                   key={address.id} 
                   className="border rounded-md p-4 space-y-2 cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() => handleEditAddressWithMap(address)}
+                  onClick={() => navigate(`/customer/edit-address/${address.id}`)}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -627,16 +603,14 @@ export default function ProfilePage() {
                         <p className="font-semibold">{address.full_name} {address.phone && `(${address.phone})`}</p>
                       </div>
                       <p className="text-gray-600 mt-1 ml-6">
-                        {[
-                          address.street_address,
-                          address.barangay,
-                          address.city,
-                          address.province,
-                          address.region,
-                          address.postal_code
-                        ].filter(Boolean).join(', ')}
+                        {address.street_address}
+                        {address.barangay && (
+                          <span className="block text-sm text-blue-600 mt-1">
+                            📍 {address.barangay}
+                          </span>
+                        )}
                       </p>
-                      <p className="text-sm text-blue-600 mt-2 ml-6">Click to edit on map</p>
+                      <p className="text-sm text-blue-600 mt-2 ml-6">Click to edit address</p>
                     </div>
                   </div>
                   <div className="flex justify-end space-x-3" onClick={(e) => e.stopPropagation()}>

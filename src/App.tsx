@@ -19,6 +19,7 @@ const AdminVerifyOrders = lazy(() => import('./admin/pages/VerifyOrdersPage'));
 const AdminBatchOrders = lazy(() => import('./admin/pages/BatchOrdersPage'));
 const AdminDrivers = lazy(() => import('./admin/pages/DriversPage'));
 
+
 // Customer routes
 const CustomerLayout = lazy(() => import('./customer/CustomerLayout'));
 const CustomerHome = lazy(() => import('./customer/pages/HomePage'));
@@ -30,12 +31,15 @@ const CustomerOrders = lazy(() => import('./customer/pages/OrdersPage'));
 const CustomerProfile = lazy(() => import('./customer/pages/ProfilePage'));
 const CustomerNotifications = lazy(() => import('./customer/pages/NotificationsPage'));
 const CustomerOrderDetails = lazy(() => import('./customer/pages/OrderDetailsPage'));
+const CustomerAddAddress = lazy(() => import('./customer/pages/AddAddressPage'));
+const CustomerEditAddress = lazy(() => import('./customer/pages/EditAddressPage'));
 
 // Driver routes
 const DriverLayout = lazy(() => import('./driver/DriverLayout'));
 const DriverDashboard = lazy(() => import('./driver/pages/DashboardPage'));
 const DriverOrders = lazy(() => import('./driver/pages/OrdersPage'));
 const DriverProfile = lazy(() => import('./driver/pages/ProfilePage'));
+const DriverRoute = lazy(() => import('./driver/pages/RoutePage'));
 
 // Protected Route Component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -112,6 +116,8 @@ function App() {
           <Route path="orders" element={<CustomerOrders />} />
           <Route path="orders/:id" element={<CustomerOrderDetails />} />
           <Route path="profile" element={<CustomerProfile />} />
+          <Route path="add-address" element={<CustomerAddAddress />} />
+          <Route path="edit-address/:id" element={<CustomerEditAddress />} />
           <Route path="notifications" element={<CustomerNotifications />} />
         </Route>
 
@@ -126,6 +132,7 @@ function App() {
         >
           <Route index element={<DriverDashboard />} />
           <Route path="orders" element={<DriverOrders />} />
+          <Route path="route" element={<DriverRoute />} />
           <Route path="profile" element={<DriverProfile />} />
         </Route>
 

@@ -3,7 +3,7 @@ import {
   LayoutDashboard, 
   Package, 
   User, 
-  ShoppingBag, 
+  Map, 
   LogOut 
 } from 'lucide-react';
 import { useProfile } from '../lib/auth';
@@ -33,7 +33,8 @@ export default function DriverLayout() {
 
   const navItems = [
     { icon: <LayoutDashboard size={24} />, label: 'Dashboard', path: '/driver' },
-    { icon: <Package size={24} />, label: 'Orders', path: '/driver/orders' },
+    { icon: <Package size={24} />, label: 'Batches', path: '/driver/orders' },
+    { icon: <Map size={24} />, label: 'Routes', path: '/driver/route' },
     { icon: <User size={24} />, label: 'Profile', path: '/driver/profile' },
   ];
 
@@ -44,7 +45,7 @@ export default function DriverLayout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             <div className="flex items-center">
-              <img src={require('../assets/logo.png')} alt="DeliveryEase Logo" width={32} height={32} style={{objectFit: 'contain', marginRight: 8}} />
+              <img src={logo} alt="DeliveryEase Logo" width={32} height={32} style={{objectFit: 'contain', marginRight: 8}} />
               <span className="ml-2 text-xl font-semibold text-gray-900">DeliveryEase</span>
             </div>
             

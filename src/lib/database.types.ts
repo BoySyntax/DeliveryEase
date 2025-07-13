@@ -9,6 +9,36 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      barangays: {
+        Row: {
+          id: string
+          name: string
+          city: string
+          province: string
+          region: string
+          active: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          city: string
+          province: string
+          region?: string
+          active?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          city?: string
+          province?: string
+          region?: string
+          active?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
       delivery_zones: {
         Row: {
           id: string
@@ -44,6 +74,7 @@ export interface Database {
           driver_id: string | null
           total_weight: number
           max_weight: number
+          barangay: string | null
         }
         Insert: {
           id?: string
@@ -52,6 +83,7 @@ export interface Database {
           driver_id?: string | null
           total_weight?: number
           max_weight?: number
+          barangay?: string | null
         }
         Update: {
           id?: string
@@ -60,6 +92,7 @@ export interface Database {
           driver_id?: string | null
           total_weight?: number
           max_weight?: number
+          barangay?: string | null
         }
         Relationships: [
           {
@@ -76,12 +109,10 @@ export interface Database {
           customer_id: string
           full_name: string
           phone: string
-          region: string
-          province: string
-          city: string
-          barangay: string
-          postal_code: string
           street_address: string
+          barangay: string | null
+          latitude: number | null
+          longitude: number | null
           created_at: string
         }
         Insert: {
@@ -89,12 +120,10 @@ export interface Database {
           customer_id: string
           full_name: string
           phone: string
-          region: string
-          province: string
-          city: string
-          barangay: string
-          postal_code: string
           street_address: string
+          barangay?: string | null
+          latitude?: number | null
+          longitude?: number | null
           created_at?: string
         }
         Update: {
@@ -102,12 +131,10 @@ export interface Database {
           customer_id?: string
           full_name?: string
           phone?: string
-          region?: string
-          province?: string
-          city?: string
-          barangay?: string
-          postal_code?: string
           street_address?: string
+          barangay?: string | null
+          latitude?: number | null
+          longitude?: number | null
           created_at?: string
         }
         Relationships: [
@@ -251,12 +278,10 @@ export interface Database {
           batch_id: string | null
           total_weight: number
           delivery_address: {
-            region: string
-            province: string
-            city: string
-            barangay: string
+            full_name: string
+            phone: string
             street_address: string
-            postal_code: string
+            barangay: string
           } | null
           notification_read: boolean
           notification_dismissed: boolean
@@ -273,12 +298,9 @@ export interface Database {
           batch_id?: string | null
           total_weight?: number
           delivery_address?: {
-            region: string
-            province: string
-            city: string
-            barangay: string
+            full_name: string
+            phone: string
             street_address: string
-            postal_code: string
           } | null
           notification_read?: boolean
           notification_dismissed?: boolean
@@ -295,12 +317,10 @@ export interface Database {
           batch_id?: string | null
           total_weight?: number
           delivery_address?: {
-            region: string
-            province: string
-            city: string
-            barangay: string
+            full_name: string
+            phone: string
             street_address: string
-            postal_code: string
+            barangay: string
           } | null
           notification_read?: boolean
           notification_dismissed?: boolean
@@ -461,7 +481,7 @@ export interface Database {
           }
         ]
       }
-      [_ in never]: never
+
     }
     Functions: {
       get_all_batch_summaries: {
@@ -482,6 +502,10 @@ export interface Database {
           driver_name: string | null
           order_count: number
         }[]
+      }
+      consolidate_batches_for_barangay: {
+        Args: { target_barangay: string }
+        Returns: undefined
       }
     }
     Enums: {

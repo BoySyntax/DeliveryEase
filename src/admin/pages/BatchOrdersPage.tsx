@@ -7,7 +7,7 @@ import { Database } from '../../lib/database.types';
 import Loader from '../../ui/components/Loader';
 import { toast } from 'react-hot-toast';
 import Select from '../../ui/components/Select';
-import { Package, Users, MapPin, Weight, Truck, RefreshCw } from 'lucide-react';
+import { Package, Users, MapPin, Weight, Truck, RefreshCw, Zap, AlertTriangle } from 'lucide-react';
 
 type OrderStatus = Database['public']['Enums']['order_status'];
 
@@ -131,6 +131,102 @@ export default function BatchOrdersPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedBarangay, setSelectedBarangay] = useState<string>('');
 
+  // Helper function to calculate actual total weight from order items
+  const calculateBatchWeight = (batch: BatchData): number => {
+    return (batch.orders || []).reduce((batchTotal, order) => {
+      const orderWeight = (order.items || []).reduce((orderTotal, item) => {
+        const itemWeight = (item.product?.weight || 0) * item.quantity;
+        return orderTotal + itemWeight;
+      }, 0);
+      return batchTotal + orderWeight;
+    }, 0);
+  };
+
+  // Auto-assign batches that reach 3500kg capacity
+  const checkAndAutoAssignBatches = async (batches: BatchData[]) => {
+    const batchesToAssign = batches.filter(batch => {
+      const weight = calculateBatchWeight(batch);
+      const maxWeight = batch.max_weight || 3500;
+      return weight >= maxWeight && batch.status === 'pending' && !batch.driver_id;
+    });
+
+    if (batchesToAssign.length === 0) return;
+
+    console.log(`🚚 Found ${batchesToAssign.length} batch(es) ready for auto-assignment`);
+
+    for (const batch of batchesToAssign) {
+      await autoAssignBatch(batch);
+    }
+  };
+
+  // Auto-assign a single batch to available driver
+  const autoAssignBatch = async (batch: BatchData) => {
+    try {
+      // Find available driver (not currently assigned to any batch)
+      const { data: availableDrivers, error: driversError } = await supabase
+        .from('profiles')
+        .select('id, name')
+        .eq('role', 'driver');
+
+      if (driversError) throw driversError;
+
+      if (!availableDrivers || availableDrivers.length === 0) {
+        console.log('❌ No drivers available for auto-assignment');
+        toast.error(`Batch ${batch.batch_number} ready but no drivers available`);
+        return;
+      }
+
+      // Get drivers not currently assigned to any active batch
+      const { data: assignedDrivers } = await supabase
+        .from('order_batches')
+        .select('driver_id')
+        .in('status', ['assigned', 'delivering'])
+        .not('driver_id', 'is', null);
+
+      const assignedDriverIds = (assignedDrivers || []).map(b => b.driver_id);
+      const availableForAssignment = availableDrivers.filter(d => !assignedDriverIds.includes(d.id));
+
+      if (availableForAssignment.length === 0) {
+        console.log('❌ All drivers are currently busy');
+        toast.error(`Batch ${batch.batch_number} ready but all drivers are busy`);
+        return;
+      }
+
+      // Assign to first available driver
+      const selectedDriver = availableForAssignment[0];
+      
+      const { error: assignError } = await supabase
+        .from('order_batches')
+        .update({ 
+          driver_id: selectedDriver.id,
+          status: 'assigned'
+        })
+        .eq('id', batch.id);
+
+      if (assignError) throw assignError;
+
+      const weight = calculateBatchWeight(batch);
+      console.log(`✅ Batch ${batch.batch_number} auto-assigned to ${selectedDriver.name}`);
+      
+             // Show success toast with batch details
+       toast.success(
+         `🚚 Batch ${batch.batch_number} auto-assigned to ${selectedDriver.name}!\n` +
+         `📦 ${batch.orders.length} orders, ${weight.toFixed(1)}kg total`,
+         { 
+           duration: 6000,
+           icon: '🤖'
+         }
+       );
+
+       // Reload data to update UI
+       await loadData();
+
+    } catch (error) {
+      console.error('Error in auto-assignment:', error);
+      toast.error(`Failed to auto-assign Batch ${batch.batch_number}`);
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, [selectedBarangay]);
@@ -178,11 +274,12 @@ export default function BatchOrdersPage() {
         setDrivers(driversData);
       }
 
-      // Load pending batches
+      // Load pending batches that have orders and weight > 0
       const { data: batchData, error: batchError } = await supabase
         .from('order_batches')
         .select('*')
         .eq('status', 'pending')
+        .gt('total_weight', 0) // Only batches with weight > 0
         .order('created_at', { ascending: false });
 
       if (batchError) throw batchError;
@@ -228,26 +325,33 @@ export default function BatchOrdersPage() {
       }
 
       // Combine the data
-      const transformedBatches = (batchData || []).map((batch: any, index) => {
-        const batchOrders = ordersData.filter(order => order.batch_id === batch.id);
-        
-        return {
-          ...batch,
-          batch_number: index + 1,
-          barangay: batch.barangay || 'Unknown',
-          driver: null,
-          orders: batchOrders.map((order: any) => ({
-            ...order,
-            delivery_address: order.delivery_address || {
-              region: '',
-              province: '',
-              city: '',
-              barangay: batch.barangay || '',
-              street_address: ''
-            }
-          }))
-        } as BatchData;
-      });
+      const transformedBatches = (batchData || [])
+        .map((batch: any, index) => {
+          const batchOrders = ordersData.filter(order => order.batch_id === batch.id);
+          
+          return {
+            ...batch,
+            batch_number: index + 1,
+            barangay: batch.barangay || 'Unknown',
+            driver: null,
+            orders: batchOrders.map((order: any) => ({
+              ...order,
+              delivery_address: order.delivery_address || {
+                region: '',
+                province: '',
+                city: '',
+                barangay: batch.barangay || '',
+                street_address: ''
+              }
+            }))
+          } as BatchData;
+        })
+        // FILTER OUT EMPTY BATCHES (no orders or 0 weight)
+        .filter(batch => {
+          const hasOrders = batch.orders && batch.orders.length > 0;
+          const hasWeight = batch.total_weight > 0;
+          return hasOrders && hasWeight;
+        });
 
       // Filter batches by barangay if selected
       const filteredBatches = transformedBatches.filter(batch => {
@@ -258,6 +362,9 @@ export default function BatchOrdersPage() {
       // Debug log to check data
       console.log('Batch data:', filteredBatches);
       setBatches(filteredBatches);
+
+      // Check for auto-assignment opportunities
+      await checkAndAutoAssignBatches(filteredBatches);
   }
 
   const assignDriver = async (batchId: string, driverId: string) => {
@@ -290,12 +397,79 @@ export default function BatchOrdersPage() {
     return <Loader label="Loading order batches..." />;
   }
 
+  // Count batches ready for auto-assignment
+  const batchesReadyForAssignment = batches.filter(batch => {
+    const weight = calculateBatchWeight(batch);
+    const maxWeight = batch.max_weight || 3500;
+    return weight >= maxWeight && batch.status === 'pending' && !batch.driver_id;
+  });
+
   return (
     <div className="space-y-6 relative">
       {refreshing && (
         <div className="absolute top-0 left-0 right-0 z-10 bg-blue-50 border border-blue-200 rounded-lg p-2 flex items-center justify-center gap-2">
           <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
           <span className="text-sm text-blue-700 font-medium">Updating batch data...</span>
+        </div>
+      )}
+      
+            {/* Auto-Assignment Alert */}
+      {batchesReadyForAssignment.length > 0 && (
+        <div className="bg-gradient-to-r from-purple-50 to-purple-100 border-2 border-purple-200 rounded-lg p-4">
+          <div className="flex items-center gap-3">
+            <div className="bg-purple-500 p-2 rounded-full">
+              <Zap className="w-5 h-5 text-white animate-pulse" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-purple-900">
+                🤖 {batchesReadyForAssignment.length} Batch{batchesReadyForAssignment.length !== 1 ? 'es' : ''} Ready for Auto-Assignment
+              </h3>
+              <p className="text-purple-700 text-sm">
+                These batches have reached {(3500).toLocaleString()}kg capacity and can be automatically assigned to available drivers.
+              </p>
+              <p className="text-purple-600 text-xs mt-1 font-medium">
+                ✨ New orders will now go to a new batch automatically!
+              </p>
+            </div>
+            <Button
+              onClick={async () => {
+                for (const batch of batchesReadyForAssignment) {
+                  await autoAssignBatch(batch);
+                }
+              }}
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              Auto-Assign All
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Capacity Info */}
+      {batches.length > 0 && (
+        <div className="bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-500 p-2 rounded-full">
+              <Package className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-blue-900">📦 Batch Management System</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2 text-sm">
+                <div>
+                  <p className="text-blue-700 font-medium">🎯 Optimal Capacity</p>
+                  <p className="text-blue-600">Batches fill to 3,500kg then auto-assign</p>
+                </div>
+                <div>
+                  <p className="text-blue-700 font-medium">🔄 Smart Creation</p>
+                  <p className="text-blue-600">New batches created when current ones are full</p>
+                </div>
+                <div>
+                  <p className="text-blue-700 font-medium">⚡ Auto-Assignment</p>
+                  <p className="text-blue-600">Full batches automatically assigned to drivers</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
       <div className="flex justify-between items-center">
@@ -344,9 +518,11 @@ export default function BatchOrdersPage() {
                         <h2 className="text-xl font-semibold text-gray-900">
                           Batch {batch.batch_number}
                         </h2>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <MapPin className="w-4 h-4" />
-                          <span>{batch.barangay}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                            <MapPin className="w-4 h-4 mr-1" />
+                            {batch.barangay}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -358,7 +534,7 @@ export default function BatchOrdersPage() {
                       </div>
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Weight className="w-4 h-4" />
-                        <span>{batch.total_weight.toFixed(2)} kg</span>
+                        <span>{calculateBatchWeight(batch).toFixed(2)} kg</span>
                       </div>
                     </div>
 
@@ -371,7 +547,7 @@ export default function BatchOrdersPage() {
                       <div className="flex justify-between items-center">
                         <span className="text-sm font-medium text-gray-700">Total Weight</span>
                         <span className="text-sm font-bold text-gray-900">
-                          {(batch.total_weight || 0).toFixed(2)} / {batch.max_weight || 3500} kg
+                          {calculateBatchWeight(batch).toFixed(2)} / {batch.max_weight || 3500} kg
                         </span>
                       </div>
                       
@@ -380,48 +556,93 @@ export default function BatchOrdersPage() {
                         <div className="flex-1 bg-gray-200 rounded-full h-6 overflow-hidden">
                           <div 
                             className={`h-full rounded-full transition-all duration-700 ease-out ${
-                              (batch.total_weight / batch.max_weight) > 0.9 
-                                ? 'bg-red-500' 
-                                : (batch.total_weight / batch.max_weight) > 0.7 
-                                  ? 'bg-yellow-500' 
-                                  : 'bg-green-500'
+                              calculateBatchWeight(batch) >= (batch.max_weight || 3500)
+                                ? 'bg-purple-500 animate-pulse' 
+                                : (calculateBatchWeight(batch) / (batch.max_weight || 3500)) > 0.9 
+                                  ? 'bg-red-500' 
+                                  : (calculateBatchWeight(batch) / (batch.max_weight || 3500)) > 0.7 
+                                    ? 'bg-yellow-500' 
+                                    : 'bg-green-500'
                             }`}
-                            style={{ width: `${Math.min(((batch.total_weight || 0) / (batch.max_weight || 3500)) * 100, 100)}%` }}
+                            style={{ width: `${Math.min((calculateBatchWeight(batch) / (batch.max_weight || 3500)) * 100, 100)}%` }}
                           ></div>
                         </div>
                         <span className={`text-sm font-bold min-w-[3rem] ${
-                          ((batch.total_weight || 0) / (batch.max_weight || 3500)) > 0.9 
-                            ? 'text-red-600' 
-                            : ((batch.total_weight || 0) / (batch.max_weight || 3500)) > 0.7 
-                              ? 'text-yellow-600' 
-                              : 'text-green-600'
+                          calculateBatchWeight(batch) >= (batch.max_weight || 3500)
+                            ? 'text-purple-600 animate-pulse' 
+                            : (calculateBatchWeight(batch) / (batch.max_weight || 3500)) > 0.9 
+                              ? 'text-red-600' 
+                              : (calculateBatchWeight(batch) / (batch.max_weight || 3500)) > 0.7 
+                                ? 'text-yellow-600' 
+                                : 'text-green-600'
                         }`}>
-                          {(((batch.total_weight || 0) / (batch.max_weight || 3500)) * 100).toFixed(0)}%
+                          {((calculateBatchWeight(batch) / (batch.max_weight || 3500)) * 100).toFixed(0)}%
                         </span>
                       </div>
                       
                       {/* Capacity Status */}
-                      <div className="text-xs text-gray-500">
-                        {((batch.max_weight || 3500) - (batch.total_weight || 0)).toFixed(2)} kg remaining capacity
-                      </div>
+                      {calculateBatchWeight(batch) >= (batch.max_weight || 3500) ? (
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1 bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-medium">
+                            <Zap className="w-3 h-3" />
+                            BATCH FULL - READY FOR ASSIGNMENT
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <div className="text-xs text-gray-500">
+                            {((batch.max_weight || 3500) - calculateBatchWeight(batch)).toFixed(2)} kg remaining capacity
+                          </div>
+                          {((batch.max_weight || 3500) - calculateBatchWeight(batch)) < 50 && (
+                            <div className="flex items-center gap-1 bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-medium">
+                              <AlertTriangle className="w-3 h-3" />
+                              NEAR CAPACITY - New batch will be created soon
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   {/* Driver Assignment */}
                   {batch.status === 'pending' && (
                     <div className="flex items-center gap-2">
-                      <Select
-                        options={[
-                          { value: '', label: 'Select Driver' },
-                          ...drivers.map(driver => ({
-                            value: driver.id,
-                            label: driver.name || driver.id
-                          }))
-                        ]}
-                        value=""
-                        onChange={(e) => assignDriver(batch.id, e.target.value)}
-                        className="w-48"
-                      />
+                      {calculateBatchWeight(batch) >= (batch.max_weight || 3500) ? (
+                        <div className="flex flex-col gap-2">
+                          <Button
+                            onClick={() => autoAssignBatch(batch)}
+                            className="bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-2"
+                          >
+                            <Zap className="w-4 h-4" />
+                            Auto-Assign Now
+                          </Button>
+                          <Select
+                            options={[
+                              { value: '', label: 'Or Manual Select' },
+                              ...drivers.map(driver => ({
+                                value: driver.id,
+                                label: driver.name || driver.id
+                              }))
+                            ]}
+                            value=""
+                            onChange={(e) => assignDriver(batch.id, e.target.value)}
+                            className="w-48 text-sm"
+                          />
+                        </div>
+                      ) : (
+                        <Select
+                          options={[
+                            { value: '', label: 'Select Driver' },
+                            ...drivers.map(driver => ({
+                              value: driver.id,
+                              label: driver.name || driver.id
+                            }))
+                          ]}
+                          value=""
+                          onChange={(e) => assignDriver(batch.id, e.target.value)}
+                          className="w-48"
+                        />
+                      )}
                     </div>
                   )}
 
@@ -528,7 +749,7 @@ export default function BatchOrdersPage() {
                     <div className="flex items-center gap-2">
                       <Weight className="w-4 h-4 text-gray-500" />
                       <span className="text-sm font-medium text-gray-700">
-                        Total Weight: {batch.total_weight.toFixed(2)} kg
+                        Total Weight: {calculateBatchWeight(batch).toFixed(2)} kg
                       </span>
                     </div>
                   </div>
