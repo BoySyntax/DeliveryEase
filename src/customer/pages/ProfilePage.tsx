@@ -224,12 +224,13 @@ export default function ProfilePage() {
       const fileName = `avatar_${timestamp}_${randomId}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
 
-      console.log('Upload details:', {
+      console.log('Upload details [FIXED VERSION]:', {
         fileName: file.name,
         fileType: file.type,
         fileSize: file.size,
         uploadPath: filePath,
-        bucketPath: 'profile-images'
+        bucketPath: 'profile-images',
+        timestamp: new Date().toISOString()
       });
 
       // First, try to delete any existing avatar to free up space
@@ -252,7 +253,8 @@ export default function ProfilePage() {
       const arrayBuffer = await file.arrayBuffer();
       const fileData = new Uint8Array(arrayBuffer);
 
-      // Upload using profile-images bucket
+      // Upload using profile-images bucket (VERIFIED FIX v2.0)
+      console.log('About to upload to profile-images bucket, NOT payment-proof');
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('profile-images')
         .upload(filePath, fileData, {
