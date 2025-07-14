@@ -189,6 +189,13 @@ export default function ProfilePage() {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp'];
     const maxSize = 5 * 1024 * 1024; // 5MB
 
+    console.log('File validation:', {
+      fileType: file.type,
+      fileSize: file.size,
+      fileName: file.name,
+      isAllowedType: allowedTypes.includes(file.type)
+    });
+
     if (!allowedTypes.includes(file.type)) {
       toast.error('Please select a valid image file (JPEG, PNG, JPG, GIF, WEBP).');
       return;
@@ -249,9 +256,18 @@ export default function ProfilePage() {
         }
       }
 
-      // Convert to ArrayBuffer
+      // Convert to ArrayBuffer and ensure proper MIME type
       const arrayBuffer = await file.arrayBuffer();
       const fileData = new Uint8Array(arrayBuffer);
+
+      // Ensure we have the correct MIME type
+      const mimeType = file.type || 'image/jpeg';
+      console.log('File details:', {
+        originalType: file.type,
+        resolvedType: mimeType,
+        fileSize: file.size,
+        fileName: file.name
+      });
 
       // Upload using profile-images bucket (VERIFIED FIX v2.0)
       console.log('About to upload to profile-images bucket, NOT payment-proof');
@@ -260,7 +276,7 @@ export default function ProfilePage() {
         .upload(filePath, fileData, {
           upsert: true,
           cacheControl: '3600',
-          contentType: file.type
+          contentType: mimeType
         });
 
       if (uploadError) {
