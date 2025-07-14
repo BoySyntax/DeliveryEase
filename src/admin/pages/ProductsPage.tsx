@@ -427,10 +427,10 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 overflow-y-auto max-h-screen">
+    <div className="fixed inset-0 bg-black bg-opacity-30 block z-50 overflow-y-auto max-h-screen">
       <form
         onSubmit={handleSubmit}
-        className="bg-white p-4 sm:p-6 rounded-lg shadow-lg w-full max-w-md space-y-4 mx-2"
+        className="bg-white p-4 sm:p-6 rounded-lg shadow-lg w-full max-w-md space-y-4 mx-2 overflow-y-auto max-h-[90vh]"
       >
         <h2 className="text-xl font-semibold mb-2">{product ? 'Edit' : 'Add'} Product</h2>
         <Input
