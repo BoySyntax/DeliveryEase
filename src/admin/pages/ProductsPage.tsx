@@ -427,10 +427,10 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 overflow-y-auto max-h-screen">
       <form
         onSubmit={handleSubmit}
-        className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md space-y-4"
+        className="bg-white p-4 sm:p-6 rounded-lg shadow-lg w-full max-w-md space-y-4 mx-2"
       >
         <h2 className="text-xl font-semibold mb-2">{product ? 'Edit' : 'Add'} Product</h2>
         <Input
@@ -439,6 +439,7 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
           value={formData.name}
           onChange={handleChange}
           required
+          className="w-full"
         />
         
         <textarea
@@ -450,7 +451,7 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
           required
         />
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
             label="Price"
             name="price"
@@ -460,6 +461,7 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
             value={formData.price}
             onChange={handleChange}
             required
+            className="w-full"
           />
           
           <Select
@@ -478,10 +480,11 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
               { value: 'other', label: 'Other' }
             ]}
             required
+            className="w-full"
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
             label="Weight per unit (kg)"
             name="weight"
@@ -491,6 +494,7 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
             value={formData.weight}
             onChange={handleChange}
             required
+            className="w-full"
           />
           
           <Input
@@ -501,6 +505,7 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
             value={formData.quantity}
             onChange={handleChange}
             required
+            className="w-full"
           />
         </div>
 
@@ -513,6 +518,7 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
             value={formData.unit_quantity}
             onChange={handleChange}
             required
+            className="w-full"
           />
         )}
 
@@ -539,6 +545,7 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
             label: cat.name
           }))}
           required
+          className="w-full"
         />
 
         <div className="flex items-center gap-2">
@@ -560,7 +567,7 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
         />
 
         {formData.image_url && (
-          <div className="relative w-32 h-32">
+          <div className="relative w-32 h-32 mx-auto">
             <img
               src={formData.image_url}
               alt="Product preview"
@@ -569,11 +576,11 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
           </div>
         )}
 
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={onClose}>
+        <div className="flex flex-col sm:flex-row justify-end gap-2">
+          <Button variant="outline" onClick={onClose} className="w-full sm:w-auto">
             Cancel
           </Button>
-          <Button type="submit">
+          <Button type="submit" className="w-full sm:w-auto">
             {product ? 'Update' : 'Create'} Product
           </Button>
         </div>
