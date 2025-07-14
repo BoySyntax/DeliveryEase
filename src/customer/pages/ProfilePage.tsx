@@ -217,29 +217,29 @@ export default function ProfilePage() {
       const previewUrl = URL.createObjectURL(file);
       setImageUrl(previewUrl);
 
-      // Create unique file path - use payment-proof bucket which works
+      // Create unique file path - use profile-images bucket (FIXED: was incorrectly using payment-proof)
       const timestamp = Date.now();
       const randomId = Math.random().toString(36).substring(2, 8);
       const fileExt = file.type.split('/')[1]; // Get extension from MIME type
       const fileName = `avatar_${timestamp}_${randomId}.${fileExt}`;
-      const filePath = `profiles/${user.id}/${fileName}`;
+      const filePath = `${user.id}/${fileName}`;
 
       console.log('Upload details:', {
         fileName: file.name,
         fileType: file.type,
         fileSize: file.size,
         uploadPath: filePath,
-        bucketPath: 'payment-proof'
+        bucketPath: 'profile-images'
       });
 
       // First, try to delete any existing avatar to free up space
-      if (profile.avatar_url && profile.avatar_url.includes('payment-proof')) {
+      if (profile.avatar_url && profile.avatar_url.includes('profile-images')) {
         try {
           // Extract the file path from the existing URL
           const urlParts = profile.avatar_url.split('/');
-          const existingPath = urlParts.slice(-3).join('/'); // Get profiles/userId/filename
+          const existingPath = urlParts.slice(-2).join('/'); // Get userId/filename
           await supabase.storage
-            .from('payment-proof')
+            .from('profile-images')
             .remove([existingPath]);
           console.log('Removed existing avatar:', existingPath);
         } catch (deleteError) {
@@ -248,13 +248,13 @@ export default function ProfilePage() {
         }
       }
 
-      // Convert to ArrayBuffer like working payment proofs
+      // Convert to ArrayBuffer
       const arrayBuffer = await file.arrayBuffer();
       const fileData = new Uint8Array(arrayBuffer);
 
-      // Upload using payment-proof bucket (which works)
+      // Upload using profile-images bucket
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('payment-proof')
+        .from('profile-images')
         .upload(filePath, fileData, {
           upsert: true,
           cacheControl: '3600',
@@ -268,21 +268,21 @@ export default function ProfilePage() {
 
       console.log('Upload successful:', uploadData);
 
-      // Get signed URL like payment proofs
+      // Get public URL for profile images (they are publicly accessible)
       const { data: urlData } = await supabase.storage
-        .from('payment-proof')
-        .createSignedUrl(filePath, 60 * 60 * 24 * 30); // 30 days expiry for profile images
+        .from('profile-images')
+        .getPublicUrl(filePath);
 
-      if (!urlData?.signedUrl) {
-        throw new Error('Failed to generate signed URL');
+      if (!urlData?.publicUrl) {
+        throw new Error('Failed to generate public URL');
       }
 
-      console.log('Generated signed URL:', urlData.signedUrl);
+      console.log('Generated public URL:', urlData.publicUrl);
 
       // Update profile in database
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ avatar_url: urlData.signedUrl })
+        .update({ avatar_url: urlData.publicUrl })
         .eq('id', profile.id);
 
       if (updateError) {
@@ -294,7 +294,7 @@ export default function ProfilePage() {
       URL.revokeObjectURL(previewUrl);
       
       // Set the new image URL from the uploaded file
-      setImageUrl(urlData.signedUrl);
+      setImageUrl(urlData.publicUrl);
 
       toast.success('Profile image updated successfully!');
       
