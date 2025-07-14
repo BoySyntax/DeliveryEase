@@ -256,15 +256,9 @@ export default function ProfilePage() {
         }
       }
 
-      // Convert to ArrayBuffer and ensure proper MIME type
-      const arrayBuffer = await file.arrayBuffer();
-      const fileData = new Uint8Array(arrayBuffer);
-
-      // Ensure we have the correct MIME type
-      const mimeType = file.type || 'image/jpeg';
+      // Upload file directly without conversion to preserve MIME type
       console.log('File details:', {
         originalType: file.type,
-        resolvedType: mimeType,
         fileSize: file.size,
         fileName: file.name
       });
@@ -273,10 +267,9 @@ export default function ProfilePage() {
       console.log('About to upload to profile-images bucket, NOT payment-proof');
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('profile-images')
-        .upload(filePath, fileData, {
+        .upload(filePath, file, {
           upsert: true,
-          cacheControl: '3600',
-          contentType: mimeType
+          cacheControl: '3600'
         });
 
       if (uploadError) {
