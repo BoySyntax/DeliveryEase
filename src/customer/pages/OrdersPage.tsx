@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Package, Clock, CheckCircle, Truck, XCircle } from 'lucide-react';
+import { Package, Clock, CheckCircle, Truck, XCircle, Calendar } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency, cleanImageUrl } from '../../lib/utils';
 import { toast } from 'react-hot-toast';
@@ -35,6 +35,49 @@ export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState<string>('pending');
   const prevOrderStatuses = useRef<{ [id: string]: string } | null>(null);
 
+  // Helper function to calculate estimated delivery date range
+  function getEstimatedDeliveryDate(orderCreatedAt: string): string {
+    const createdDate = new Date(orderCreatedAt);
+    const now = new Date();
+    
+    // If order was created today, estimate delivery starting tomorrow
+    // Otherwise, estimate delivery starting from today
+    const startDate = new Date();
+    if (createdDate.toDateString() === now.toDateString()) {
+      startDate.setDate(startDate.getDate() + 1);
+    }
+    
+    // Delivery window is 1-3 days from start date
+    const minDeliveryDate = new Date(startDate);
+    const maxDeliveryDate = new Date(startDate);
+    maxDeliveryDate.setDate(maxDeliveryDate.getDate() + 2); // 3 days max
+    
+    const formatDate = (date: Date) => {
+      const month = date.toLocaleDateString('en-US', { month: 'short' });
+      const day = date.getDate();
+      return `${month} ${day}`;
+    };
+    
+    // If same day delivery window, show single date
+    if (minDeliveryDate.toDateString() === maxDeliveryDate.toDateString()) {
+      return formatDate(minDeliveryDate);
+    }
+    
+    // If consecutive days in same month, show "July 17-19"
+    if (minDeliveryDate.getMonth() === maxDeliveryDate.getMonth()) {
+      const month = minDeliveryDate.toLocaleDateString('en-US', { month: 'long' });
+      return `${month} ${minDeliveryDate.getDate()}-${maxDeliveryDate.getDate()}`;
+    }
+    
+    // If different months, show "July 30-Aug 1"
+    return `${formatDate(minDeliveryDate)}-${formatDate(maxDeliveryDate)}`;
+  }
+
+  // Helper function to check if order is assigned to driver (should show estimated delivery)
+  function isOrderAssignedToDriver(order: Order): boolean {
+    return order.delivery_status === 'assigned' || order.delivery_status === 'delivering';
+  }
+
   // Helper function to determine the display status based on approval and delivery status
   function getDisplayStatus(order: Order): string {
     // If rejected, show rejected
@@ -50,11 +93,11 @@ export default function OrdersPage() {
     // If approved, check delivery status
     if (order.approval_status === 'approved') {
       if (order.delivery_status === 'delivered') {
-        return 'out_for_delivery'; // or 'delivered' if you want to distinguish
-      } else if (order.delivery_status === 'pending') {
-        return 'verified';
+        return 'delivered';
+      } else if (order.delivery_status === 'assigned' || order.delivery_status === 'delivering') {
+        return 'out_for_delivery';
       } else {
-        return 'verified'; // Default for approved orders
+        return 'verified'; // For pending delivery status
       }
     }
     
@@ -79,7 +122,8 @@ export default function OrdersPage() {
               'pending': 'Pending Verification',
               'rejected': 'Rejected',
               'verified': 'Verified',
-              'out_for_delivery': 'Out for Delivery'
+              'out_for_delivery': 'Out for Delivery',
+              'delivered': 'Delivered'
             };
             toast.success(`Order #${order.id.slice(0, 8)} status updated: ${statusLabels[currentDisplayStatus] || currentDisplayStatus}`);
           }
@@ -151,13 +195,14 @@ export default function OrdersPage() {
     { code: 'rejected', icon: <XCircle size={18} />, label: 'Rejected', color: 'bg-red-500 border-red-500 text-white', labelColor: 'text-red-500' },
     { code: 'pending', icon: <Clock size={18} />, label: 'Pending', color: 'bg-yellow-400 border-yellow-400 text-white', labelColor: 'text-yellow-500' },
     { code: 'verified', icon: <CheckCircle size={18} />, label: 'Verified', color: 'bg-blue-500 border-blue-500 text-white', labelColor: 'text-blue-500' },
-    { code: 'out_for_delivery', icon: <Truck size={18} />, label: 'Deliver', color: 'bg-green-500 border-green-500 text-white', labelColor: 'text-green-500' },
+    { code: 'out_for_delivery', icon: <Truck size={18} />, label: 'Delivery', color: 'bg-green-500 border-green-500 text-white', labelColor: 'text-green-500' },
+    { code: 'delivered', icon: <CheckCircle size={18} />, label: 'Delivered', color: 'bg-green-600 border-green-600 text-white', labelColor: 'text-green-600' },
   ];
 
   // Filter orders based on statusFilter
   const filteredOrders = statusFilter
     ? orders.filter(order => getDisplayStatus(order) === statusFilter)
-    : orders;
+    : []; // Show no orders when no filter is active
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -227,7 +272,7 @@ export default function OrdersPage() {
                   className="bg-white rounded-lg shadow-sm overflow-hidden"
                 >
                   <div className="p-4">
-                    <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center justify-between mb-3">
                       <div>
                         <p className="text-sm text-gray-500">
                           Order #{order.id.slice(0, 8)}
@@ -235,43 +280,56 @@ export default function OrdersPage() {
                         <p className="text-sm text-gray-500">
                           {new Date(order.created_at).toLocaleDateString()}
                         </p>
+                        {isOrderAssignedToDriver(order) && (
+                          <div className="flex items-center gap-1 mt-1">
+                            <Calendar size={12} className="text-green-600" />
+                            <span className="text-xs font-medium text-green-600">
+                              Estimated delivery: {getEstimatedDeliveryDate(order.created_at)}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                      <span
-                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                        style={{ 
-                          backgroundColor: (() => {
+                      {!['out_for_delivery', 'delivered'].includes(getDisplayStatus(order)) && (
+                        <span
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                          style={{ 
+                            backgroundColor: (() => {
+                              const displayStatus = getDisplayStatus(order);
+                              const statusColors: { [key: string]: string } = {
+                                'pending': '#FEF3C7',
+                                'rejected': '#FEE2E2', 
+                                'verified': '#DBEAFE',
+                                'out_for_delivery': '#D1FAE5',
+                                'delivered': '#D1FAE5'
+                              };
+                              return statusColors[displayStatus] || '#eee';
+                            })(), 
+                            color: (() => {
+                              const displayStatus = getDisplayStatus(order);
+                              const textColors: { [key: string]: string } = {
+                                'pending': '#D97706',
+                                'rejected': '#DC2626',
+                                'verified': '#2563EB', 
+                                'out_for_delivery': '#059669',
+                                'delivered': '#059669'
+                              };
+                              return textColors[displayStatus] || '#222';
+                            })()
+                          }}
+                        >
+                          {(() => {
                             const displayStatus = getDisplayStatus(order);
-                            const statusColors: { [key: string]: string } = {
-                              'pending': '#FEF3C7',
-                              'rejected': '#FEE2E2', 
-                              'verified': '#DBEAFE',
-                              'out_for_delivery': '#D1FAE5'
+                            const statusLabels: { [key: string]: string } = {
+                              'pending': 'Pending',
+                              'rejected': 'Rejected',
+                              'verified': 'Verified',
+                              'out_for_delivery': '',
+                              'delivered': 'Delivered'
                             };
-                            return statusColors[displayStatus] || '#eee';
-                          })(), 
-                          color: (() => {
-                            const displayStatus = getDisplayStatus(order);
-                            const textColors: { [key: string]: string } = {
-                              'pending': '#D97706',
-                              'rejected': '#DC2626',
-                              'verified': '#2563EB', 
-                              'out_for_delivery': '#059669'
-                            };
-                            return textColors[displayStatus] || '#222';
-                          })()
-                        }}
-                      >
-                        {(() => {
-                          const displayStatus = getDisplayStatus(order);
-                          const statusLabels: { [key: string]: string } = {
-                            'pending': 'Pending',
-                            'rejected': 'Rejected',
-                            'verified': 'Verified',
-                            'out_for_delivery': 'Out for Delivery'
-                          };
-                          return statusLabels[displayStatus] || displayStatus;
-                        })()}
-                      </span>
+                            return statusLabels[displayStatus] || displayStatus;
+                          })()}
+                        </span>
+                      )}
                     </div>
 
                     <div className="divide-y">
@@ -321,6 +379,7 @@ export default function OrdersPage() {
                 {statusFilter === 'pending' && "No Pending Orders"}
                 {statusFilter === 'verified' && "No Verified Orders"}
                 {statusFilter === 'out_for_delivery' && "No Orders Out for Delivery"}
+                {statusFilter === 'delivered' && "No Delivered Orders"}
                 {!statusFilter && "No Orders"}
               </h3>
               <p className="text-sm text-gray-500">
@@ -328,6 +387,7 @@ export default function OrdersPage() {
                 {statusFilter === 'pending' && "Orders waiting for verification will appear here"}
                 {statusFilter === 'verified' && "Orders that have been verified will appear here"}
                 {statusFilter === 'out_for_delivery' && "Orders that are being delivered will appear here"}
+                {statusFilter === 'delivered' && "Orders that have been delivered will appear here"}
                 {!statusFilter && "When you place orders, they will appear here"}
               </p>
             </div>

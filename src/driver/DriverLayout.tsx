@@ -1,7 +1,6 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
-  Package, 
   User, 
   Map, 
   LogOut 
@@ -33,7 +32,6 @@ export default function DriverLayout() {
 
   const navItems = [
     { icon: <LayoutDashboard size={24} />, label: 'Dashboard', path: '/driver' },
-    { icon: <Package size={24} />, label: 'Batches', path: '/driver/orders' },
     { icon: <Map size={24} />, label: 'Routes', path: '/driver/route' },
     { icon: <User size={24} />, label: 'Profile', path: '/driver/profile' },
   ];

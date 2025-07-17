@@ -37,7 +37,6 @@ const CustomerEditAddress = lazy(() => import('./customer/pages/EditAddressPage'
 // Driver routes
 const DriverLayout = lazy(() => import('./driver/DriverLayout'));
 const DriverDashboard = lazy(() => import('./driver/pages/DashboardPage'));
-const DriverOrders = lazy(() => import('./driver/pages/OrdersPage'));
 const DriverProfile = lazy(() => import('./driver/pages/ProfilePage'));
 const DriverRoute = lazy(() => import('./driver/pages/RoutePage'));
 
@@ -131,7 +130,6 @@ function App() {
           }
         >
           <Route index element={<DriverDashboard />} />
-          <Route path="orders" element={<DriverOrders />} />
           <Route path="route" element={<DriverRoute />} />
           <Route path="profile" element={<DriverProfile />} />
         </Route>

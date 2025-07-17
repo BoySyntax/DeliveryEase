@@ -189,14 +189,11 @@ export default function ProfilePage() {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp'];
     const maxSize = 5 * 1024 * 1024; // 5MB
 
-    console.log('File validation:', {
-      fileType: file.type,
-      fileSize: file.size,
-      fileName: file.name,
-      isAllowedType: allowedTypes.includes(file.type)
-    });
-
-    if (!allowedTypes.includes(file.type)) {
+    // Check file extension as fallback
+    const fileExtension = file.name.toLowerCase().split('.').pop() || '';
+    const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    
+    if (!allowedTypes.includes(file.type) && !validExtensions.includes(fileExtension)) {
       toast.error('Please select a valid image file (JPEG, PNG, JPG, GIF, WEBP).');
       return;
     }
@@ -224,56 +221,67 @@ export default function ProfilePage() {
       const previewUrl = URL.createObjectURL(file);
       setImageUrl(previewUrl);
 
-      // Create unique file path - use profile-images bucket (FIXED: was incorrectly using payment-proof)
+      // Create unique file path
       const timestamp = Date.now();
       const randomId = Math.random().toString(36).substring(2, 8);
-      const fileExt = file.type.split('/')[1]; // Get extension from MIME type
+      
+      // Determine content type
+      let contentType = file.type;
+      if (!allowedTypes.includes(contentType)) {
+        // Fallback to extension-based content type
+        const mimeTypes: { [key: string]: string } = {
+          'jpg': 'image/jpeg',
+          'jpeg': 'image/jpeg',
+          'png': 'image/png',
+          'gif': 'image/gif',
+          'webp': 'image/webp'
+        };
+        contentType = mimeTypes[fileExtension] || 'image/jpeg';
+      }
+
+      // Create a new File object with explicit type
+      const fileWithCorrectType = new File([file], file.name, {
+        type: contentType
+      });
+
+      // Get file extension from content type
+      const fileExt = contentType.split('/')[1] || 'jpg';
       const fileName = `avatar_${timestamp}_${randomId}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
 
-      console.log('Upload details [FIXED VERSION]:', {
-        fileName: file.name,
-        fileType: file.type,
-        fileSize: file.size,
+      console.log('Upload details:', {
+        fileName: fileWithCorrectType.name,
+        fileType: fileWithCorrectType.type,
+        fileSize: fileWithCorrectType.size,
         uploadPath: filePath,
         bucketPath: 'profile-images',
-        timestamp: new Date().toISOString()
+        contentType: contentType
       });
 
       // First, try to delete any existing avatar to free up space
       if (profile.avatar_url && profile.avatar_url.includes('profile-images')) {
         try {
-          // Extract the file path from the existing URL
           const urlParts = profile.avatar_url.split('/');
-          const existingPath = urlParts.slice(-2).join('/'); // Get userId/filename
+          const existingPath = urlParts.slice(-2).join('/');
           await supabase.storage
             .from('profile-images')
             .remove([existingPath]);
           console.log('Removed existing avatar:', existingPath);
         } catch (deleteError) {
           console.log('Could not delete existing avatar:', deleteError);
-          // Continue with upload even if delete fails
         }
       }
 
-      // Upload file directly without conversion to preserve MIME type
-      console.log('File details:', {
-        originalType: file.type,
-        fileSize: file.size,
-        fileName: file.name
-      });
-
-      // Upload using profile-images bucket (VERIFIED FIX v2.0)
-      console.log('About to upload to profile-images bucket, NOT payment-proof');
+      // Upload the file
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('profile-images')
-        .upload(filePath, file, {
+        .upload(filePath, fileWithCorrectType, {
           upsert: true,
-          cacheControl: '3600'
+          cacheControl: '3600',
+          contentType: contentType
         });
 
       if (uploadError) {
-        console.error('Upload failed:', uploadError);
         throw new Error(`Upload failed: ${uploadError.message}`);
       }
 

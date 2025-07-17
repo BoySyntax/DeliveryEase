@@ -43,6 +43,18 @@ interface RouteMetrics {
   routeComparisonData?: any;
 }
 
+// Extended DeliveryLocation with order items
+interface ExtendedDeliveryLocation extends DeliveryLocation {
+  order_items?: {
+    quantity: number;
+    price: number;
+    product: {
+      name: string;
+      image_url?: string;
+    };
+  }[];
+}
+
 // Google Maps types
 interface GoogleMapsWindow extends Window {
   google: any;
@@ -52,7 +64,7 @@ interface GoogleMapsWindow extends Window {
 declare const window: GoogleMapsWindow;
 
 export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: DeliveryMapProps) {
-  const [deliveryLocations, setDeliveryLocations] = useState<DeliveryLocation[]>([]);
+  const [deliveryLocations, setDeliveryLocations] = useState<ExtendedDeliveryLocation[]>([]);
   const [optimizedOrder, setOptimizedOrder] = useState<string[]>([]);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
@@ -106,7 +118,6 @@ export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: Deliv
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
         const { latitude, longitude, accuracy } = position.coords;
-        console.log('📍 Real-time location update:', { latitude, longitude, accuracy });
         
         const newLocation = {
           lat: latitude,
@@ -609,21 +620,59 @@ export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: Deliv
         }
       });
 
-      const infoWindow = new window.google.maps.InfoWindow({
-        content: `
-          <div class="p-2 max-w-xs">
-            <h3 class="font-bold text-gray-800">${location.customer_name}</h3>
-            <p class="text-sm text-gray-600 mb-1">${location.address}</p>
-            <p class="text-sm text-blue-600 font-medium mb-2">${location.barangay}</p>
-            <div class="flex justify-between items-center">
-              <span class="font-semibold text-green-600">₱${location.total.toLocaleString()}</span>
-              <span class="text-xs ${isCompleted ? 'text-green-600' : isCurrent ? 'text-yellow-600' : 'text-gray-500'}">
-                ${isCompleted ? '✅ Completed' : isCurrent ? '🟡 Current' : `⭕ Stop #${sequenceNumber}`}
-              </span>
-            </div>
-            ${location.phone ? `<p class="text-xs text-gray-500 mt-1">📞 ${location.phone}</p>` : ''}
+      // Generate order items HTML with better debugging
+      const extendedLocation = location as ExtendedDeliveryLocation;
+      console.log('📍 Creating popup for location:', location.customer_name);
+      console.log('📍 Order items data:', extendedLocation.order_items);
+      console.log('📍 Order items length:', extendedLocation.order_items?.length);
+      
+      let orderItemsHtml = '';
+      if (extendedLocation.order_items && extendedLocation.order_items.length > 0) {
+        console.log('📍 Generating order items HTML for', extendedLocation.order_items.length, 'items');
+        orderItemsHtml = `
+          <div class="mt-3 pt-2 border-t border-gray-200">
+            <p class="text-xs font-medium text-gray-700 mb-2">📦 Order Items:</p>
+            ${extendedLocation.order_items.map(item => `
+              <div class="flex justify-between items-center text-xs mb-1">
+                <span class="text-gray-600">${item.product.name} (${item.quantity}x)</span>
+                <span class="text-gray-800 font-medium">₱${(item.price * item.quantity).toLocaleString()}</span>
+              </div>
+            `).join('')}
           </div>
-        `
+        `;
+        console.log('📍 Generated HTML:', orderItemsHtml);
+      } else {
+        console.log('📍 No order items found for this location');
+        console.log('📍 Extended location data:', JSON.stringify(extendedLocation, null, 2));
+        orderItemsHtml = `
+          <div class="mt-3 pt-2 border-t border-gray-200">
+            <p class="text-xs font-medium text-gray-700 mb-2">📦 Order Items:</p>
+            <div class="text-xs text-gray-500">No order items found</div>
+            <div class="text-xs text-blue-500 mt-1">Debug: order_items = ${JSON.stringify(extendedLocation.order_items)}</div>
+          </div>
+        `;
+      }
+
+      const popupContent = `
+        <div class="p-2 max-w-xs">
+          <h3 class="font-bold text-gray-800">${location.customer_name}</h3>
+          <p class="text-sm text-gray-600 mb-1">${location.address}</p>
+          <p class="text-sm text-blue-600 font-medium mb-2">${location.barangay}</p>
+          <div class="flex justify-between items-center">
+            <span class="font-semibold text-green-600">₱${location.total.toLocaleString()}</span>
+            <span class="text-xs ${isCompleted ? 'text-green-600' : isCurrent ? 'text-yellow-600' : 'text-gray-500'}">
+              ${isCompleted ? '✅ Completed' : isCurrent ? '🟡 Current' : `⭕ Stop #${sequenceNumber}`}
+            </span>
+          </div>
+          ${location.phone ? `<p class="text-xs text-gray-500 mt-1">📞 ${location.phone}</p>` : ''}
+          ${orderItemsHtml}
+        </div>
+      `;
+
+      console.log('📍 Final popup content:', popupContent);
+
+      const infoWindow = new window.google.maps.InfoWindow({
+        content: popupContent
       });
 
       marker.addListener('click', () => {
@@ -728,6 +777,19 @@ export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: Deliv
 
     try {
       setLoading(true);
+      
+      // First, let's check if there are any order items in the database at all
+      const { data: allOrderItems, error: itemsError } = await supabase
+        .from('order_items')
+        .select('*')
+        .limit(5);
+      
+      console.log('🔍 Checking if order_items table has data:', allOrderItems);
+      console.log('🔍 Order items error:', itemsError);
+      
+      if (itemsError) {
+        console.error('❌ Error checking order_items table:', itemsError);
+      }
       const { data: orders, error } = await supabase
         .from('orders')
         .select(`
@@ -735,28 +797,129 @@ export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: Deliv
           total,
           delivery_status,
           delivery_address,
-          customer:profiles!orders_customer_id_fkey(name)
+          customer:profiles!orders_customer_id_fkey(name),
+          items:order_items(
+            quantity,
+            price,
+            product:products(name, image_url)
+          )
         `)
         .eq('batch_id', batchId)
         .eq('approval_status', 'approved');
 
       if (error) throw error;
 
-      const locations: DeliveryLocation[] = (orders || []).map(order => ({
-        id: order.id,
-        order_id: order.id,
-        customer_name: order.customer?.name || 'Customer',
-        address: order.delivery_address?.street_address || '',
-        barangay: order.delivery_address?.barangay || 'Unknown',
-        latitude: (order.delivery_address as any)?.latitude || null,
-        longitude: (order.delivery_address as any)?.longitude || null,
-        phone: order.delivery_address?.phone || '',
-        total: order.total,
-        delivery_status: order.delivery_status,
-        priority: order.delivery_status === 'pending' ? 5 : 3
-      }));
+      console.log('📦 Fetched orders with items:', orders);
+      console.log('📦 Number of orders:', orders?.length);
+      
+      // Enhanced debugging for each order
+      if (orders && orders.length > 0) {
+        orders.forEach((order, index) => {
+          console.log(`📦 Order ${index + 1}:`, {
+            id: order.id,
+            customer: order.customer?.name,
+            total: order.total,
+            items: order.items,
+            itemsCount: order.items?.length || 0,
+            itemsType: typeof order.items,
+            itemsIsArray: Array.isArray(order.items)
+          });
+          
+          // Check if items is null, undefined, or empty array
+          if (!order.items) {
+            console.log(`❌ Order ${index + 1} has no items property`);
+          } else if (Array.isArray(order.items) && order.items.length === 0) {
+            console.log(`❌ Order ${index + 1} has empty items array`);
+          } else {
+            console.log(`✅ Order ${index + 1} has ${order.items.length} items:`, order.items);
+          }
+        });
+      }
+
+      // Let's also try a direct query to order_items to see if there are any items for these orders
+      let directOrderItems: any[] = [];
+      if (orders && orders.length > 0) {
+        const orderIds = orders.map(o => o.id);
+        console.log('🔍 Checking order_items for order IDs:', orderIds);
+        
+        const { data: directItems, error: directError } = await supabase
+          .from('order_items')
+          .select(`
+            id,
+            order_id,
+            quantity,
+            price,
+            product:products(name, image_url)
+          `)
+          .in('order_id', orderIds);
+        
+        directOrderItems = directItems || [];
+        console.log('🔍 Direct order_items query result:', directOrderItems);
+        console.log('🔍 Direct order_items error:', directError);
+        
+        if (directOrderItems && directOrderItems.length > 0) {
+          console.log('✅ Found order items via direct query:', directOrderItems);
+          
+          // Group items by order_id
+          const itemsByOrder = directOrderItems.reduce((acc: Record<string, any[]>, item: any) => {
+            if (!acc[item.order_id]) {
+              acc[item.order_id] = [];
+            }
+            acc[item.order_id].push(item);
+            return acc;
+          }, {} as Record<string, any[]>);
+          
+          console.log('📦 Items grouped by order:', itemsByOrder);
+        } else {
+          console.log('❌ No order items found via direct query');
+        }
+      }
+
+      // Create a map of order items from the direct query
+      const itemsByOrder = directOrderItems ? directOrderItems.reduce((acc: Record<string, any[]>, item: any) => {
+        if (!acc[item.order_id]) {
+          acc[item.order_id] = [];
+        }
+        acc[item.order_id].push(item);
+        return acc;
+      }, {} as Record<string, any[]>) : {};
+
+      const locations: ExtendedDeliveryLocation[] = (orders || []).map(order => {
+        // Use direct query results if nested query failed
+        const orderItems = order.items && order.items.length > 0 
+          ? order.items 
+          : (itemsByOrder[order.id] || []);
+        
+        console.log(`📍 Creating location for order ${order.id}:`, {
+          orderItemsFromNested: order.items,
+          orderItemsFromDirect: itemsByOrder[order.id],
+          finalOrderItems: orderItems
+        });
+
+        return {
+          id: order.id,
+          order_id: order.id,
+          customer_name: order.customer?.name || 'Customer',
+          address: order.delivery_address?.street_address || '',
+          barangay: order.delivery_address?.barangay || 'Unknown',
+          latitude: (order.delivery_address as any)?.latitude || null,
+          longitude: (order.delivery_address as any)?.longitude || null,
+          phone: order.delivery_address?.phone || '',
+          total: order.total,
+          delivery_status: order.delivery_status,
+          priority: order.delivery_status === 'pending' ? 5 : 3,
+          order_items: orderItems
+        };
+      });
 
       setDeliveryLocations(locations);
+      
+      // Force refresh markers after data is loaded
+      setTimeout(() => {
+        console.log('🔄 Force refreshing markers after data load...');
+        updateMapMarkers();
+      }, 1000);
+      
     } catch (error) {
       console.error('Error loading delivery locations:', error);
       // toast.error('Failed to load delivery locations');

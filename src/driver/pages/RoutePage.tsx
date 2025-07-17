@@ -7,15 +7,10 @@ import {
   Route, 
   MapPin, 
   Clock, 
-  Navigation, 
   Truck, 
   Target,
-  RotateCcw,
   CheckCircle,
-  TrendingUp,
-  AlertCircle,
-  Map,
-  List
+  AlertCircle
 } from 'lucide-react';
 import { useProfile } from '../../lib/auth';
 import { toast } from 'react-hot-toast';
@@ -36,7 +31,6 @@ export default function RoutePage() {
   const [activeBatches, setActiveBatches] = useState<BatchInfo[]>([]);
   const [selectedBatch, setSelectedBatch] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
 
   useEffect(() => {
     if (profile?.id) {
@@ -138,7 +132,6 @@ export default function RoutePage() {
         <h3 className="text-xl font-semibold text-gray-900 mb-2">No Active Batches</h3>
         <p className="text-gray-600 mb-6">You don't have any delivery batches assigned at the moment.</p>
         <Button onClick={loadActiveBatches} variant="outline">
-          <RotateCcw className="h-4 w-4 mr-2" />
           Refresh
         </Button>
       </div>
@@ -148,44 +141,8 @@ export default function RoutePage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">🗺️ Delivery Routes</h1>
-          <p className="text-gray-600 mt-1">
-            Real-time navigation with genetic algorithm optimization
-          </p>
-        </div>
-        
-        <div className="flex items-center gap-3">
-          <div className="flex bg-gray-100 rounded-lg p-1">
-            <Button
-              onClick={() => setViewMode('map')}
-              variant={viewMode === 'map' ? 'primary' : 'ghost'}
-              size="sm"
-              className="px-4"
-            >
-              <Map className="h-4 w-4 mr-2" />
-              Map View
-            </Button>
-            <Button
-              onClick={() => setViewMode('list')}
-              variant={viewMode === 'list' ? 'primary' : 'ghost'}
-              size="sm"
-              className="px-4"
-            >
-              <List className="h-4 w-4 mr-2" />
-              List View
-            </Button>
-          </div>
-          
-          <Button
-            onClick={loadActiveBatches}
-            variant="outline"
-          >
-            <RotateCcw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">🗺️ Delivery Routes</h1>
       </div>
 
       {/* Batch Selection */}
@@ -229,34 +186,11 @@ export default function RoutePage() {
 
       {/* Main Content */}
       {selectedBatch ? (
-        viewMode === 'map' ? (
-          /* Real-time Map View */
-          <RealTimeDeliveryMap
-            batchId={selectedBatch}
-            driverId={profile?.id || ''}
-            onRouteOptimized={handleRouteOptimized}
-          />
-        ) : (
-          /* List View */
-          <Card>
-            <CardContent className="p-6">
-              <div className="text-center py-12">
-                <List className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">List View</h3>
-                <p className="text-gray-600 mb-6">
-                  Traditional route list view coming soon. Use Map View for real-time navigation.
-                </p>
-                <Button
-                  onClick={() => setViewMode('map')}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  <Map className="h-4 w-4 mr-2" />
-                  Switch to Map View
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )
+        <RealTimeDeliveryMap
+          batchId={selectedBatch}
+          driverId={profile?.id || ''}
+          onRouteOptimized={handleRouteOptimized}
+        />
       ) : (
         <Card>
           <CardContent className="p-6">
@@ -269,37 +203,7 @@ export default function RoutePage() {
         </Card>
       )}
 
-      {/* Features Info */}
-      <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
-        <CardContent className="p-6">
-          <h3 className="text-lg font-semibold text-blue-900 mb-4">
-            🧬 Advanced Route Features
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div className="flex items-start gap-3">
-              <Target className="h-5 w-5 text-blue-600 mt-0.5" />
-              <div>
-                <p className="font-medium text-blue-800">Genetic Algorithm</p>
-                <p className="text-blue-700">AI-powered route optimization for maximum efficiency</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Navigation className="h-5 w-5 text-purple-600 mt-0.5" />
-              <div>
-                <p className="font-medium text-purple-800">Real-time GPS</p>
-                <p className="text-purple-700">Live driver tracking and turn-by-turn navigation</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <TrendingUp className="h-5 w-5 text-green-600 mt-0.5" />
-              <div>
-                <p className="font-medium text-green-800">Smart Metrics</p>
-                <p className="text-green-700">Distance, time, and fuel cost optimization</p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+
     </div>
   );
 } 
