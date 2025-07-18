@@ -17,8 +17,10 @@ type Product = {
   quantity: number;
   category_id: string;
   created_at: string | null;
-  unit?: string;
-  unit_quantity?: number;
+  unit: string | null;
+  unit_quantity: number | null;
+  featured: boolean;
+  weight: number;
 };
 
 export default function ProductDetailsPage() {
