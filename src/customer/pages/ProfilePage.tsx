@@ -185,6 +185,41 @@ export default function ProfilePage() {
       return;
     }
 
+    // Reset the file input to ensure clean state
+    e.target.value = '';
+
+    // Debug: Log the original file details
+    console.log('Original file details:', {
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      lastModified: file.lastModified
+    });
+
+    // Check if file is actually readable and can be loaded as an image
+    try {
+      const testRead = await file.arrayBuffer();
+      console.log('File is readable, size:', testRead.byteLength);
+      
+      // Try to create an image from the file to validate it's actually an image
+      const imageUrl = URL.createObjectURL(file);
+      const img = new Image();
+      
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = () => reject(new Error('File is not a valid image'));
+        img.src = imageUrl;
+      });
+      
+      URL.revokeObjectURL(imageUrl);
+      console.log('File is a valid image');
+      
+    } catch (readError) {
+      console.error('File validation failed:', readError);
+      toast.error('The selected file is not a valid image. Please try a different file.');
+      return;
+    }
+
     // Validate file type and size
     const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp'];
     const maxSize = 5 * 1024 * 1024; // 5MB
@@ -193,8 +228,18 @@ export default function ProfilePage() {
     const fileExtension = file.name.toLowerCase().split('.').pop() || '';
     const validExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
     
-    if (!allowedTypes.includes(file.type) && !validExtensions.includes(fileExtension)) {
+    // More robust validation - check both MIME type and extension
+    const isValidMimeType = allowedTypes.includes(file.type);
+    const isValidExtension = validExtensions.includes(fileExtension);
+    
+    if (!isValidMimeType && !isValidExtension) {
       toast.error('Please select a valid image file (JPEG, PNG, JPG, GIF, WEBP).');
+      return;
+    }
+    
+    // Additional check for empty or corrupted files
+    if (file.size === 0) {
+      toast.error('The selected file appears to be empty.');
       return;
     }
 
@@ -225,37 +270,54 @@ export default function ProfilePage() {
       const timestamp = Date.now();
       const randomId = Math.random().toString(36).substring(2, 8);
       
-      // Determine content type
-      let contentType = file.type;
-      if (!allowedTypes.includes(contentType)) {
-        // Fallback to extension-based content type
-        const mimeTypes: { [key: string]: string } = {
-          'jpg': 'image/jpeg',
-          'jpeg': 'image/jpeg',
-          'png': 'image/png',
-          'gif': 'image/gif',
-          'webp': 'image/webp'
-        };
-        contentType = mimeTypes[fileExtension] || 'image/jpeg';
+      // Determine content type based on file extension first, then fallback to file.type
+      const mimeTypes: { [key: string]: string } = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'webp': 'image/webp'
+      };
+      
+      // Use extension-based content type as primary, fallback to file.type
+      let contentType = mimeTypes[fileExtension] || file.type;
+      
+      // If still not a valid image type, default to jpeg
+      if (!allowedTypes.includes(contentType) || contentType === 'application/json') {
+        contentType = 'image/jpeg';
       }
 
-      // Create a new File object with explicit type
-      const fileWithCorrectType = new File([file], file.name, {
-        type: contentType
+      // Create a new file with the correct type using FileReader
+      const correctedFile = await new Promise<File>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const blob = new Blob([reader.result as ArrayBuffer], { type: contentType });
+          const newFile = new File([blob], file.name, { type: contentType });
+          resolve(newFile);
+        };
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
       });
 
-      // Get file extension from content type
-      const fileExt = contentType.split('/')[1] || 'jpg';
-      const fileName = `avatar_${timestamp}_${randomId}.${fileExt}`;
+      // Use original file name with timestamp to avoid any naming issues
+      const originalName = file.name;
+      const nameWithoutExt = originalName.substring(0, originalName.lastIndexOf('.'));
+      const fileExt = originalName.substring(originalName.lastIndexOf('.') + 1);
+      const fileName = `${nameWithoutExt}_${timestamp}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
 
+      // Log upload details
       console.log('Upload details:', {
-        fileName: fileWithCorrectType.name,
-        fileType: fileWithCorrectType.type,
-        fileSize: fileWithCorrectType.size,
+        originalFileName: file.name,
+        originalFileType: file.type,
+        fileExtension: fileExtension,
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
         uploadPath: filePath,
         bucketPath: 'profile-images',
-        contentType: contentType
+        contentType: contentType,
+        allowedTypes: allowedTypes
       });
 
       // First, try to delete any existing avatar to free up space
@@ -272,18 +334,45 @@ export default function ProfilePage() {
         }
       }
 
-      // Upload the file
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('profile-images')
-        .upload(filePath, fileWithCorrectType, {
-          upsert: true,
-          cacheControl: '3600',
-          contentType: contentType
-        });
-
-      if (uploadError) {
-        throw new Error(`Upload failed: ${uploadError.message}`);
+      // Try using the same approach as successful product uploads
+      console.log('Attempting upload using FormData approach');
+      console.log('Corrected file type:', correctedFile.type);
+      console.log('File path:', filePath);
+      console.log('File size:', correctedFile.size);
+      
+      // Get the current session
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Authentication required');
       }
+
+      // Create FormData like in ProductsPage
+      const formData = new FormData();
+      formData.append('file', correctedFile, fileName);
+
+      // Get the Supabase URL and anon key
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      // Upload using fetch like in ProductsPage
+      const response = await fetch(
+        `${supabaseUrl}/storage/v1/object/profile-images/${filePath}`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': supabaseAnonKey
+          },
+          body: formData
+        }
+      );
+
+      if (!response.ok) {
+        console.error('Upload failed with status:', response.status);
+        throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+      }
+
+      const uploadData = await response.json();
 
       console.log('Upload successful:', uploadData);
 
