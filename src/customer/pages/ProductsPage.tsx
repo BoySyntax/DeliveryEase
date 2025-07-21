@@ -188,28 +188,7 @@ export default function ProductsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-row gap-2 items-center mb-2 justify-center">
-        <Input
-          placeholder="Search products..."
-          icon={<Search size={16} />}
-          value={searchQuery}
-          onChange={(e) => handleSearch(e.target.value)}
-          className="w-[220px] h-8 py-1 text-xs rounded-md border-gray-300 focus:border-primary-500 focus:ring-primary-500 shadow-sm pl-8"
-        />
-        <Select
-          options={[
-            { value: '', label: 'All Categories' },
-            ...categories.map(cat => ({
-              value: cat.id,
-              label: cat.name
-            }))
-          ]}
-          value={categoryId}
-          onChange={(e) => handleCategoryChange(e.target.value)}
-          className="w-[180px] h-8 px-2 py-1 text-xs rounded-md border-gray-300 focus:border-primary-500 focus:ring-primary-500 shadow-sm"
-        />
-      </div>
-
+      {/* Removed search bar and category selector, now in layout */}
       {loadingProducts ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {[...Array(10)].map((_, index) => (

@@ -31,14 +31,16 @@ export default function LoginPage() {
     <div className="fixed inset-0 bg-primary-500">
       {/* Logo Section */}
       <div className="absolute inset-x-0 top-0 h-2/3 flex flex-col items-center justify-center">
-        <img 
-          src={logo} 
-          alt="DeliveryEase" 
-          className="w-48 h-48 object-contain mb-1 brightness-0 invert"
-        />
-        <h1 className="text-white text-4xl font-bold tracking-tight">
-          DeliveryEase
-        </h1>
+        <div className="relative">
+          <img 
+            src={logo} 
+            alt="DeliveryEase" 
+            className="w-48 h-48 object-contain brightness-0 invert"
+          />
+          <h1 className="absolute bottom-0 left-1/2 transform -translate-x-1/2 text-white text-4xl font-bold tracking-tight">
+            DeliveryEase
+          </h1>
+        </div>
       </div>
 
       {/* Sign In Section */}
