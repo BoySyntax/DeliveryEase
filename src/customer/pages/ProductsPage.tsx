@@ -20,8 +20,8 @@ type Product = {
   image_url: string;
   category_id: string;
   quantity?: number;
-  unit?: string;
-  unit_quantity?: number;
+  unit?: string | null;
+  unit_quantity?: number | null;
 };
 
 export default function ProductsPage() {
@@ -211,12 +211,12 @@ export default function ProductsPage() {
       </div>
 
       {loadingProducts ? (
-        <div className="grid grid-cols-2 gap-4">
-          {[...Array(8)].map((_, index) => (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          {[...Array(10)].map((_, index) => (
             <div key={index} className="animate-pulse">
-              <div className="aspect-square bg-gray-200 rounded-lg mb-4"></div>
-              <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+              <div className="aspect-square bg-gray-200 rounded-lg mb-3"></div>
+              <div className="h-3 bg-gray-200 rounded w-3/4 mb-2"></div>
+              <div className="h-3 bg-gray-200 rounded w-1/2"></div>
             </div>
           ))}
         </div>
@@ -225,7 +225,7 @@ export default function ProductsPage() {
           <p className="text-gray-500">No products found</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {products.map((product) => (
             <ProductCard
               key={product.id}
@@ -234,8 +234,8 @@ export default function ProductsPage() {
               price={product.price}
               imageUrl={product.image_url}
               quantity={product.quantity}
-              unit={product.unit}
-              unit_quantity={product.unit_quantity}
+              unit={product.unit || undefined}
+              unit_quantity={product.unit_quantity || undefined}
               onAddToCart={() => handleAddToCart(product.id)}
               loading={addingToCart === product.id}
               className="border border-gray-200"

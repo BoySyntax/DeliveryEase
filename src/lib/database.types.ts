@@ -215,14 +215,17 @@ export interface Database {
         Row: {
           id: string
           name: string
+          image_url: string | null
         }
         Insert: {
           id?: string
           name: string
+          image_url?: string | null
         }
         Update: {
           id?: string
           name?: string
+          image_url?: string | null
         }
         Relationships: []
       }

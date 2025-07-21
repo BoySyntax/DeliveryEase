@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Upload</title>
+</head>
+<body>
+    <h1>Test Image Upload</h1>
+    <input type="file" id="fileInput" accept="image/*">
+    <button onclick="uploadFile()">Upload</button>
+    <div id="result"></div>
+
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script>
+        // Replace with your Supabase URL and anon key
+        const supabaseUrl = 'YOUR_SUPABASE_URL';
+        const supabaseKey = 'YOUR_SUPABASE_ANON_KEY';
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a file');
+                return;
+            }
+
+            console.log('File details:', {
+                name: file.name,
+                type: file.type,
+                size: file.size
+            });
+
+            const fileExt = file.name.split('.').pop();
+            const fileName = `test-${Date.now()}.${fileExt}`;
+
+            try {
+                const { data, error } = await supabase.storage
+                    .from('categories-images')
+                    .upload(fileName, file, {
+                        contentType: file.type
+                    });
+
+                if (error) {
+                    console.error('Upload error:', error);
+                    document.getElementById('result').innerHTML = `Error: ${error.message}`;
+                } else {
+                    console.log('Upload success:', data);
+                    document.getElementById('result').innerHTML = `Success: ${fileName}`;
+                }
+            } catch (err) {
+                console.error('Exception:', err);
+                document.getElementById('result').innerHTML = `Exception: ${err.message}`;
+            }
+        }
+    </script>
+</body>
+</html> 

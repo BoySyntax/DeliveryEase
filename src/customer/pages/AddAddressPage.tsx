@@ -173,7 +173,7 @@ export default function AddAddressPage() {
 
           <div className="text-center mb-6 sm:mb-8">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2 px-2">Add New Address</h1>
-            <p className="text-sm sm:text-base lg:text-lg text-gray-600 px-4">Set up your delivery location in Region 10 (Northern Mindanao)</p>
+            
             
             {/* Progress Steps - Responsive */}
             <div className="mt-6 sm:mt-8">

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Order Items</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Test Order Items Query</h1>
+    <div id="results"></div>
+
+    <script>
+        // Replace with your actual Supabase credentials
+        const supabaseUrl = 'YOUR_SUPABASE_URL';
+        const supabaseKey = 'YOUR_SUPABASE_ANON_KEY';
+        
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        async function testOrderItems() {
+            const resultsDiv = document.getElementById('results');
+            
+            try {
+                // Test 1: Check if we can connect
+                resultsDiv.innerHTML = '<p>Testing connection...</p>';
+                
+                // Test 2: Get all orders with batch_id
+                const { data: orders, error: ordersError } = await supabase
+                    .from('orders')
+                    .select('id, total, delivery_status, batch_id')
+                    .not('batch_id', 'is', null)
+                    .eq('approval_status', 'approved');
+                
+                resultsDiv.innerHTML += `<h3>Orders with batch_id:</h3><pre>${JSON.stringify(orders, null, 2)}</pre>`;
+                
+                if (ordersError) {
+                    resultsDiv.innerHTML += `<p style="color: red;">Orders Error: ${ordersError.message}</p>`;
+                    return;
+                }
+                
+                if (orders && orders.length > 0) {
+                    const batchId = orders[0].batch_id;
+                    resultsDiv.innerHTML += `<p>Using batch_id: ${batchId}</p>`;
+                    
+                    // Test 3: Query with nested items
+                    const { data: ordersWithItems, error: itemsError } = await supabase
+                        .from('orders')
+                        .select(`
+                            id,
+                            total,
+                            delivery_status,
+                            customer:profiles!orders_customer_id_fkey(name),
+                            items:order_items(
+                                quantity,
+                                price,
+                                product:products(name, image_url)
+                            )
+                        `)
+                        .eq('batch_id', batchId)
+                        .eq('approval_status', 'approved');
+                    
+                    resultsDiv.innerHTML += `<h3>Orders with nested items:</h3><pre>${JSON.stringify(ordersWithItems, null, 2)}</pre>`;
+                    
+                    if (itemsError) {
+                        resultsDiv.innerHTML += `<p style="color: red;">Items Error: ${itemsError.message}</p>`;
+                    }
+                    
+                    // Test 4: Direct query to order_items
+                    const orderIds = orders.map(o => o.id);
+                    const { data: directItems, error: directError } = await supabase
+                        .from('order_items')
+                        .select(`
+                            id,
+                            order_id,
+                            quantity,
+                            price,
+                            product:products(name, image_url)
+                        `)
+                        .in('order_id', orderIds);
+                    
+                    resultsDiv.innerHTML += `<h3>Direct order_items query:</h3><pre>${JSON.stringify(directItems, null, 2)}</pre>`;
+                    
+                    if (directError) {
+                        resultsDiv.innerHTML += `<p style="color: red;">Direct Error: ${directError.message}</p>`;
+                    }
+                }
+                
+            } catch (error) {
+                resultsDiv.innerHTML += `<p style="color: red;">General Error: ${error.message}</p>`;
+            }
+        }
+
+        // Run the test when page loads
+        testOrderItems();
+    </script>
+</body>
+</html> 

@@ -542,7 +542,7 @@ export default function CheckoutPage() {
         {/* QR Code and Payment Proof - Combined Modern Flex Container */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6 flex flex-row items-stretch gap-6 overflow-hidden">
           {/* Left: QR Code and Payment Info */}
-          <div className="flex flex-col items-center justify-center w-1/2">
+          <div className="flex flex-col items-center justify-center w-1/2 relative overflow-hidden">
             <div className="flex items-center bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 mb-4 w-full max-w-xs">
               <svg className="w-5 h-5 text-blue-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 20a8 8 0 100-16 8 8 0 000 16z" /></svg>
               <span className="text-sm text-blue-800 font-medium">Scan the QR to pay. Please pay the exact amount.</span>
@@ -551,6 +551,7 @@ export default function CheckoutPage() {
               src={instapayQR}
               alt="InstaPay QR Code"
               className="w-48 h-48 md:w-56 md:h-56 lg:w-64 lg:h-64 object-contain mb-2"
+              style={{ maxWidth: '100%', height: 'auto', display: 'block' }}
             />
             <a
               href={instapayQR}

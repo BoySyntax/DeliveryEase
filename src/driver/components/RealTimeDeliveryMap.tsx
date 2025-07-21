@@ -64,6 +64,8 @@ interface GoogleMapsWindow extends Window {
 declare const window: GoogleMapsWindow;
 
 export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: DeliveryMapProps) {
+  console.log('🎯 RealTimeDeliveryMap component rendered with batchId:', batchId);
+  
   const [deliveryLocations, setDeliveryLocations] = useState<ExtendedDeliveryLocation[]>([]);
   const [optimizedOrder, setOptimizedOrder] = useState<string[]>([]);
   const [isOptimizing, setIsOptimizing] = useState(false);
@@ -620,11 +622,10 @@ export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: Deliv
         }
       });
 
-      // Generate order items HTML with better debugging
+      // Generate order items HTML from real database data
       const extendedLocation = location as ExtendedDeliveryLocation;
       console.log('📍 Creating popup for location:', location.customer_name);
-      console.log('📍 Order items data:', extendedLocation.order_items);
-      console.log('📍 Order items length:', extendedLocation.order_items?.length);
+      console.log('📍 Real order items data:', extendedLocation.order_items);
       
       let orderItemsHtml = '';
       if (extendedLocation.order_items && extendedLocation.order_items.length > 0) {
@@ -640,15 +641,12 @@ export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: Deliv
             `).join('')}
           </div>
         `;
-        console.log('📍 Generated HTML:', orderItemsHtml);
       } else {
-        console.log('📍 No order items found for this location');
-        console.log('📍 Extended location data:', JSON.stringify(extendedLocation, null, 2));
+        console.log('📍 No order items found, will fetch directly from database for order:', location.id);
         orderItemsHtml = `
           <div class="mt-3 pt-2 border-t border-gray-200">
             <p class="text-xs font-medium text-gray-700 mb-2">📦 Order Items:</p>
-            <div class="text-xs text-gray-500">No order items found</div>
-            <div class="text-xs text-blue-500 mt-1">Debug: order_items = ${JSON.stringify(extendedLocation.order_items)}</div>
+            <div class="text-xs text-gray-500" id="loading-items-${location.id}">Loading items...</div>
           </div>
         `;
       }
@@ -775,21 +773,14 @@ export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: Deliv
   const loadDeliveryLocations = useCallback(async () => {
     if (!batchId) return;
 
+    console.log('🚀 Starting loadDeliveryLocations with batchId:', batchId);
+
     try {
       setLoading(true);
       
-      // First, let's check if there are any order items in the database at all
-      const { data: allOrderItems, error: itemsError } = await supabase
-        .from('order_items')
-        .select('*')
-        .limit(5);
+
+      console.log('🔍 About to query orders for batchId:', batchId);
       
-      console.log('🔍 Checking if order_items table has data:', allOrderItems);
-      console.log('🔍 Order items error:', itemsError);
-      
-      if (itemsError) {
-        console.error('❌ Error checking order_items table:', itemsError);
-      }
       const { data: orders, error } = await supabase
         .from('orders')
         .select(`
@@ -797,15 +788,13 @@ export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: Deliv
           total,
           delivery_status,
           delivery_address,
-          customer:profiles!orders_customer_id_fkey(name),
-          items:order_items(
-            quantity,
-            price,
-            product:products(name, image_url)
-          )
+          customer:profiles!orders_customer_id_fkey(name)
         `)
         .eq('batch_id', batchId)
         .eq('approval_status', 'approved');
+        
+      console.log('🔍 Supabase query completed. Orders:', orders);
+      console.log('🔍 Supabase query error:', error);
 
       if (error) throw error;
 
@@ -819,28 +808,16 @@ export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: Deliv
             id: order.id,
             customer: order.customer?.name,
             total: order.total,
-            items: order.items,
-            itemsCount: order.items?.length || 0,
-            itemsType: typeof order.items,
-            itemsIsArray: Array.isArray(order.items)
+            delivery_status: order.delivery_status
           });
-          
-          // Check if items is null, undefined, or empty array
-          if (!order.items) {
-            console.log(`❌ Order ${index + 1} has no items property`);
-          } else if (Array.isArray(order.items) && order.items.length === 0) {
-            console.log(`❌ Order ${index + 1} has empty items array`);
-          } else {
-            console.log(`✅ Order ${index + 1} has ${order.items.length} items:`, order.items);
-          }
         });
       }
 
-      // Let's also try a direct query to order_items to see if there are any items for these orders
+      // Fetch order items separately for better reliability
       let directOrderItems: any[] = [];
       if (orders && orders.length > 0) {
         const orderIds = orders.map(o => o.id);
-        console.log('🔍 Checking order_items for order IDs:', orderIds);
+        console.log('🔍 Fetching order items for order IDs:', orderIds);
         
         const { data: directItems, error: directError } = await supabase
           .from('order_items')
@@ -855,45 +832,32 @@ export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: Deliv
         
         directOrderItems = directItems || [];
         console.log('🔍 Direct order_items query result:', directOrderItems);
-        console.log('🔍 Direct order_items error:', directError);
         
-        if (directOrderItems && directOrderItems.length > 0) {
-          console.log('✅ Found order items via direct query:', directOrderItems);
-          
-          // Group items by order_id
-          const itemsByOrder = directOrderItems.reduce((acc: Record<string, any[]>, item: any) => {
-            if (!acc[item.order_id]) {
-              acc[item.order_id] = [];
-            }
-            acc[item.order_id].push(item);
-            return acc;
-          }, {} as Record<string, any[]>);
-          
-          console.log('📦 Items grouped by order:', itemsByOrder);
-        } else {
-          console.log('❌ No order items found via direct query');
+        if (directError) {
+          console.error('❌ Error fetching order items:', directError);
         }
       }
 
-      // Create a map of order items from the direct query
-      const itemsByOrder = directOrderItems ? directOrderItems.reduce((acc: Record<string, any[]>, item: any) => {
+      // Group items by order_id
+      const itemsByOrder = directOrderItems.reduce((acc: Record<string, any[]>, item: any) => {
         if (!acc[item.order_id]) {
           acc[item.order_id] = [];
         }
         acc[item.order_id].push(item);
         return acc;
-      }, {} as Record<string, any[]>) : {};
+      }, {} as Record<string, any[]>);
+
+      console.log('📦 Items grouped by order:', itemsByOrder);
 
       const locations: ExtendedDeliveryLocation[] = (orders || []).map(order => {
-        // Use direct query results if nested query failed
-        const orderItems = order.items && order.items.length > 0 
-          ? order.items 
-          : (itemsByOrder[order.id] || []);
+        // Use the direct query results
+        const orderItems = itemsByOrder[order.id] || [];
         
         console.log(`📍 Creating location for order ${order.id}:`, {
-          orderItemsFromNested: order.items,
-          orderItemsFromDirect: itemsByOrder[order.id],
-          finalOrderItems: orderItems
+          orderId: order.id,
+          customerName: order.customer?.name,
+          itemsCount: orderItems.length,
+          items: orderItems
         });
 
         return {
@@ -1092,8 +1056,12 @@ export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: Deliv
   }, [getCurrentLocation, startLocationTracking, stopLocationTracking]);
 
   useEffect(() => {
+    console.log('🔄 useEffect triggered with batchId:', batchId);
     if (batchId) {
+      console.log('✅ Calling loadDeliveryLocations with batchId:', batchId);
       loadDeliveryLocations();
+    } else {
+      console.log('❌ No batchId provided');
     }
   }, [batchId, loadDeliveryLocations]);
 

@@ -28,24 +28,24 @@ export default function ProductCard({ id, name, price, imageUrl, quantity, unit,
             className="h-full w-full object-cover object-center transition-transform group-hover:scale-105"
           />
         </div>
-        <CardContent className="p-4 flex flex-col flex-1">
-          <h3 className="text-lg font-medium text-gray-900 line-clamp-2 flex-1">
+        <CardContent className="p-2 sm:p-3 flex flex-col flex-1">
+          <h3 className="text-sm sm:text-base font-medium text-gray-900 line-clamp-2 flex-1 leading-tight">
             {name}
           </h3>
-          <p className={`text-sm mt-1 ${quantity === 0 || !quantity ? 'text-red-500 font-medium' : 'text-gray-500'}`}>
-            {quantity === 0 || !quantity ? 'Out of Stock' : `Quantity: ${quantity}`}
+          <p className={`text-xs mt-1 ${quantity === 0 || !quantity ? 'text-red-500 font-medium' : 'text-gray-500'}`}>
+            {quantity === 0 || !quantity ? 'Out of Stock' : `Qty: ${quantity}`}
           </p>
-          <p className="text-primary-600 font-semibold text-sm mt-2">{formatCurrency(price)}</p>
+          <p className="text-primary-600 font-semibold text-sm mt-1">{formatCurrency(price)}</p>
           {unit && (
-            <div className="text-gray-700 text-sm font-normal">
+            <div className="text-gray-700 text-xs font-normal">
               per {unit}
               {unit !== 'piece' && unit_quantity ? ` (${unit_quantity} pcs)` : ''}
             </div>
           )}
-          <div className="mt-4 flex space-x-2">
+          <div className="mt-2 flex space-x-1">
             <Button 
               size="sm"
-              icon={<ShoppingCart size={16} />}
+              icon={<ShoppingCart size={14} />}
               fullWidth
               disabled={quantity === 0 || !quantity || loading}
               onClick={(e) => {
@@ -53,11 +53,11 @@ export default function ProductCard({ id, name, price, imageUrl, quantity, unit,
                 e.stopPropagation();
                 onAddToCart();
               }}
-              className="transition-transform duration-100 active:scale-95"
+              className="transition-transform duration-100 active:scale-95 text-xs py-1 px-2"
             >
               {loading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                   Adding...
                 </>
               ) : (

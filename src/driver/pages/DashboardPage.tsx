@@ -114,7 +114,7 @@ export default function DashboardPage() {
       .from('order_batches')
       .select(`
         id,
-        orders:orders!orders_batch_id_fkey(total)
+        orders:orders!batch_id(total)
       `)
       .eq('driver_id', profile.id)
       .eq('status', 'delivered');

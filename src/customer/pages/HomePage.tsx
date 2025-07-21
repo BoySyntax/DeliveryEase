@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingBag, ArrowRight, ShoppingCart, Loader2, Search, Bell, Package } from 'lucide-react';
+import { ShoppingBag, ArrowRight, ShoppingCart, Loader2, Bell, Package, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Card, CardContent } from '../../ui/components/Card';
 import Button from '../../ui/components/Button';
@@ -11,6 +11,7 @@ import { toast } from 'react-hot-toast';
 type Category = {
   id: string;
   name: string;
+  image_url: string | null;
 };
 
 type Product = {
@@ -31,10 +32,11 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [addingToCart, setAddingToCart] = useState<string | null>(null);
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
   const [cartCount, setCartCount] = useState(0);
   const [orderCount, setOrderCount] = useState(0);
   const [notifCount, setNotifCount] = useState(0);
+  const [currentCategoryPage, setCurrentCategoryPage] = useState(0);
+  const categoriesScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -110,6 +112,48 @@ export default function HomePage() {
     fetchStats();
   }, []);
 
+  const scrollToCategoryPage = (pageIndex: number) => {
+    if (categoriesScrollRef.current) {
+      const container = categoriesScrollRef.current;
+      const totalPages = Math.ceil(categories.length / 2);
+      
+      // Ensure page index is within bounds
+      if (pageIndex < 0) {
+        pageIndex = 0;
+      } else if (pageIndex >= totalPages) {
+        pageIndex = totalPages - 1;
+      }
+      
+      const itemWidth = container.scrollWidth / totalPages;
+      const scrollPosition = pageIndex * itemWidth;
+      
+      container.scrollTo({
+        left: scrollPosition,
+        behavior: 'smooth'
+      });
+      setCurrentCategoryPage(pageIndex);
+    }
+  };
+
+  // Handle scroll events to update current page
+  useEffect(() => {
+    const container = categoriesScrollRef.current;
+    if (!container || categories.length <= 2) return;
+
+    const handleScroll = () => {
+      const scrollLeft = container.scrollLeft;
+      const containerWidth = container.clientWidth;
+      const totalPages = Math.ceil(categories.length / 2);
+      const itemWidth = container.scrollWidth / totalPages;
+      
+      const currentPage = Math.round(scrollLeft / itemWidth);
+      setCurrentCategoryPage(currentPage);
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [categories.length]);
+
   const handleAddToCart = async (productId: string) => {
     setAddingToCart(productId);
     try {
@@ -180,12 +224,12 @@ export default function HomePage() {
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[...Array(4)].map((_, index) => (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          {[...Array(10)].map((_, index) => (
             <div key={index} className="animate-pulse">
-              <div className="aspect-square bg-gray-200 rounded-lg mb-4"></div>
-              <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+              <div className="aspect-square bg-gray-200 rounded-lg mb-3"></div>
+              <div className="h-3 bg-gray-200 rounded w-3/4 mb-2"></div>
+              <div className="h-3 bg-gray-200 rounded w-1/2"></div>
             </div>
           ))}
         </div>
@@ -195,47 +239,113 @@ export default function HomePage() {
 
   return (
     <div className="space-y-10">
-      {/* Hero Section */}
-      <section className="bg-gradient-to-r from-primary-500 to-primary-700 text-white rounded-2xl py-12 px-6 mb-8 relative overflow-hidden shadow-lg w-full">
-        <div className="max-w-6xl mx-auto text-center relative z-10">
-          <form onSubmit={e => { e.preventDefault(); navigate(`/customer/products?search=${encodeURIComponent(searchQuery)}`); }} className="flex justify-center mb-6">
-            <div className="relative w-full max-w-md">
-              <input
-                type="text"
-                className="w-full rounded-full px-5 py-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-400 shadow"
-                placeholder="Search for products..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-              />
-              <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-primary-600 hover:text-primary-800">
-                <Search size={22} />
-              </button>
-            </div>
-          </form>
-          <div className="mt-8">
-            <div className="flex justify-between items-center mb-4 px-2">
-              <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Categories</h2>
-            </div>
-            <div className="flex gap-4 overflow-x-auto pb-2 px-2 hide-scrollbar" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-              {categories.slice(0, 8).map((category) => (
-                <Link
-                  key={category.id}
-                  to={`/customer/products?category=${category.id}`}
-                  className="flex-shrink-0 bg-white/90 hover:bg-primary-100 transition-colors rounded-xl shadow-md px-4 py-2 flex items-center justify-center min-w-0 border border-gray-200 dark:border-gray-700"
-                  style={{ width: 'auto', minWidth: 'unset', maxWidth: '200px' }}
+      {/* Categories Section */}
+      <section className="mb-8 relative">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex justify-center items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-800">Categories</h2>
+          </div>
+          
+          {/* Categories Container with Scroll */}
+          <div className="relative">
+            {/* Navigation Arrows */}
+            {categories.length > 2 && (
+              <>
+                <button
+                  onClick={() => scrollToCategoryPage(currentCategoryPage - 1)}
+                  className="absolute left-0 top-1/2 -translate-y-1/2 z-20 rounded-lg p-1.5 shadow-lg border transition-all duration-200 bg-white border-gray-200 hover:bg-gray-50 hover:shadow-xl cursor-pointer"
+                  style={{ transform: 'translateY(-50%)' }}
                 >
-                  <span className="text-base font-semibold text-gray-800 dark:text-gray-900 text-center line-clamp-2 whitespace-nowrap">{category.name}</span>
+                  <ChevronLeft size={16} className="text-green-500" />
+                </button>
+                <button
+                  onClick={() => scrollToCategoryPage(currentCategoryPage + 1)}
+                  className="absolute right-0 top-1/2 -translate-y-1/2 z-20 rounded-lg p-1.5 shadow-lg border transition-all duration-200 bg-white border-gray-200 hover:bg-gray-50 hover:shadow-xl cursor-pointer"
+                  style={{ transform: 'translateY(-50%)' }}
+                >
+                  <ChevronRight size={16} className="text-green-500" />
+                </button>
+              </>
+            )}
+            
+            {/* Scrollable Categories */}
+            <div 
+              ref={categoriesScrollRef}
+              className="flex overflow-x-auto scrollbar-hide px-16 relative"
+              style={{ scrollSnapType: 'x mandatory' }}
+            >
+              {/* Gradient overlay to indicate more content */}
+              {categories.length > 2 && (
+                <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent pointer-events-none z-5" />
+              )}
+              {/* Original categories only */}
+              {categories.map((category, index) => (
+                <Link
+                  key={`${category.id}-${index}`}
+                  to={`/customer/products?category=${category.id}`}
+                  className="group flex flex-col items-center p-2 flex-shrink-0 relative -mx-1"
+                  style={{ scrollSnapAlign: 'start' }}
+                >
+                  {/* Category image or placeholder */}
+                  {category.image_url ? (
+                    <div className="w-36 h-36 mb-4 flex items-center justify-center">
+                      <div className="w-32 h-32 rounded-full bg-gradient-to-br from-gray-50 to-gray-100 shadow-lg border-2 border-gray-200 flex items-center justify-center group-hover:shadow-xl group-hover:border-primary-300 transition-all duration-200">
+                        <img
+                          src={category.image_url}
+                          alt={category.name}
+                          className="w-28 h-28 object-contain group-hover:scale-105 transition-transform duration-200"
+                          style={{ width: '112px', height: '112px', objectFit: 'contain' }}
+                          onError={(e) => {
+                            // Fallback to placeholder if image fails to load
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                            target.nextElementSibling?.classList.remove('hidden');
+                          }}
+                        />
+                        <div className="w-32 h-32 bg-gray-300 rounded-full flex items-center justify-center group-hover:bg-primary-100 transition-colors hidden">
+                          <span className="text-2xl font-bold text-gray-600 group-hover:text-primary-600">
+                            {category.name.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="w-36 h-36 mb-4 flex items-center justify-center">
+                      <div className="w-32 h-32 rounded-full bg-gradient-to-br from-gray-50 to-gray-100 shadow-lg border-2 border-gray-200 flex items-center justify-center group-hover:shadow-xl group-hover:border-primary-300 transition-all duration-200">
+                        <span className="text-2xl font-bold text-gray-600 group-hover:text-primary-600">
+                          {category.name.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  <span className="text-sm font-semibold text-gray-800 text-center line-clamp-2 leading-tight">
+                    {category.name}
+                  </span>
                 </Link>
               ))}
             </div>
-            <style>{`
-              .hide-scrollbar::-webkit-scrollbar { display: none; }
-              .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-            `}</style>
+            
+            {/* Pagination Dots */}
+            {categories.length > 2 && (
+              <div className="flex flex-col items-center mt-6 gap-2">
+                <div className="flex gap-2">
+                  {Array.from({ length: Math.ceil(categories.length / 2) }).map((_, index) => (
+                    <button
+                      key={index}
+                      onClick={() => scrollToCategoryPage(index)}
+                      className={`h-2 rounded-full transition-all duration-200 ${
+                        currentCategoryPage === index 
+                          ? 'bg-green-500 w-6' 
+                          : 'bg-gray-800 hover:bg-gray-600 w-2'
+                      }`}
+                    />
+                  ))}
+                </div>
+
+              </div>
+            )}
           </div>
         </div>
-        {/* Subtle pattern/illustration */}
-        <div className="absolute inset-0 opacity-10 bg-[url('/pattern.svg')] bg-repeat z-0" />
       </section>
 
       {/* Quick Stats / Shortcuts */}
@@ -249,11 +359,11 @@ export default function HomePage() {
             View all <ArrowRight size={16} className="ml-1" />
           </Link>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {featuredProducts.map((product) => (
-            <Card key={product.id} className="h-full group transform transition hover:-translate-y-1 hover:shadow-xl rounded-2xl border-2 border-transparent hover:border-primary-400 relative overflow-hidden min-h-[260px]">
+            <Card key={product.id} className="h-full group transform transition hover:-translate-y-1 hover:shadow-xl rounded-lg border border-gray-200 hover:border-primary-400 relative overflow-hidden">
               <Link to={`/customer/products/${product.id}`}> 
-                <div className="aspect-square w-full overflow-hidden bg-gray-100 rounded-t-2xl">
+                <div className="aspect-square w-full overflow-hidden bg-gray-100 rounded-t-lg">
                   <img 
                     src={product.image_url} 
                     alt={product.name}
@@ -261,12 +371,12 @@ export default function HomePage() {
                   />
                 </div>
               </Link>
-              <CardContent className="p-3 flex flex-col flex-1">
-                <h3 className="text-base font-bold text-gray-900 line-clamp-2 flex-1 mb-1">
+              <CardContent className="p-2 sm:p-3 flex flex-col flex-1">
+                <h3 className="text-sm sm:text-base font-medium text-gray-900 line-clamp-2 flex-1 mb-1 leading-tight">
                   {product.name}
                 </h3>
-                <div className="flex items-baseline gap-1 mb-2 flex-wrap">
-                  <span className="text-primary-600 font-semibold text-base">
+                <div className="flex items-baseline gap-1 mb-1 flex-wrap">
+                  <span className="text-primary-600 font-semibold text-sm">
                     {formatCurrency(product.price)}
                   </span>
                   {product.unit && (
@@ -282,25 +392,25 @@ export default function HomePage() {
                 </div>
                 {/* Show product quantity */}
                 {product.quantity !== undefined && (
-                  <p className="text-gray-500 text-xs mb-2">Quantity: {product.quantity}</p>
+                  <p className="text-gray-500 text-xs mb-1">Qty: {product.quantity}</p>
                 )}
                 {product.quantity !== undefined && product.quantity <= 5 && product.quantity > 0 && (
-                  <span className="inline-block bg-yellow-100 text-yellow-800 text-xs font-semibold px-2 py-1 rounded-full mb-2">Low Stock</span>
+                  <span className="inline-block bg-yellow-100 text-yellow-800 text-xs font-semibold px-1 py-0.5 rounded-full mb-1">Low Stock</span>
                 )}
                 {product.quantity === 0 && (
-                  <span className="inline-block bg-red-100 text-red-800 text-xs font-semibold px-2 py-1 rounded-full mb-2">Out of Stock</span>
+                  <span className="inline-block bg-red-100 text-red-800 text-xs font-semibold px-1 py-0.5 rounded-full mb-1">Out of Stock</span>
                 )}
                 <Button
                   size="sm"
-                  icon={<ShoppingCart size={16} />}
+                  icon={<ShoppingCart size={14} />}
                   fullWidth
                   disabled={product.quantity === 0 || addingToCart === product.id}
                   onClick={() => handleAddToCart(product.id)}
-                  className="rounded-full mt-auto"
+                  className="rounded-md mt-auto text-xs py-1 px-2"
                 >
                   {addingToCart === product.id ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                       Adding...
                     </>
                   ) : product.quantity === 0 ? (
