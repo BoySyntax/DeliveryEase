@@ -243,7 +243,7 @@ export default function HomePage() {
       <section className="mb-8 relative">
         <div className="max-w-6xl mx-auto">
           <div className="flex justify-center items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">Categories</h2>
+            <h2 className="text-xl font-bold text-gray-800">Categories</h2>
           </div>
           
           {/* Categories Container with Scroll */}
@@ -288,13 +288,13 @@ export default function HomePage() {
                 >
                   {/* Category image or placeholder */}
                   {category.image_url ? (
-                    <div className="w-36 h-36 mb-4 flex items-center justify-center">
-                      <div className="w-32 h-32 rounded-full bg-gradient-to-br from-gray-50 to-gray-100 shadow-lg border-2 border-gray-200 flex items-center justify-center group-hover:shadow-xl group-hover:border-primary-300 transition-all duration-200">
+                    <div className="w-28 h-28 mb-3 flex items-center justify-center">
+                      <div className="w-24 h-24 rounded-full bg-gradient-to-br from-gray-50 to-gray-100 shadow-lg border-2 border-gray-200 flex items-center justify-center group-hover:shadow-xl group-hover:border-primary-300 transition-all duration-200">
                         <img
                           src={category.image_url}
                           alt={category.name}
-                          className="w-28 h-28 object-contain group-hover:scale-105 transition-transform duration-200"
-                          style={{ width: '112px', height: '112px', objectFit: 'contain' }}
+                          className="w-20 h-20 object-contain group-hover:scale-105 transition-transform duration-200"
+                          style={{ width: '80px', height: '80px', objectFit: 'contain' }}
                           onError={(e) => {
                             // Fallback to placeholder if image fails to load
                             const target = e.target as HTMLImageElement;
@@ -302,23 +302,23 @@ export default function HomePage() {
                             target.nextElementSibling?.classList.remove('hidden');
                           }}
                         />
-                        <div className="w-32 h-32 bg-gray-300 rounded-full flex items-center justify-center group-hover:bg-primary-100 transition-colors hidden">
-                          <span className="text-2xl font-bold text-gray-600 group-hover:text-primary-600">
+                        <div className="w-24 h-24 bg-gray-300 rounded-full flex items-center justify-center group-hover:bg-primary-100 transition-colors hidden">
+                          <span className="text-xl font-bold text-gray-600 group-hover:text-primary-600">
                             {category.name.charAt(0).toUpperCase()}
                           </span>
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="w-36 h-36 mb-4 flex items-center justify-center">
-                      <div className="w-32 h-32 rounded-full bg-gradient-to-br from-gray-50 to-gray-100 shadow-lg border-2 border-gray-200 flex items-center justify-center group-hover:shadow-xl group-hover:border-primary-300 transition-all duration-200">
-                        <span className="text-2xl font-bold text-gray-600 group-hover:text-primary-600">
+                    <div className="w-28 h-28 mb-3 flex items-center justify-center">
+                      <div className="w-24 h-24 rounded-full bg-gradient-to-br from-gray-50 to-gray-100 shadow-lg border-2 border-gray-200 flex items-center justify-center group-hover:shadow-xl group-hover:border-primary-300 transition-all duration-200">
+                        <span className="text-xl font-bold text-gray-600 group-hover:text-primary-600">
                           {category.name.charAt(0).toUpperCase()}
                         </span>
                       </div>
                     </div>
                   )}
-                  <span className="text-sm font-semibold text-gray-800 text-center line-clamp-2 leading-tight">
+                  <span className="text-xs font-semibold text-gray-800 text-center line-clamp-2 leading-tight">
                     {category.name}
                   </span>
                 </Link>
