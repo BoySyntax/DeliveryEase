@@ -37,6 +37,24 @@ export default function HomePage() {
   const [notifCount, setNotifCount] = useState(0);
   const [currentCategoryPage, setCurrentCategoryPage] = useState(0);
   const categoriesScrollRef = useRef<HTMLDivElement>(null);
+  const [categoriesPerPage, setCategoriesPerPage] = useState(2);
+
+  useEffect(() => {
+    function updateCategoriesPerPage() {
+      if (window.innerWidth >= 1280) {
+        setCategoriesPerPage(5); // xl and up
+      } else if (window.innerWidth >= 1024) {
+        setCategoriesPerPage(4); // lg
+      } else if (window.innerWidth >= 768) {
+        setCategoriesPerPage(3); // md
+      } else {
+        setCategoriesPerPage(2); // mobile
+      }
+    }
+    updateCategoriesPerPage();
+    window.addEventListener('resize', updateCategoriesPerPage);
+    return () => window.removeEventListener('resize', updateCategoriesPerPage);
+  }, []);
 
   useEffect(() => {
     async function loadData() {
@@ -112,26 +130,22 @@ export default function HomePage() {
     fetchStats();
   }, []);
 
+  const totalPages = Math.ceil(categories.length / categoriesPerPage);
+
   const scrollToCategoryPage = (pageIndex: number) => {
     if (categoriesScrollRef.current) {
       const container = categoriesScrollRef.current;
-      const totalPages = Math.ceil(categories.length / 2);
-      
-      // Ensure page index is within bounds
-      if (pageIndex < 0) {
-        pageIndex = 0;
-      } else if (pageIndex >= totalPages) {
-        pageIndex = totalPages - 1;
-      }
-      
+      // Calculate item width based on categoriesPerPage
       const itemWidth = container.scrollWidth / totalPages;
-      const scrollPosition = pageIndex * itemWidth;
-      
+      let page = pageIndex;
+      if (page < 0) page = 0;
+      if (page >= totalPages) page = totalPages - 1;
+      const scrollPosition = page * itemWidth;
       container.scrollTo({
         left: scrollPosition,
-        behavior: 'smooth'
+        behavior: 'smooth',
       });
-      setCurrentCategoryPage(pageIndex);
+      setCurrentCategoryPage(page);
     }
   };
 
@@ -143,7 +157,7 @@ export default function HomePage() {
     const handleScroll = () => {
       const scrollLeft = container.scrollLeft;
       const containerWidth = container.clientWidth;
-      const totalPages = Math.ceil(categories.length / 2);
+      const totalPages = Math.ceil(categories.length / categoriesPerPage);
       const itemWidth = container.scrollWidth / totalPages;
       
       const currentPage = Math.round(scrollLeft / itemWidth);
@@ -271,13 +285,9 @@ export default function HomePage() {
             {/* Scrollable Categories */}
             <div 
               ref={categoriesScrollRef}
-              className="flex overflow-x-auto scrollbar-hide px-16 relative"
+              className="flex overflow-x-auto scrollbar-hide px-16 relative gap-4 md:gap-16"
               style={{ scrollSnapType: 'x mandatory' }}
             >
-              {/* Gradient overlay to indicate more content */}
-              {categories.length > 2 && (
-                <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent pointer-events-none z-5" />
-              )}
               {/* Original categories only */}
               {categories.map((category, index) => (
                 <Link
@@ -288,13 +298,13 @@ export default function HomePage() {
                 >
                   {/* Category image or placeholder */}
                   {category.image_url ? (
-                    <div className="w-28 h-28 mb-3 flex items-center justify-center">
-                      <div className="w-24 h-24 rounded-full bg-gradient-to-br from-gray-50 to-gray-100 shadow-lg border-2 border-gray-200 flex items-center justify-center group-hover:shadow-xl group-hover:border-primary-300 transition-all duration-200">
+                    <div className="w-28 h-28 md:w-36 md:h-36 mb-3 flex items-center justify-center overflow-visible">
+                      <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-gradient-to-br from-gray-50 to-gray-100 shadow-lg border-2 border-gray-200 flex items-center justify-center group-hover:shadow-xl group-hover:border-primary-300 transition-all duration-200">
                         <img
                           src={category.image_url}
                           alt={category.name}
-                          className="w-20 h-20 object-contain group-hover:scale-105 transition-transform duration-200"
-                          style={{ width: '80px', height: '80px', objectFit: 'contain' }}
+                          className="w-20 h-20 md:w-28 md:h-28 object-contain group-hover:scale-125 transition-transform duration-200"
+                          style={{ objectFit: 'contain' }}
                           onError={(e) => {
                             // Fallback to placeholder if image fails to load
                             const target = e.target as HTMLImageElement;
@@ -302,17 +312,17 @@ export default function HomePage() {
                             target.nextElementSibling?.classList.remove('hidden');
                           }}
                         />
-                        <div className="w-24 h-24 bg-gray-300 rounded-full flex items-center justify-center group-hover:bg-primary-100 transition-colors hidden">
-                          <span className="text-xl font-bold text-gray-600 group-hover:text-primary-600">
+                        <div className="w-24 h-24 md:w-32 md:h-32 bg-gray-300 rounded-full flex items-center justify-center group-hover:bg-primary-100 transition-colors hidden">
+                          <span className="text-xl md:text-3xl font-bold text-gray-600 group-hover:text-primary-600">
                             {category.name.charAt(0).toUpperCase()}
                           </span>
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="w-28 h-28 mb-3 flex items-center justify-center">
-                      <div className="w-24 h-24 rounded-full bg-gradient-to-br from-gray-50 to-gray-100 shadow-lg border-2 border-gray-200 flex items-center justify-center group-hover:shadow-xl group-hover:border-primary-300 transition-all duration-200">
-                        <span className="text-xl font-bold text-gray-600 group-hover:text-primary-600">
+                    <div className="w-28 h-28 md:w-36 md:h-36 mb-3 flex items-center justify-center">
+                      <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-gradient-to-br from-gray-50 to-gray-100 shadow-lg border-2 border-gray-200 flex items-center justify-center group-hover:shadow-xl group-hover:border-primary-300 transition-all duration-200">
+                        <span className="text-xl md:text-3xl font-bold text-gray-600 group-hover:text-primary-600">
                           {category.name.charAt(0).toUpperCase()}
                         </span>
                       </div>
@@ -329,7 +339,7 @@ export default function HomePage() {
             {categories.length > 2 && (
               <div className="flex flex-col items-center mt-6 gap-2">
                 <div className="flex gap-2">
-                  {Array.from({ length: Math.ceil(categories.length / 2) }).map((_, index) => (
+                  {Array.from({ length: totalPages }).map((_, index) => (
                     <button
                       key={index}
                       onClick={() => scrollToCategoryPage(index)}

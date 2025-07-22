@@ -38,7 +38,7 @@ export default function CustomerLayout() {
   ];
 
   // Check if search bar should be hidden on current page
-  const shouldHideSearch = hideSearchOnPages.some(page => location.pathname.startsWith(page)) || location.pathname.startsWith('/customer/products');
+  const shouldHideSearch = hideSearchOnPages.some(page => location.pathname.startsWith(page));
 
   // Notification badge for orders
   const [orderNotifCount, setOrderNotifCount] = useState(0);
@@ -149,57 +149,100 @@ export default function CustomerLayout() {
       {/* Header */}
       <header className="bg-white shadow-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center" style={{ paddingTop: location.pathname.startsWith('/customer/products') ? 4 : undefined, paddingBottom: location.pathname.startsWith('/customer/products') ? 2 : undefined }}>
               <img src={logo} alt="DeliveryEase Logo" width={56} height={56} style={{objectFit: 'contain', marginRight: 8}} />
               <span className="text-lg font-semibold text-gray-900">DeliveryEase</span>
             </div>
-            {/* Show search bar and categories below logo/title only on /customer/products */}
-            {location.pathname === '/customer/products' && !loadingCategories && (
-              <div className="w-full flex flex-row items-center justify-center gap-3 mt-1" style={{ marginBottom: 0, border: 'none', outline: 'none' }}>
-                <form onSubmit={handleSearch} className="flex-1 max-w-lg" style={{ border: 'none', outline: 'none' }}>
+            {/* Desktop Nav & Search (sm and up) */}
+            <div className="hidden sm:flex sm:items-center sm:gap-6">
+              {/* Show search bar on all pages except those in hideSearchOnPages */}
+              {!shouldHideSearch && !loadingCategories && (
+                <form onSubmit={handleSearch} className="flex items-center gap-2">
                   <Input
                     placeholder="Search for products..."
                     icon={<Search size={18} className="text-gray-400" />}
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    className="w-full rounded-full px-4 py-2 text-sm text-gray-900 border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 shadow-sm placeholder-gray-400 pr-10"
+                    className="w-96 rounded-full px-4 py-2 text-sm text-gray-900 border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 shadow-sm placeholder-gray-400 pr-10"
                   />
-                  <button type="submit" className="hidden" />
+                  {/* Show category selector only on /customer/products */}
+                  {location.pathname === '/customer/products' && (
+                    <Select
+                      options={[
+                        { value: '', label: 'All Categories' },
+                        ...categories.map(cat => ({ value: cat.id, label: cat.name }))
+                      ]}
+                      value={categoryId}
+                      onChange={e => handleCategoryChange(e.target.value)}
+                      className="w-[180px] h-10 px-3 py-2 text-sm rounded-md border-gray-300 focus:border-primary-500 focus:ring-primary-500 shadow-sm bg-white"
+                    />
+                  )}
                 </form>
-                <Select
-                  options={[
-                    { value: '', label: 'All Categories' },
-                    ...categories.map(cat => ({ value: cat.id, label: cat.name }))
-                  ]}
-                  value={categoryId}
-                  onChange={e => handleCategoryChange(e.target.value)}
-                  className="w-[150px] h-10 px-3 py-2 text-sm rounded-md border-gray-300 focus:border-primary-500 focus:ring-primary-500 shadow-sm bg-white"
-                />
+              )}
+              {/* Desktop Nav Items */}
+              <nav className="flex items-center gap-8 ml-6">
+                {navItems.map((item) => (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    end={item.path === '/customer'}
+                    className={({ isActive }) => cn(
+                      'relative flex flex-col items-center text-gray-600 hover:text-primary-600 transition',
+                      isActive ? 'text-primary-600 font-semibold' : ''
+                    )}
+                    style={{ textDecoration: 'none' }}
+                  >
+                    <span className="relative">
+                      {item.icon}
+                      {(item.label === 'Notifications' && orderNotifCount > 0) && (
+                        <span className="absolute -top-1 -right-2 min-w-[1.1rem] h-5 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold shadow z-10">
+                          {orderNotifCount}
+                        </span>
+                      )}
+                      {(item.label === 'Cart' && cartCount > 0) && (
+                        <span className="absolute -top-1 -right-2 min-w-[1.1rem] h-5 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold shadow z-10">
+                          {cartCount}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-xs mt-1">{item.label}</span>
+                  </NavLink>
+                ))}
+              </nav>
+            </div>
+            {/* Mobile search bar (below logo/title) */}
+            {!shouldHideSearch && (
+              <div className="sm:hidden py-3">
+                <form onSubmit={handleSearch} className="flex flex-row gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      className="w-full rounded-full px-4 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-400 border border-gray-300"
+                      placeholder="Search for products..."
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                    />
+                    <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary-600">
+                      <Search size={18} />
+                    </button>
+                  </div>
+                  {/* Show category selector only on /customer/products */}
+                  {location.pathname === '/customer/products' && !loadingCategories && (
+                    <Select
+                      options={[
+                        { value: '', label: 'All Categories' },
+                        ...categories.map(cat => ({ value: cat.id, label: cat.name }))
+                      ]}
+                      value={categoryId}
+                      onChange={e => handleCategoryChange(e.target.value)}
+                      className="w-[150px] h-10 px-3 py-2 text-sm rounded-md border-gray-300 focus:border-primary-500 focus:ring-primary-500 shadow-sm bg-white"
+                    />
+                  )}
+                </form>
               </div>
             )}
           </div>
-          {/* Removed the flex justify-between h-20 items-center row to compact the header */}
-          
-          {/* Mobile Search Bar */}
-          {!shouldHideSearch && (
-            <div className="md:hidden py-3">
-              <form onSubmit={handleSearch}>
-                <div className="relative">
-                  <input
-                    type="text"
-                    className="w-full rounded-full px-4 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-400 border border-gray-300"
-                    placeholder="Search for products..."
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                  />
-                  <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary-600">
-                    <Search size={18} />
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
         </div>
       </header>
 
