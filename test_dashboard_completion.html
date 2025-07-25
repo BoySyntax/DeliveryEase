@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Completion Test</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        .result { margin-top: 10px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }
+        .stat-card { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 15px; text-align: center; }
+        .stat-value { font-size: 2em; font-weight: bold; margin: 10px 0; }
+        .stat-label { color: #666; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <h1>🚚 Dashboard Completion Test</h1>
+    
+    <div class="test-section info">
+        <h3>👤 Authentication</h3>
+        <button onclick="checkAuth()">Check Authentication</button>
+        <div id="auth-result" class="result"></div>
+    </div>
+
+    <div class="test-section info">
+        <h3>📊 Current Dashboard Stats</h3>
+        <button onclick="loadDashboardStats()">Load Dashboard Stats</button>
+        <div id="stats-result" class="result">
+            <div class="stats-grid" id="stats-grid"></div>
+        </div>
+    </div>
+
+    <div class="test-section info">
+        <h3>📦 Batch Status Check</h3>
+        <button onclick="checkBatchStatus()">Check Batch Status</button>
+        <div id="batch-status-result" class="result"></div>
+    </div>
+
+    <div class="test-section warning">
+        <h3>🔄 Real-time Monitoring</h3>
+        <button onclick="startMonitoring()">Start Monitoring</button>
+        <button onclick="stopMonitoring()">Stop Monitoring</button>
+        <div id="monitoring-result" class="result"></div>
+    </div>
+
+    <div class="test-section info">
+        <h3>🛠️ Manual Batch Completion Test</h3>
+        <p>This will simulate completing a batch to test the dashboard update:</p>
+        <button onclick="simulateBatchCompletion()" id="simulate-btn" disabled>Simulate Batch Completion</button>
+        <div id="simulation-result" class="result"></div>
+    </div>
+
+    <script>
+        const supabaseUrl = 'https://vpwskrytguoiybqrpebp.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZwd3Nrcnl0Z3VvaXlicXJwZWJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ5NzI5NzAsImV4cCI6MjA1MDU0ODk3MH0.Ej8Ej8Ej8Ej8Ej8Ej8Ej8Ej8Ej8Ej8Ej8Ej8Ej8Ej8';
+        
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+        let monitoringInterval = null;
+        let currentUser = null;
+        let currentActiveBatch = null;
+
+        async function checkAuth() {
+            const resultDiv = document.getElementById('auth-result');
+            try {
+                const { data: { user }, error } = await supabase.auth.getUser();
+                if (error) throw error;
+                
+                if (user) {
+                    // Get user profile
+                    const { data: profile, error: profileError } = await supabase
+                        .from('profiles')
+                        .select('*')
+                        .eq('id', user.id)
+                        .single();
+                    
+                    if (profileError) throw profileError;
+                    
+                    currentUser = user;
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            ✅ Driver authenticated!<br>
+                            Name: ${profile.name}<br>
+                            Role: ${profile.role}<br>
+                            ID: ${profile.id}
+                        </div>
+                    `;
+                    
+                    // Enable simulate button
+                    document.getElementById('simulate-btn').disabled = false;
+                } else {
+                    resultDiv.innerHTML = '<div class="error">❌ No user authenticated</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Auth test failed: ${error.message}</div>`;
+            }
+        }
+
+        async function loadDashboardStats() {
+            const resultDiv = document.getElementById('stats-result');
+            const statsGrid = document.getElementById('stats-grid');
+            
+            if (!currentUser) {
+                resultDiv.innerHTML = '<div class="error">❌ Please authenticate first</div>';
+                return;
+            }
+
+            try {
+                console.log('📊 Loading dashboard stats...');
+
+                // Get assigned batches count
+                const { count: assignedCount, error: assignedError } = await supabase
+                    .from('order_batches')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('driver_id', currentUser.id)
+                    .eq('status', 'assigned');
+
+                if (assignedError) {
+                    console.error('Error loading assigned batches:', assignedError);
+                }
+
+                // Get active batches count
+                const { count: activeCount, error: activeError } = await supabase
+                    .from('order_batches')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('driver_id', currentUser.id)
+                    .eq('status', 'delivering');
+
+                if (activeError) {
+                    console.error('Error loading active batches:', activeError);
+                }
+
+                // Get completed batches
+                const { data: completedBatches, error: completedError } = await supabase
+                    .from('order_batches')
+                    .select('id')
+                    .eq('driver_id', currentUser.id)
+                    .eq('status', 'delivered');
+
+                if (completedError) {
+                    console.error('Error loading completed batches:', completedError);
+                }
+
+                const completedCount = completedBatches?.length || 0;
+                
+                // Calculate total earnings
+                let totalEarnings = 0;
+                if (completedBatches && completedBatches.length > 0) {
+                    const batchIds = completedBatches.map(batch => batch.id);
+                    const { data: completedOrders, error: ordersError } = await supabase
+                        .from('orders')
+                        .select('total')
+                        .in('batch_id', batchIds)
+                        .eq('approval_status', 'approved');
+
+                    if (ordersError) {
+                        console.error('Error loading completed orders:', ordersError);
+                    } else {
+                        totalEarnings = completedOrders?.reduce((sum, order) => sum + order.total, 0) || 0;
+                    }
+                }
+
+                const stats = {
+                    assignedBatches: assignedCount || 0,
+                    activeBatches: activeCount || 0,
+                    completedBatches: completedCount,
+                    totalEarnings: totalEarnings
+                };
+
+                console.log('📈 Dashboard stats:', stats);
+
+                // Update the stats grid
+                statsGrid.innerHTML = `
+                    <div class="stat-card">
+                        <div class="stat-label">Assigned Batches</div>
+                        <div class="stat-value">${stats.assignedBatches}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Active Deliveries</div>
+                        <div class="stat-value">${stats.activeBatches}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Completed Batches</div>
+                        <div class="stat-value">${stats.completedBatches}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Total Earnings</div>
+                        <div class="stat-value">₱${stats.totalEarnings.toFixed(2)}</div>
+                    </div>
+                `;
+
+                resultDiv.innerHTML = '<div class="success">✅ Dashboard stats loaded successfully!</div>';
+
+            } catch (error) {
+                console.error('Error loading dashboard stats:', error);
+                resultDiv.innerHTML = `<div class="error">❌ Error loading stats: ${error.message}</div>`;
+            }
+        }
+
+        async function checkBatchStatus() {
+            const resultDiv = document.getElementById('batch-status-result');
+            
+            if (!currentUser) {
+                resultDiv.innerHTML = '<div class="error">❌ Please authenticate first</div>';
+                return;
+            }
+
+            try {
+                // Get active batch
+                const { data: activeBatch, error: batchError } = await supabase
+                    .from('order_batches')
+                    .select('id, status, created_at')
+                    .eq('driver_id', currentUser.id)
+                    .in('status', ['assigned', 'delivering'])
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .single();
+
+                if (batchError && batchError.code !== 'PGRST116') {
+                    throw batchError;
+                }
+
+                if (activeBatch) {
+                    currentActiveBatch = activeBatch;
+                    
+                    // Get orders for this batch
+                    const { data: orders, error: ordersError } = await supabase
+                        .from('orders')
+                        .select('id, delivery_status, total')
+                        .eq('batch_id', activeBatch.id)
+                        .eq('approval_status', 'approved');
+
+                    if (ordersError) throw ordersError;
+
+                    const deliveredCount = orders?.filter(order => order.delivery_status === 'delivered').length || 0;
+                    const totalOrders = orders?.length || 0;
+                    const totalRevenue = orders?.reduce((sum, order) => sum + order.total, 0) || 0;
+
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            ✅ Active batch found!<br>
+                            Batch ID: ${activeBatch.id.slice(0, 8)}...<br>
+                            Status: ${activeBatch.status}<br>
+                            Orders: ${deliveredCount}/${totalOrders} delivered<br>
+                            Revenue: ₱${totalRevenue.toFixed(2)}
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = '<div class="warning">⚠️ No active batch found</div>';
+                }
+
+            } catch (error) {
+                console.error('Error checking batch status:', error);
+                resultDiv.innerHTML = `<div class="error">❌ Error checking batch status: ${error.message}</div>`;
+            }
+        }
+
+        function startMonitoring() {
+            if (monitoringInterval) {
+                stopMonitoring();
+            }
+
+            const resultDiv = document.getElementById('monitoring-result');
+            resultDiv.innerHTML = '<div class="info">🔄 Starting real-time monitoring...</div>';
+
+            monitoringInterval = setInterval(async () => {
+                if (currentUser) {
+                    await loadDashboardStats();
+                    await checkBatchStatus();
+                }
+            }, 5000); // Check every 5 seconds
+
+            resultDiv.innerHTML = '<div class="success">✅ Real-time monitoring started (checking every 5 seconds)</div>';
+        }
+
+        function stopMonitoring() {
+            if (monitoringInterval) {
+                clearInterval(monitoringInterval);
+                monitoringInterval = null;
+                document.getElementById('monitoring-result').innerHTML = '<div class="warning">⏹️ Monitoring stopped</div>';
+            }
+        }
+
+        async function simulateBatchCompletion() {
+            const resultDiv = document.getElementById('simulation-result');
+            
+            if (!currentUser || !currentActiveBatch) {
+                resultDiv.innerHTML = '<div class="error">❌ No active batch to complete</div>';
+                return;
+            }
+
+            try {
+                resultDiv.innerHTML = '<div class="info">🔄 Simulating batch completion...</div>';
+
+                // Update batch status to delivered
+                const { error: batchError } = await supabase
+                    .from('order_batches')
+                    .update({ status: 'delivered' })
+                    .eq('id', currentActiveBatch.id);
+
+                if (batchError) throw batchError;
+
+                // Update all orders in the batch to delivered
+                const { error: ordersError } = await supabase
+                    .from('orders')
+                    .update({ delivery_status: 'delivered' })
+                    .eq('batch_id', currentActiveBatch.id)
+                    .eq('approval_status', 'approved');
+
+                if (ordersError) throw ordersError;
+
+                resultDiv.innerHTML = `
+                    <div class="success">
+                        ✅ Batch completion simulated!<br>
+                        Batch ${currentActiveBatch.id.slice(0, 8)}... marked as delivered<br>
+                        All orders marked as delivered<br>
+                        <br>
+                        <strong>Check the dashboard stats above to see the update!</strong>
+                    </div>
+                `;
+
+                // Refresh stats after a short delay
+                setTimeout(() => {
+                    loadDashboardStats();
+                    checkBatchStatus();
+                }, 1000);
+
+            } catch (error) {
+                console.error('Error simulating batch completion:', error);
+                resultDiv.innerHTML = `<div class="error">❌ Error simulating completion: ${error.message}</div>`;
+            }
+        }
+
+        // Auto-check auth on load
+        window.onload = function() {
+            checkAuth();
+        };
+    </script>
+</body>
+</html> 

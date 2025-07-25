@@ -85,7 +85,6 @@ export default function RoutePage() {
         setSelectedBatch(batchesWithCounts[0].id);
       }
     } catch (error) {
-      console.error('Error loading active batches:', error);
       toast.error('Failed to load active batches');
     } finally {
       setLoading(false);
@@ -143,6 +142,7 @@ export default function RoutePage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">🗺️ Delivery Routes</h1>
+        <p className="text-gray-600 mt-1">Routes are optimized to start from the nearest delivery location to the depot for maximum efficiency</p>
       </div>
 
       {/* Batch Selection */}

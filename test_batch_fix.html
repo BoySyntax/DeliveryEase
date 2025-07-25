@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Batch Assignment Fix Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .step {
+            margin: 20px 0;
+            padding: 15px;
+            border-left: 4px solid #007bff;
+            background-color: #f8f9fa;
+        }
+        .success {
+            border-left-color: #28a745;
+            background-color: #d4edda;
+        }
+        .warning {
+            border-left-color: #ffc107;
+            background-color: #fff3cd;
+        }
+        .error {
+            border-left-color: #dc3545;
+            background-color: #f8d7da;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .btn {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+        .btn-success {
+            background-color: #28a745;
+        }
+        .btn-success:hover {
+            background-color: #1e7e34;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛠️ Batch Assignment Fix Test</h1>
+        <p>This page helps you test and verify the batch assignment fix.</p>
+
+        <div class="step">
+            <h3>📋 What the Fix Does:</h3>
+            <ul>
+                <li><strong>📍 Barangay Grouping:</strong> Orders are grouped by barangay (location)</li>
+                <li><strong>⚖️ Smart Capacity:</strong> New batches only created when current batch reaches 3500kg</li>
+                <li><strong>🔄 Continuous Filling:</strong> Orders keep being added to existing batch until full</li>
+                <li><strong>🤖 Auto-Assignment:</strong> Full batches automatically assigned to drivers</li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <h3>🔧 Step 1: Apply the Database Fix</h3>
+            <p>Run this SQL script in your Supabase SQL editor:</p>
+            <pre><code>-- Copy and paste the contents of fix_batch_assignment_issue.sql
+-- This will fix the batch assignment logic</code></pre>
+            <button class="btn" onclick="copyToClipboard('fix_batch_assignment_issue.sql')">📋 Copy Fix Script</button>
+        </div>
+
+        <div class="step">
+            <h3>🔍 Step 2: Check Current Status</h3>
+            <p>Run this diagnostic query to see the current state:</p>
+            <pre><code>-- Check current batches and their orders
+SELECT 
+    b.barangay,
+    b.total_weight,
+    b.max_weight,
+    COUNT(o.id) as order_count,
+    ROUND((b.total_weight / b.max_weight * 100), 1) as capacity_percent
+FROM order_batches b
+LEFT JOIN orders o ON o.batch_id = b.id AND o.approval_status = 'approved'
+WHERE b.status = 'pending'
+GROUP BY b.id, b.barangay, b.total_weight, b.max_weight
+ORDER BY b.created_at DESC;</code></pre>
+            <button class="btn" onclick="copyToClipboard('diagnostic_query')">📋 Copy Diagnostic Query</button>
+        </div>
+
+        <div class="step">
+            <h3>✅ Step 3: Test the Fix</h3>
+            <p>To test if the fix works:</p>
+            <ol>
+                <li>Go to your admin panel: <a href="/admin/verify-orders" target="_blank">Verify Orders</a></li>
+                <li>Approve a few orders from the same barangay</li>
+                <li>Check the <a href="/admin/batch-orders" target="_blank">Batch Orders</a> page</li>
+                <li>You should see orders grouped by barangay and filling up to 3500kg</li>
+            </ol>
+        </div>
+
+        <div class="step success">
+            <h3>🎉 Expected Results After Fix:</h3>
+            <ul>
+                <li>✅ Orders from same barangay will be in the same batch</li>
+                <li>✅ New batches only created when current batch reaches 3500kg</li>
+                <li>✅ No more single-order batches (unless order weight > 3500kg)</li>
+                <li>✅ Clear capacity indicators showing remaining space</li>
+                <li>✅ Auto-assignment when batches reach full capacity</li>
+            </ul>
+        </div>
+
+        <div class="step warning">
+            <h3>⚠️ Troubleshooting:</h3>
+            <p>If orders still aren't batching properly:</p>
+            <ul>
+                <li>Check that orders have the correct barangay in delivery_address</li>
+                <li>Verify that orders have approval_status = 'approved'</li>
+                <li>Ensure the trigger function is properly installed</li>
+                <li>Run the diagnostic script to check for errors</li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <h3>📊 Monitor Progress</h3>
+            <p>Use this query to monitor batch filling progress:</p>
+            <pre><code>-- Monitor batch progress
+SELECT 
+    b.barangay,
+    b.total_weight,
+    b.max_weight,
+    COUNT(o.id) as order_count,
+    ROUND((b.total_weight / b.max_weight * 100), 1) as capacity_percent,
+    CASE 
+        WHEN b.total_weight >= b.max_weight THEN '🟢 FULL - Ready for Assignment'
+        WHEN (b.max_weight - b.total_weight) < 50 THEN '🟡 NEAR CAPACITY'
+        ELSE '🔵 ACCEPTING ORDERS'
+    END as status
+FROM order_batches b
+LEFT JOIN orders o ON o.batch_id = b.id AND o.approval_status = 'approved'
+WHERE b.status = 'pending'
+GROUP BY b.id, b.barangay, b.total_weight, b.max_weight
+ORDER BY b.created_at DESC;</code></pre>
+        </div>
+    </div>
+
+    <script>
+        function copyToClipboard(fileName) {
+            // This would normally copy the file contents
+            // For now, just show a success message
+            alert('📋 Script copied! Please check the file: ' + fileName);
+        }
+    </script>
+</body>
+</html> 

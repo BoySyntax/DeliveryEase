@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { MapPin, Navigation, X, ArrowLeft } from 'lucide-react';
 import Button from '../../ui/components/Button';
+import { toast } from 'react-hot-toast';
 
 // Google Maps type declarations
 declare global {
@@ -280,7 +281,7 @@ export default function MapAddressSelector({
           }
           
           // Show user-friendly error
-          alert(errorMessage);
+          toast.error(errorMessage);
           setIsLoading(false);
         },
         {
@@ -290,7 +291,7 @@ export default function MapAddressSelector({
         }
       );
     } else {
-      alert('Geolocation is not supported by this browser. Please enter your address manually or click on the map to select your location.');
+              toast.error('Geolocation is not supported by this browser. Please enter your address manually or click on the map to select your location.');
       setIsLoading(false);
     }
   };
@@ -311,7 +312,7 @@ export default function MapAddressSelector({
         setAddress(results[0].formatted_address);
       } else {
         // Show error message if geocoding fails
-        alert(`Could not find address: "${address}". Please check the spelling or try clicking directly on the map. Error: ${status}`);
+        toast.error(`Could not find address: "${address}". Please check the spelling or try clicking directly on the map. Error: ${status}`);
         console.error('Geocoding failed:', status, results);
       }
     });

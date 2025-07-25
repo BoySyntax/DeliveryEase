@@ -43,18 +43,70 @@ export default function CustomerLayout() {
   // Notification badge for orders
   const [orderNotifCount, setOrderNotifCount] = useState(0);
   const [cartCount, setCartCount] = useState(0);
+  
+  // Clear notification badge when on notifications page
+  useEffect(() => {
+    if (location.pathname === '/customer/notifications') {
+      setOrderNotifCount(0);
+    }
+  }, [location.pathname]);
   useEffect(() => {
     async function fetchOrderNotif() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      
+      // Get all orders for the user
       const { data, error } = await supabase
         .from('orders')
-        .select('id')
+        .select(`
+          id,
+          created_at,
+          approval_status,
+          delivery_status,
+          batch_id,
+          notification_read
+        `)
         .eq('customer_id', user.id)
-        .eq('notification_dismissed', false)
-        .eq('notification_read', false);
+        .order('created_at', { ascending: false })
+        .limit(20);
+
       if (!error && data) {
-        setOrderNotifCount(data.length);
+        // Count only unread notifications using the same logic as NotificationsPage
+        let notificationCount = 0;
+        
+        data.forEach(order => {
+          // Only count if notification is not read
+          if (!order.notification_read) {
+            const now = new Date();
+            const orderCreatedAt = new Date(order.created_at);
+            const timeDiff = now.getTime() - orderCreatedAt.getTime();
+            const hoursDiff = timeDiff / (1000 * 60 * 60);
+
+            // Only count notifications for recent status changes (within last 24 hours)
+            if (hoursDiff <= 24) {
+              // Count pending orders (only if recently created)
+              if (order.approval_status === 'pending' && hoursDiff < 1) {
+                notificationCount++;
+              }
+              // Count rejected orders
+              else if (order.approval_status === 'rejected') {
+                notificationCount++;
+              }
+              // Count verified orders (approved) - only if recently approved
+              else if (order.approval_status === 'approved' && hoursDiff < 6) {
+                notificationCount++;
+              }
+              // Count delivery statuses (only if recent)
+              else if ((order.delivery_status === 'assigned' && hoursDiff < 12) || 
+                       (order.delivery_status === 'delivering' && hoursDiff < 12) || 
+                       (order.delivery_status === 'delivered' && hoursDiff < 6)) {
+                notificationCount++;
+              }
+            }
+          }
+        });
+        
+        setOrderNotifCount(notificationCount);
       }
     }
     async function fetchCartCount() {

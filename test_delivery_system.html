@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delivery System Test</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 3px; font-family: monospace; max-height: 300px; overflow-y: auto; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .error { color: red; }
+        .success { color: green; }
+        .warning { color: orange; }
+        .info { color: blue; }
+        input { padding: 5px; margin: 5px; width: 300px; }
+    </style>
+</head>
+<body>
+    <h1>🚚 Delivery System Test</h1>
+    
+    <div class="test-section">
+        <h3>1. Database Connection Test</h3>
+        <button onclick="testConnection()">🔗 Test Connection</button>
+        <div id="connection-log" class="log"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>2. Check Order Status</h3>
+        <input type="text" id="orderId" placeholder="Enter Order ID">
+        <button onclick="checkOrderStatus()">🔍 Check Order</button>
+        <div id="order-log" class="log"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>3. Test Driver Update</h3>
+        <input type="text" id="testOrderId" placeholder="Enter Order ID to test update">
+        <input type="text" id="driverId" placeholder="Enter Driver ID">
+        <button onclick="testDriverUpdate()">✅ Test Driver Update</button>
+        <div id="driver-log" class="log"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>4. Check Batch Assignment</h3>
+        <input type="text" id="batchId" placeholder="Enter Batch ID">
+        <button onclick="checkBatchAssignment()">📦 Check Batch</button>
+        <div id="batch-log" class="log"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>5. Recent Orders Status</h3>
+        <button onclick="checkRecentOrders()">📋 Check Recent Orders</button>
+        <div id="recent-log" class="log"></div>
+    </div>
+
+    <script>
+        // Initialize Supabase (you'll need to add your own credentials)
+        const supabaseUrl = 'https://your-project.supabase.co';
+        const supabaseKey = 'your-anon-key';
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        function log(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type;
+            element.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            element.scrollTop = element.scrollHeight;
+        }
+
+        async function testConnection() {
+            const logElement = 'connection-log';
+            log(logElement, '🔗 Testing database connection...', 'info');
+            
+            try {
+                const { data, error } = await supabase
+                    .from('orders')
+                    .select('count')
+                    .limit(1);
+                
+                if (error) {
+                    log(logElement, `❌ Connection failed: ${error.message}`, 'error');
+                    return;
+                }
+                
+                log(logElement, '✅ Database connection successful!', 'success');
+                
+            } catch (error) {
+                log(logElement, `❌ Connection error: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkOrderStatus() {
+            const orderId = document.getElementById('orderId').value.trim();
+            const logElement = 'order-log';
+            
+            if (!orderId) {
+                log(logElement, '❌ Please enter an Order ID', 'error');
+                return;
+            }
+
+            log(logElement, `🔍 Checking Order ${orderId}...`, 'info');
+            
+            try {
+                const { data, error } = await supabase
+                    .from('orders')
+                    .select(`
+                        id,
+                        created_at,
+                        approval_status,
+                        delivery_status,
+                        batch_id,
+                        customer_id,
+                        total
+                    `)
+                    .eq('id', orderId)
+                    .single();
+
+                if (error) {
+                    log(logElement, `❌ Error: ${error.message}`, 'error');
+                    return;
+                }
+
+                log(logElement, `✅ Order found:`, 'success');
+                log(logElement, `   ID: ${data.id}`, 'info');
+                log(logElement, `   Approval Status: ${data.approval_status}`, 'info');
+                log(logElement, `   Delivery Status: ${data.delivery_status || 'null'}`, 'info');
+                log(logElement, `   Batch ID: ${data.batch_id || 'null'}`, 'info');
+                log(logElement, `   Customer ID: ${data.customer_id}`, 'info');
+                log(logElement, `   Total: $${data.total}`, 'info');
+                
+                // Check what should be displayed
+                const displayStatus = getDisplayStatus(data);
+                const statusLabels = {
+                    'rejected': 'Rejected',
+                    'pending': 'Pending',
+                    'verified': 'Verified', 
+                    'out_for_delivery': 'Delivery',
+                    'delivered': 'Delivered'
+                };
+                
+                log(logElement, `   Should Display: ${statusLabels[displayStatus] || displayStatus}`, 
+                    displayStatus === 'delivered' ? 'success' : 'warning');
+
+            } catch (error) {
+                log(logElement, `❌ Exception: ${error.message}`, 'error');
+            }
+        }
+
+        function getDisplayStatus(order) {
+            if (order.approval_status === 'rejected') return 'rejected';
+            if (order.approval_status === 'pending') return 'pending';
+            if (order.approval_status === 'approved') {
+                if (order.delivery_status === 'delivered') return 'delivered';
+                if (order.delivery_status === 'assigned' || order.delivery_status === 'delivering') return 'out_for_delivery';
+                return 'verified';
+            }
+            return order.order_status_code || 'pending';
+        }
+
+        async function testDriverUpdate() {
+            const orderId = document.getElementById('testOrderId').value.trim();
+            const driverId = document.getElementById('driverId').value.trim();
+            const logElement = 'driver-log';
+            
+            if (!orderId || !driverId) {
+                log(logElement, '❌ Please enter both Order ID and Driver ID', 'error');
+                return;
+            }
+
+            log(logElement, `🚚 Testing driver update for Order ${orderId} by Driver ${driverId}...`, 'info');
+            
+            try {
+                // First check if the order is in a batch assigned to this driver
+                const { data: orderData, error: orderError } = await supabase
+                    .from('orders')
+                    .select('batch_id, delivery_status')
+                    .eq('id', orderId)
+                    .single();
+                
+                if (orderError) {
+                    log(logElement, `❌ Error getting order: ${orderError.message}`, 'error');
+                    return;
+                }
+                
+                log(logElement, `📦 Order batch ID: ${orderData.batch_id}`, 'info');
+                log(logElement, `📦 Current delivery status: ${orderData.delivery_status || 'null'}`, 'info');
+                
+                if (!orderData.batch_id) {
+                    log(logElement, '❌ Order is not assigned to any batch', 'error');
+                    return;
+                }
+                
+                // Check batch assignment
+                const { data: batchData, error: batchError } = await supabase
+                    .from('order_batches')
+                    .select('driver_id, status')
+                    .eq('id', orderData.batch_id)
+                    .single();
+                
+                if (batchError) {
+                    log(logElement, `❌ Error getting batch: ${batchError.message}`, 'error');
+                    return;
+                }
+                
+                log(logElement, `📦 Batch driver ID: ${batchData.driver_id}`, 'info');
+                log(logElement, `📦 Batch status: ${batchData.status}`, 'info');
+                
+                if (batchData.driver_id !== driverId) {
+                    log(logElement, '❌ Batch is not assigned to this driver', 'error');
+                    return;
+                }
+                
+                // Test the update
+                const { data, error } = await supabase
+                    .from('orders')
+                    .update({ 
+                        delivery_status: 'delivered'
+                    })
+                    .eq('id', orderId)
+                    .select();
+
+                if (error) {
+                    log(logElement, `❌ Update failed: ${error.message}`, 'error');
+                    log(logElement, `   Error code: ${error.code}`, 'error');
+                    return;
+                }
+
+                log(logElement, `✅ Update successful!`, 'success');
+                log(logElement, `   New delivery status: ${data[0].delivery_status}`, 'success');
+
+            } catch (error) {
+                log(logElement, `❌ Exception: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkBatchAssignment() {
+            const batchId = document.getElementById('batchId').value.trim();
+            const logElement = 'batch-log';
+            
+            if (!batchId) {
+                log(logElement, '❌ Please enter a Batch ID', 'error');
+                return;
+            }
+
+            log(logElement, `📦 Checking Batch ${batchId}...`, 'info');
+            
+            try {
+                const { data, error } = await supabase
+                    .from('order_batches')
+                    .select(`
+                        id,
+                        driver_id,
+                        status,
+                        created_at
+                    `)
+                    .eq('id', batchId)
+                    .single();
+
+                if (error) {
+                    log(logElement, `❌ Error: ${error.message}`, 'error');
+                    return;
+                }
+
+                log(logElement, `✅ Batch found:`, 'success');
+                log(logElement, `   ID: ${data.id}`, 'info');
+                log(logElement, `   Driver ID: ${data.driver_id || 'null'}`, 'info');
+                log(logElement, `   Status: ${data.status}`, 'info');
+                log(logElement, `   Created: ${new Date(data.created_at).toLocaleString()}`, 'info');
+                
+                // Check orders in this batch
+                const { data: orders, error: ordersError } = await supabase
+                    .from('orders')
+                    .select('id, delivery_status, customer_id')
+                    .eq('batch_id', batchId);
+                
+                if (ordersError) {
+                    log(logElement, `❌ Error getting orders: ${ordersError.message}`, 'error');
+                    return;
+                }
+                
+                log(logElement, `📋 Orders in batch (${orders.length}):`, 'info');
+                orders.forEach(order => {
+                    log(logElement, `   Order ${order.id.slice(0, 8)}: ${order.delivery_status || 'null'}`, 'info');
+                });
+
+            } catch (error) {
+                log(logElement, `❌ Exception: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkRecentOrders() {
+            const logElement = 'recent-log';
+            log(logElement, '📋 Checking recent orders...', 'info');
+            
+            try {
+                const { data, error } = await supabase
+                    .from('orders')
+                    .select(`
+                        id,
+                        created_at,
+                        approval_status,
+                        delivery_status,
+                        batch_id,
+                        total
+                    `)
+                    .order('created_at', { ascending: false })
+                    .limit(10);
+
+                if (error) {
+                    log(logElement, `❌ Error: ${error.message}`, 'error');
+                    return;
+                }
+
+                log(logElement, `✅ Found ${data.length} recent orders:`, 'success');
+                data.forEach(order => {
+                    const displayStatus = getDisplayStatus(order);
+                    const statusLabels = {
+                        'rejected': 'Rejected',
+                        'pending': 'Pending',
+                        'verified': 'Verified',
+                        'out_for_delivery': 'Delivery',
+                        'delivered': 'Delivered'
+                    };
+                    
+                    log(logElement, `📦 Order ${order.id.slice(0, 8)}: approval=${order.approval_status}, delivery=${order.delivery_status || 'null'}, display=${statusLabels[displayStatus] || displayStatus}`, 'info');
+                });
+            } catch (error) {
+                log(logElement, `❌ Exception: ${error.message}`, 'error');
+            }
+        }
+
+        // Instructions
+        document.addEventListener('DOMContentLoaded', function() {
+            const logElement = 'connection-log';
+            log(logElement, '🚀 Delivery System Test Tool Ready', 'info');
+            log(logElement, '⚠️  IMPORTANT: You need to add your Supabase credentials to test this', 'warning');
+            log(logElement, '   1. Replace supabaseUrl with your project URL', 'info');
+            log(logElement, '   2. Replace supabaseKey with your anon key', 'info');
+            log(logElement, '   3. Run the tests to verify the system is working', 'info');
+        });
+    </script>
+</body>
+</html> 

@@ -1,64 +1,72 @@
--- Diagnostic check for order items issue
+-- Diagnostic script to check batch assignment issues
+-- Run this in Supabase SQL editor to see what's happening
 
--- 1. Check current orders with batch_id
-SELECT 'Current approved orders with batch_id:' as check_type;
+-- 1. Check all orders and their approval status
 SELECT 
-    o.id,
-    o.customer_id,
-    o.total,
-    o.delivery_status,
-    o.batch_id,
-    p.name as customer_name
-FROM orders o
-LEFT JOIN profiles p ON o.customer_id = p.id
-WHERE o.batch_id IS NOT NULL 
-AND o.approval_status = 'approved'
-ORDER BY o.id;
+    id,
+    approval_status,
+    batch_id,
+    total_weight,
+    delivery_address->>'barangay' as barangay,
+    created_at
+FROM orders 
+WHERE approval_status = 'approved'
+ORDER BY created_at DESC;
 
--- 2. Check order items for these orders
-SELECT 'Order items for approved orders with batch_id:' as check_type;
+-- 2. Check all batches
 SELECT 
-    oi.id,
+    id,
+    barangay,
+    total_weight,
+    max_weight,
+    status,
+    driver_id,
+    created_at,
+    (SELECT COUNT(*) FROM orders WHERE batch_id = order_batches.id) as order_count
+FROM order_batches
+ORDER BY created_at DESC;
+
+-- 3. Check orders that are approved but not batched
+SELECT 
+    id,
+    approval_status,
+    batch_id,
+    total_weight,
+    delivery_address->>'barangay' as barangay,
+    created_at
+FROM orders 
+WHERE approval_status = 'approved' 
+AND batch_id IS NULL
+ORDER BY created_at DESC;
+
+-- 4. Check if there are any orders with missing barangay
+SELECT 
+    id,
+    approval_status,
+    delivery_address,
+    created_at
+FROM orders 
+WHERE approval_status = 'approved' 
+AND (delivery_address->>'barangay' IS NULL OR delivery_address->>'barangay' = '')
+ORDER BY created_at DESC;
+
+-- 5. Check order items and their weights
+SELECT 
     oi.order_id,
     oi.quantity,
-    oi.price,
-    pr.name as product_name,
-    o.batch_id
+    p.name as product_name,
+    p.weight as product_weight,
+    (oi.quantity * p.weight) as total_item_weight
 FROM order_items oi
-JOIN orders o ON oi.order_id = o.id
-JOIN products pr ON oi.product_id = pr.id
-WHERE o.batch_id IS NOT NULL 
-AND o.approval_status = 'approved'
+JOIN products p ON p.id = oi.product_id
+JOIN orders o ON o.id = oi.order_id
+WHERE o.approval_status = 'approved'
 ORDER BY oi.order_id;
 
--- 3. Check the specific orders we've been testing
-SELECT 'Specific test orders:' as check_type;
+-- 6. Check if there are any products without weight
 SELECT 
-    o.id,
-    o.customer_id,
-    o.total,
-    o.delivery_status,
-    o.batch_id,
-    o.approval_status,
-    p.name as customer_name
-FROM orders o
-LEFT JOIN profiles p ON o.customer_id = p.id
-WHERE o.id IN (
-    '076c21f0-c07f-44d4-8b09-57083808632a',  -- Aaron Tero
-    '0e5b4be8-04af-4e2b-854a-08fde42cf33c'   -- BOTCHOK
-);
-
--- 4. Check order items for these specific orders
-SELECT 'Order items for specific test orders:' as check_type;
-SELECT 
-    oi.id,
-    oi.order_id,
-    oi.quantity,
-    oi.price,
-    pr.name as product_name
-FROM order_items oi
-JOIN products pr ON oi.product_id = pr.id
-WHERE oi.order_id IN (
-    '076c21f0-c07f-44d4-8b09-57083808632a',  -- Aaron Tero
-    '0e5b4be8-04af-4e2b-854a-08fde42cf33c'   -- BOTCHOK
-); 
+    id,
+    name,
+    weight
+FROM products
+WHERE weight IS NULL OR weight <= 0; 

@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard 406 Error Diagnostic</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        .result { margin-top: 10px; }
+        .step { margin: 15px 0; padding: 10px; border-left: 4px solid #007bff; background: #f8f9fa; }
+        .error-details { background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; border-radius: 3px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Dashboard 406 Error Diagnostic</h1>
+    
+    <div class="test-section warning">
+        <h3>🚨 Current Issue</h3>
+        <p>You're getting 406 Not Acceptable errors when trying to fetch delivered batches. This diagnostic will help identify the exact cause.</p>
+    </div>
+
+    <div class="test-section info">
+        <h3>👤 Step 1: Authentication Check</h3>
+        <button onclick="checkAuthentication()">Check Authentication</button>
+        <div id="auth-result" class="result"></div>
+    </div>
+
+    <div class="test-section info">
+        <h3>🔒 Step 2: RLS Policy Check</h3>
+        <button onclick="checkRLSPolicies()">Check RLS Policies</button>
+        <div id="rls-result" class="result"></div>
+    </div>
+
+    <div class="test-section info">
+        <h3>📦 Step 3: Batch Query Test</h3>
+        <button onclick="testBatchQueries()">Test Batch Queries</button>
+        <div id="batch-result" class="result"></div>
+    </div>
+
+    <div class="test-section info">
+        <h3>🛠️ Step 4: Manual Fix</h3>
+        <p>If the tests above show issues, run these SQL commands in your Supabase SQL Editor:</p>
+        <pre id="fix-sql"></pre>
+        <button onclick="copyFixSQL()">Copy Fix SQL</button>
+        <div id="fix-result" class="result"></div>
+    </div>
+
+    <div class="test-section info">
+        <h3>✅ Step 5: Verification</h3>
+        <button onclick="verifyFix()">Verify Fix</button>
+        <div id="verify-result" class="result"></div>
+    </div>
+
+    <script>
+        const supabaseUrl = 'https://vpwskrytguoiybqrpebp.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZwd3Nrcnl0Z3VvaXlicXJwZWJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ5NzI5NzAsImV4cCI6MjA1MDU0ODk3MH0.Ej8Ej8Ej8Ej8Ej8Ej8Ej8Ej8Ej8Ej8Ej8Ej8Ej8Ej8';
+        
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+        let currentUser = null;
+
+        const fixSQL = `
+-- STEP 1: Fix RLS policies for order_batches
+-- Drop the existing restrictive policy
+DROP POLICY IF EXISTS "Allow authenticated users to view order_batches" ON order_batches;
+
+-- Create new policy that allows drivers to view their assigned batches
+CREATE POLICY "Drivers can view their assigned batches"
+  ON order_batches FOR SELECT
+  TO authenticated
+  USING (
+    driver_id = auth.uid() OR
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid() AND profiles.role = 'admin'
+    )
+  );
+
+-- Also add a policy for drivers to update their assigned batches
+CREATE POLICY "Drivers can update their assigned batches"
+  ON order_batches FOR UPDATE
+  TO authenticated
+  USING (
+    driver_id = auth.uid() OR
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE profiles.id = auth.uid() AND profiles.role = 'admin'
+    )
+  );
+
+-- STEP 2: Fix foreign key constraint
+-- First, drop the constraint if it exists to avoid errors
+DO $$ 
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'orders_batch_id_fkey' 
+        AND table_name = 'orders'
+    ) THEN
+        ALTER TABLE orders DROP CONSTRAINT orders_batch_id_fkey;
+    END IF;
+END $$;
+
+-- Add the foreign key constraint
+ALTER TABLE orders 
+ADD CONSTRAINT orders_batch_id_fkey 
+FOREIGN KEY (batch_id) REFERENCES order_batches(id) ON DELETE SET NULL;
+
+-- STEP 3: Verify the fixes
+SELECT 'RLS Policies:' as check_type;
+SELECT policyname, cmd, qual 
+FROM pg_policies 
+WHERE tablename = 'order_batches' 
+AND policyname LIKE '%driver%';
+
+SELECT 'Foreign Key Constraints:' as check_type;
+SELECT 
+    tc.table_name, 
+    kcu.column_name, 
+    ccu.table_name AS foreign_table_name,
+    ccu.column_name AS foreign_column_name 
+FROM 
+    information_schema.table_constraints AS tc 
+    JOIN information_schema.key_column_usage AS kcu
+      ON tc.constraint_name = kcu.constraint_name
+      AND tc.table_schema = kcu.table_schema
+    JOIN information_schema.constraint_column_usage AS ccu
+      ON ccu.constraint_name = tc.constraint_name
+      AND ccu.table_schema = tc.table_schema
+WHERE tc.constraint_type = 'FOREIGN KEY' 
+AND tc.table_name='orders' 
+AND kcu.column_name='batch_id';
+        `;
+
+        document.getElementById('fix-sql').textContent = fixSQL;
+
+        async function checkAuthentication() {
+            const resultDiv = document.getElementById('auth-result');
+            try {
+                const { data: { user }, error } = await supabase.auth.getUser();
+                if (error) throw error;
+                
+                if (user) {
+                    // Get user profile
+                    const { data: profile, error: profileError } = await supabase
+                        .from('profiles')
+                        .select('*')
+                        .eq('id', user.id)
+                        .single();
+                    
+                    if (profileError) throw profileError;
+                    
+                    currentUser = user;
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            ✅ Authentication successful!<br>
+                            <strong>User ID:</strong> ${user.id}<br>
+                            <strong>Name:</strong> ${profile.name}<br>
+                            <strong>Role:</strong> ${profile.role}<br>
+                            <strong>Email:</strong> ${user.email}
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = '<div class="error">❌ No user authenticated. Please log in as a driver.</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        ❌ Authentication failed: ${error.message}
+                        <div class="error-details">
+                            <strong>Error Code:</strong> ${error.code || 'N/A'}<br>
+                            <strong>Error Details:</strong> ${error.details || 'N/A'}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        async function checkRLSPolicies() {
+            const resultDiv = document.getElementById('rls-result');
+            try {
+                // Test if we can access order_batches at all
+                const { data: testData, error: testError } = await supabase
+                    .from('order_batches')
+                    .select('id')
+                    .limit(1);
+
+                if (testError) {
+                    resultDiv.innerHTML = `
+                        <div class="error">
+                            ❌ Cannot access order_batches table: ${testError.message}
+                            <div class="error-details">
+                                <strong>Error Code:</strong> ${testError.code || 'N/A'}<br>
+                                <strong>Error Details:</strong> ${testError.details || 'N/A'}<br>
+                                <strong>Hint:</strong> This suggests RLS policies are blocking access
+                            </div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Test specific driver query
+                if (!currentUser) {
+                    resultDiv.innerHTML = '<div class="warning">⚠️ Please authenticate first</div>';
+                    return;
+                }
+
+                const { data: driverBatches, error: driverError } = await supabase
+                    .from('order_batches')
+                    .select('id, status')
+                    .eq('driver_id', currentUser.id);
+
+                if (driverError) {
+                    resultDiv.innerHTML = `
+                        <div class="error">
+                            ❌ Cannot access driver's batches: ${driverError.message}
+                            <div class="error-details">
+                                <strong>Error Code:</strong> ${driverError.code || 'N/A'}<br>
+                                <strong>Error Details:</strong> ${driverError.details || 'N/A'}<br>
+                                <strong>Driver ID:</strong> ${currentUser.id}<br>
+                                <strong>Issue:</strong> RLS policy is blocking driver access to their own batches
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            ✅ RLS policies working correctly!<br>
+                            <strong>Driver batches found:</strong> ${driverBatches?.length || 0}<br>
+                            <strong>Batch statuses:</strong> ${driverBatches?.map(b => b.status).join(', ') || 'None'}
+                        </div>
+                    `;
+                }
+
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        ❌ RLS check failed: ${error.message}
+                        <div class="error-details">
+                            <strong>Error Code:</strong> ${error.code || 'N/A'}<br>
+                            <strong>Error Details:</strong> ${error.details || 'N/A'}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        async function testBatchQueries() {
+            const resultDiv = document.getElementById('batch-result');
+            
+            if (!currentUser) {
+                resultDiv.innerHTML = '<div class="warning">⚠️ Please authenticate first</div>';
+                return;
+            }
+
+            try {
+                const tests = [
+                    {
+                        name: 'Assigned Batches',
+                        query: supabase.from('order_batches').select('*', { count: 'exact', head: true }).eq('driver_id', currentUser.id).eq('status', 'assigned')
+                    },
+                    {
+                        name: 'Active Batches',
+                        query: supabase.from('order_batches').select('*', { count: 'exact', head: true }).eq('driver_id', currentUser.id).eq('status', 'delivering')
+                    },
+                    {
+                        name: 'Completed Batches (This is causing 406 error)',
+                        query: supabase.from('order_batches').select('id').eq('driver_id', currentUser.id).eq('status', 'delivered')
+                    }
+                ];
+
+                let results = '<div>';
+                for (const test of tests) {
+                    try {
+                        const { data, count, error } = await test.query;
+                        if (error) {
+                            results += `
+                                <div class="error">
+                                    ❌ ${test.name}: ${error.message}
+                                    <div class="error-details">
+                                        <strong>Error Code:</strong> ${error.code || 'N/A'}<br>
+                                        <strong>Error Details:</strong> ${error.details || 'N/A'}
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            const countValue = count !== undefined ? count : (data?.length || 0);
+                            results += `<div class="success">✅ ${test.name}: ${countValue} batches</div>`;
+                        }
+                    } catch (error) {
+                        results += `<div class="error">❌ ${test.name}: ${error.message}</div>`;
+                    }
+                }
+                results += '</div>';
+                resultDiv.innerHTML = results;
+
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        ❌ Batch query test failed: ${error.message}
+                        <div class="error-details">
+                            <strong>Error Code:</strong> ${error.code || 'N/A'}<br>
+                            <strong>Error Details:</strong> ${error.details || 'N/A'}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function copyFixSQL() {
+            const sqlText = document.getElementById('fix-sql').textContent;
+            navigator.clipboard.writeText(sqlText).then(() => {
+                document.getElementById('fix-result').innerHTML = '<div class="success">✅ SQL copied to clipboard! Paste it in your Supabase SQL Editor.</div>';
+            });
+        }
+
+        async function verifyFix() {
+            const resultDiv = document.getElementById('verify-result');
+            
+            if (!currentUser) {
+                resultDiv.innerHTML = '<div class="warning">⚠️ Please authenticate first</div>';
+                return;
+            }
+
+            try {
+                // Test the specific query that was causing 406 errors
+                const { data: completedBatches, error } = await supabase
+                    .from('order_batches')
+                    .select('id')
+                    .eq('driver_id', currentUser.id)
+                    .eq('status', 'delivered');
+
+                if (error) {
+                    resultDiv.innerHTML = `
+                        <div class="error">
+                            ❌ Fix verification failed: ${error.message}
+                            <div class="error-details">
+                                <strong>Error Code:</strong> ${error.code || 'N/A'}<br>
+                                <strong>Error Details:</strong> ${error.details || 'N/A'}<br>
+                                <strong>Driver ID:</strong> ${currentUser.id}<br>
+                                <strong>Status:</strong> delivered
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            ✅ Fix verification successful!<br>
+                            <strong>Completed batches found:</strong> ${completedBatches?.length || 0}<br>
+                            <strong>Batch IDs:</strong> ${completedBatches?.map(b => b.id.slice(0, 8)).join(', ') || 'None'}<br>
+                            <br>
+                            <strong>🎉 The 406 errors should now be resolved!</strong>
+                        </div>
+                    `;
+                }
+
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        ❌ Verification failed: ${error.message}
+                        <div class="error-details">
+                            <strong>Error Code:</strong> ${error.code || 'N/A'}<br>
+                            <strong>Error Details:</strong> ${error.details || 'N/A'}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // Auto-run authentication check on load
+        window.onload = function() {
+            checkAuthentication();
+        };
+    </script>
+</body>
+</html> 

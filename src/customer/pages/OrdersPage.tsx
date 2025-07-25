@@ -80,28 +80,41 @@ export default function OrdersPage() {
 
   // Helper function to determine the display status based on approval and delivery status
   function getDisplayStatus(order: Order): string {
+    // Debug: Log the status calculation for this order
+    console.log(`🔍 Status calculation for Order ${order.id.slice(0, 8)}:`, {
+      approval_status: order.approval_status,
+      delivery_status: order.delivery_status,
+      order_status_code: order.order_status_code
+    });
+    
     // If rejected, show rejected
     if (order.approval_status === 'rejected') {
+      console.log(`   → Returning 'rejected'`);
       return 'rejected';
     }
     
     // If still pending approval, show pending
     if (order.approval_status === 'pending') {
+      console.log(`   → Returning 'pending'`);
       return 'pending';
     }
     
     // If approved, check delivery status
     if (order.approval_status === 'approved') {
       if (order.delivery_status === 'delivered') {
+        console.log(`   → Returning 'delivered'`);
         return 'delivered';
       } else if (order.delivery_status === 'assigned' || order.delivery_status === 'delivering') {
+        console.log(`   → Returning 'out_for_delivery'`);
         return 'out_for_delivery';
       } else {
+        console.log(`   → Returning 'verified' (pending delivery status)`);
         return 'verified'; // For pending delivery status
       }
     }
     
     // Fallback to original status code
+    console.log(`   → Returning fallback: '${order.order_status_code || 'pending'}'`);
     return order.order_status_code || 'pending';
   }
 
@@ -137,8 +150,13 @@ export default function OrdersPage() {
   async function loadOrders() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        console.error('❌ No authenticated user found');
+        return;
+      }
 
+      console.log('🛒 Loading orders for user:', user.id);
+      
       const { data, error } = await supabase
         .from('orders')
         .select(`
@@ -161,7 +179,14 @@ export default function OrdersPage() {
         .eq('customer_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error loading orders:', error);
+        throw error;
+      }
+      
+      // Debug: Log the raw data to see what's in the database
+      console.log('🛒 Customer Orders - Raw data from database:', data);
+      
       // Map to correct type
       const mapped = (data as any[] || []).map(order => ({
         id: order.id,
@@ -173,6 +198,15 @@ export default function OrdersPage() {
         status: order.status || null,
         items: order.items,
       })) as Order[];
+      
+      // Debug: Log the mapped orders and their display status
+      mapped.forEach(order => {
+        console.log(`📦 Order ${order.id.slice(0, 8)}:`, {
+          approval_status: order.approval_status,
+          delivery_status: order.delivery_status,
+          display_status: getDisplayStatus(order)
+        });
+      });
       // Sort: rejected first, then pending, then by created_at descending
       mapped.sort((a, b) => {
         const statusA = getDisplayStatus(a);
@@ -208,7 +242,9 @@ export default function OrdersPage() {
     <div className="max-w-2xl mx-auto">
       <div className="bg-gray-50 w-full">
         <div className="max-w-2xl mx-auto px-4">
-          <h1 className="text-2xl font-semibold -mt-5 py-3">My Orders</h1>
+          <div className="flex items-center justify-between -mt-5 py-3">
+            <h1 className="text-2xl font-semibold">My Orders</h1>
+          </div>
         </div>
       </div>
       <div className="px-4 space-y-4">

@@ -30,12 +30,15 @@ type Address = {
   customer_id: string;
   full_name: string;
   phone: string;
-  region: string;
-  province: string;
-  city: string;
-  barangay: string;
-  postal_code: string;
+  region?: string;
+  province?: string;
+  city?: string;
+  barangay: string | null;
+  postal_code?: string;
   street_address: string;
+  latitude: number | null;
+  longitude: number | null;
+  created_at: string;
   label?: string;
 };
 
@@ -123,7 +126,7 @@ export default function CheckoutPage() {
         const { data: addresses, error: addressesError } = await supabase
           .from('addresses')
           .select('*')
-          .eq('customer_id', user.id); // Removed .eq('region', 'Mindanao')
+          .eq('customer_id', user.id);
         console.log('Fetched addresses:', addresses);
 
         if (addressesError) throw new Error('Error fetching addresses: ' + addressesError.message);
@@ -229,6 +232,20 @@ export default function CheckoutPage() {
         0
       );
 
+             // Create delivery address with GPS coordinates
+       const deliveryAddress = {
+         full_name: selectedAddress.full_name,
+         phone: selectedAddress.phone,
+         street_address: selectedAddress.street_address,
+         barangay: selectedAddress.barangay || 'Unknown',
+         city: selectedAddress.city || 'Unknown',
+         province: selectedAddress.province || 'Unknown',
+         region: selectedAddress.region || 'Unknown',
+         postal_code: selectedAddress.postal_code || '0000',
+         latitude: selectedAddress.latitude || null,
+         longitude: selectedAddress.longitude || null
+       };
+
       // Start a transaction
       const { data: order, error: orderError } = await supabase
         .from('orders')
@@ -236,16 +253,7 @@ export default function CheckoutPage() {
           customer_id: user.id,
           total,
           order_status_code: 'pending',
-          address: {
-            full_name: selectedAddress.full_name,
-            phone: selectedAddress.phone,
-            street_address: selectedAddress.street_address,
-            barangay: selectedAddress.barangay,
-            city: selectedAddress.city,
-            province: selectedAddress.province,
-            region: selectedAddress.region,
-            postal_code: selectedAddress.postal_code
-          },
+          delivery_address: deliveryAddress,
           notes: data.notes,
           created_at: new Date().toISOString()
         }])

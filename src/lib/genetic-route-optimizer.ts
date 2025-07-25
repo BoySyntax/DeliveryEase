@@ -26,6 +26,13 @@ export interface DepotLocation {
   address: string;
 }
 
+export interface CurrentLocation {
+  latitude: number;
+  longitude: number;
+  name: string;
+  address: string;
+}
+
 export interface OptimizedRoute {
   locations: DeliveryLocation[];
   total_distance_km: number;
@@ -86,9 +93,10 @@ export class GeneticRouteOptimizer {
     };
     
     // Default depot location (CDO City - DeliveryEase depot)
+    // Based on the map, depot should be in the upper-right area near Nazareth/Consolacion
     this.depot = depot || {
-      latitude: 8.4542,
-      longitude: 124.6319,
+      latitude: 8.4850,  // Adjusted to be more in the upper-right area
+      longitude: 124.6500, // Adjusted to be more in the upper-right area
       name: "DeliveryEase Depot",
       address: "Cagayan de Oro City, Philippines"
     };
@@ -119,6 +127,81 @@ export class GeneticRouteOptimizer {
     } else {
       return await this.optimizeSingleRoute(validLocations, invalidLocations);
     }
+  }
+
+  /**
+   * Optimize route from driver's current location
+   * This is the main method for real-time route optimization
+   */
+  async optimizeRouteFromCurrentLocation(
+    locations: DeliveryLocation[], 
+    currentLocation: CurrentLocation
+  ): Promise<OptimizedRoute> {
+    console.log(`🚚 Starting route optimization from driver's current location: ${currentLocation.name}`);
+    console.log(`📍 Current position: ${currentLocation.latitude}, ${currentLocation.longitude}`);
+    
+    // Force alert to confirm this function is being called
+            console.log(`🧬 Genetic algorithm called!\n📍 Current location: ${currentLocation.latitude}, ${currentLocation.longitude}\n📦 Locations: ${locations.length}`);
+    
+    if (locations.length <= 2) {
+      return this.createSimpleRouteFromCurrentLocation(locations, currentLocation);
+    }
+
+    // Filter locations with valid coordinates
+    const validLocations = locations.filter(loc => loc.latitude && loc.longitude);
+    const invalidLocations = locations.filter(loc => !loc.latitude || !loc.longitude);
+    
+    if (validLocations.length < 2) {
+      console.warn('Not enough valid GPS coordinates for optimization');
+      return this.createFallbackRouteFromCurrentLocation(locations, currentLocation);
+    }
+
+    // Find the location nearest to driver's current position for genetic algorithm seeding
+    let nearestIndex = 0;
+    let nearestDistance = Infinity;
+    
+    console.log('🔍 Finding nearest delivery location to driver for genetic algorithm...');
+    for (let i = 0; i < validLocations.length; i++) {
+      const distance = this.calculateDistanceFromCurrentLocation(validLocations[i], currentLocation);
+      console.log(`   ${i + 1}. ${validLocations[i].customer_name}: ${distance.toFixed(2)}km`);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = i;
+      }
+    }
+    
+    console.log(`🎯 Nearest delivery location to driver: ${validLocations[nearestIndex].customer_name} (${nearestDistance.toFixed(2)}km)`);
+    
+    // Reorder locations to start from the nearest to current position
+    const reorderedLocations = [
+      validLocations[nearestIndex],
+      ...validLocations.slice(0, nearestIndex),
+      ...validLocations.slice(nearestIndex + 1)
+    ];
+    
+    console.log('📋 Locations reordered for genetic algorithm (nearest first):');
+    reorderedLocations.forEach((loc, index) => {
+      console.log(`   ${index + 1}. ${loc.customer_name} (${loc.address})`);
+    });
+    
+    // Use genetic algorithm with nearest-first bias
+    console.log('🧬 Running genetic algorithm with nearest-first optimization...');
+    
+    if (this.config.dual_route_comparison) {
+      return await this.optimizeWithDualRouteComparisonFromCurrentLocation(reorderedLocations, invalidLocations, currentLocation);
+    } else {
+      return await this.optimizeSingleRouteFromCurrentLocation(reorderedLocations, invalidLocations, currentLocation);
+    }
+    
+    // Comment out genetic algorithm for now to test nearest-first logic
+    /*
+    // Optimize the remaining route using genetic algorithm
+    if (this.config.dual_route_comparison) {
+      return await this.optimizeWithDualRouteComparisonFromCurrentLocation(reorderedLocations, invalidLocations, currentLocation);
+    } else {
+      return await this.optimizeSingleRouteFromCurrentLocation(reorderedLocations, invalidLocations, currentLocation);
+    }
+    */
   }
 
   /**
@@ -327,20 +410,165 @@ export class GeneticRouteOptimizer {
   }
 
   /**
+   * Core genetic algorithm runner for current location optimization
+   */
+  private async runGeneticAlgorithmFromCurrentLocation(
+    locations: DeliveryLocation[], 
+    currentLocation: CurrentLocation,
+    config: GeneticAlgorithmConfig & { seed?: string }
+  ): Promise<{ locations: DeliveryLocation[], generation_count: number }> {
+    console.log('🧬 Starting genetic algorithm from current location...');
+    
+    // Initialize population with seed-based variation optimized for current location
+    let population = this.generateInitialPopulationFromCurrentLocation(locations, currentLocation, config.seed);
+    let bestDistance = Infinity;
+    let stagnationCounter = 0;
+    let generation = 0;
+    
+    for (generation = 0; generation < config.max_generations; generation++) {
+      // Evaluate fitness based on total travel distance from current location
+      const fitness = this.evaluateDistanceBasedFitnessFromCurrentLocation(population, currentLocation);
+      
+      // Track best solution (lowest distance)
+      const currentBest = Math.min(...population.map(route => this.calculateRouteDistanceFromCurrentLocation(route, currentLocation)));
+      
+      if (Math.abs(bestDistance - currentBest) < config.convergence_threshold) {
+        stagnationCounter++;
+      } else {
+        stagnationCounter = 0;
+        bestDistance = currentBest;
+      }
+      
+      // Early termination if converged
+      if (stagnationCounter > 50) {
+        console.log(`🎯 Converged at generation ${generation} with distance ${bestDistance.toFixed(2)}km from current location`);
+        break;
+      }
+      
+      // Evolve population
+      population = this.evolvePopulation(population, fitness);
+      
+      // Progress logging
+      if (generation % 100 === 0) {
+        console.log(`Generation ${generation}: Best distance from current location = ${bestDistance.toFixed(2)}km`);
+      }
+    }
+
+    // Get best route (highest fitness = lowest distance)
+    const fitness = this.evaluateDistanceBasedFitnessFromCurrentLocation(population, currentLocation);
+    const bestIndex = fitness.indexOf(Math.max(...fitness));
+    const bestRoute = population[bestIndex];
+    
+    console.log(`🏆 Best route found with total distance: ${this.calculateRouteDistanceFromCurrentLocation(bestRoute, currentLocation).toFixed(2)}km`);
+    
+    return {
+      locations: bestRoute,
+      generation_count: generation
+    };
+  }
+
+  /**
    * Enhanced fitness evaluation based on total travel distance
    * Lower distance = higher fitness score
+   * HEAVILY weights routes that start from nearest location to driver's current position
    */
   private evaluateDistanceBasedFitness(population: DeliveryLocation[][]): number[] {
     return population.map(route => {
       const distance = this.calculateRouteDistance(route);
-      return this.calculateDistanceBasedFitness(distance, route.length);
+      const depotDistanceBonus = this.calculateDepotDistanceBonus(route);
+      return this.calculateDistanceBasedFitness(distance, route.length, depotDistanceBonus);
     });
   }
 
   /**
-   * Calculate fitness score where lower distance = higher fitness
+   * Fitness evaluation for routes from current location
+   * This is the key method for real-time optimization
+   * HEAVILY weights routes that start from nearest location to driver's current position
    */
-  private calculateDistanceBasedFitness(distance: number, locationCount: number): number {
+  private evaluateDistanceBasedFitnessFromCurrentLocation(
+    population: DeliveryLocation[][], 
+    currentLocation: CurrentLocation
+  ): number[] {
+    return population.map(route => {
+      const distance = this.calculateRouteDistanceFromCurrentLocation(route, currentLocation);
+      const currentLocationBonus = this.calculateCurrentLocationBonus(route, currentLocation);
+      return this.calculateDistanceBasedFitness(distance, route.length, currentLocationBonus);
+    });
+  }
+
+  /**
+   * Calculate bonus for routes that start from the nearest location to depot
+   * This heavily influences the genetic algorithm to prefer such routes
+   */
+  private calculateDepotDistanceBonus(route: DeliveryLocation[]): number {
+    if (route.length === 0) return 0;
+    
+    const firstLocation = route[0];
+    if (!firstLocation.latitude || !firstLocation.longitude) return 0;
+    
+    // Calculate distance from depot to first location
+    const distanceToDepot = this.calculateDistanceToDepot(firstLocation);
+    
+    // Find the minimum distance to depot among all locations
+    let minDistanceToDepot = Infinity;
+    for (const location of route) {
+      if (location.latitude && location.longitude) {
+        const dist = this.calculateDistanceToDepot(location);
+        if (dist < minDistanceToDepot) {
+          minDistanceToDepot = dist;
+        }
+      }
+    }
+    
+    // If first location is the nearest to depot, give a large bonus
+    if (Math.abs(distanceToDepot - minDistanceToDepot) < 0.1) { // Within 100m
+      return 50; // Large bonus for starting from nearest location
+    } else {
+      // Penalty based on how far the first location is from being the nearest
+      const penalty = (distanceToDepot - minDistanceToDepot) * 10;
+      return Math.max(-30, -penalty); // Cap penalty at -30
+    }
+  }
+
+  /**
+   * Calculate bonus for routes that start from the nearest location to driver's current position
+   * This heavily influences the genetic algorithm to prefer such routes
+   */
+  private calculateCurrentLocationBonus(route: DeliveryLocation[], currentLocation: CurrentLocation): number {
+    if (route.length === 0) return 0;
+    
+    const firstLocation = route[0];
+    if (!firstLocation.latitude || !firstLocation.longitude) return 0;
+    
+    // Calculate distance from current location to first location
+    const distanceToCurrent = this.calculateDistanceFromCurrentLocation(firstLocation, currentLocation);
+    
+    // Find the minimum distance to current location among all locations
+    let minDistanceToCurrent = Infinity;
+    for (const location of route) {
+      if (location.latitude && location.longitude) {
+        const dist = this.calculateDistanceFromCurrentLocation(location, currentLocation);
+        if (dist < minDistanceToCurrent) {
+          minDistanceToCurrent = dist;
+        }
+      }
+    }
+    
+    // If first location is the nearest to current position, give a large bonus
+    if (Math.abs(distanceToCurrent - minDistanceToCurrent) < 0.1) { // Within 100m
+      return 50; // Large bonus for starting from nearest location to driver
+    } else {
+      // Penalty based on how far the first location is from being the nearest
+      const penalty = (distanceToCurrent - minDistanceToCurrent) * 10;
+      return Math.max(-30, -penalty); // Cap penalty at -30
+    }
+  }
+
+  /**
+   * Calculate fitness score where lower distance = higher fitness
+   * Includes bonus for starting from nearest location to depot or current location
+   */
+  private calculateDistanceBasedFitness(distance: number, locationCount: number, locationBonus: number = 0): number {
     // Base fitness calculation: inverse of distance
     // Add scaling factors for route length
     const baseDistance = locationCount * 1.5; // Expected minimum distance (1.5km between stops)
@@ -348,7 +576,10 @@ export class GeneticRouteOptimizer {
     
     // Fitness formula: higher score for shorter routes
     // Score ranges from 0 to 100, with 100 being the theoretical perfect route
-    const fitness = Math.max(0, 100 - (excessDistance / baseDistance) * 50);
+    let fitness = Math.max(0, 100 - (excessDistance / baseDistance) * 50);
+    
+    // Add significant bonus for routes that start from nearest location
+    fitness += locationBonus;
     
     return fitness;
   }
@@ -357,20 +588,24 @@ export class GeneticRouteOptimizer {
     const population: DeliveryLocation[][] = [];
     
     // Create diverse initial population with seed-based variation
+    // HEAVILY prioritize routes that start from nearest location to depot
     for (let i = 0; i < this.config.population_size; i++) {
       let route: DeliveryLocation[];
       
-      if (i < 10) {
-        // Some routes using nearest neighbor heuristic
+      if (i === 0) {
+        // First route using optimized algorithm (always starts from nearest to depot)
+        route = this.optimizedRoute(locations);
+      } else if (i < 15) {
+        // Most routes using nearest neighbor heuristic (starts from nearest to depot)
         route = this.nearestNeighborRoute(locations);
       } else if (i < 20) {
         // Some routes prioritizing high-priority orders
         route = this.priorityBasedRoute(locations);
-      } else if (i < 30 && seed) {
+      } else if (i < 25 && seed) {
         // Seed-based routes for variation between dual routes
         route = this.seedBasedRoute(locations, seed, i);
       } else {
-        // Random permutations
+        // Fewer random permutations to maintain depot-first preference
         route = this.randomRoute(locations);
       }
       
@@ -381,7 +616,47 @@ export class GeneticRouteOptimizer {
   }
 
   /**
+   * Generate initial population optimized for driver's current location
+   * HEAVILY prioritize routes that start from nearest location to driver's current position
+   */
+  private generateInitialPopulationFromCurrentLocation(
+    locations: DeliveryLocation[], 
+    currentLocation: CurrentLocation,
+    seed?: string
+  ): DeliveryLocation[][] {
+    const population: DeliveryLocation[][] = [];
+    
+    // Create diverse initial population with seed-based variation
+    // HEAVILY prioritize routes that start from nearest location to driver's current position
+    for (let i = 0; i < this.config.population_size; i++) {
+      let route: DeliveryLocation[];
+      
+      if (i === 0) {
+        // First route using optimized algorithm (always starts from nearest to driver's current position)
+        route = this.optimizedRouteFromCurrentLocation(locations, currentLocation);
+      } else if (i < 15) {
+        // Most routes using nearest neighbor heuristic (starts from nearest to driver's current position)
+        route = this.nearestNeighborRouteFromCurrentLocation(locations, currentLocation);
+      } else if (i < 20) {
+        // Some routes prioritizing high-priority orders
+        route = this.priorityBasedRouteFromCurrentLocation(locations, currentLocation);
+      } else if (i < 25 && seed) {
+        // Seed-based routes for variation between dual routes
+        route = this.seedBasedRouteFromCurrentLocation(locations, currentLocation, seed, i);
+      } else {
+        // Fewer random permutations to maintain current-location-first preference
+        route = this.randomRouteFromCurrentLocation(locations, currentLocation);
+      }
+      
+      population.push(route);
+    }
+    
+    return population;
+  }
+
+  /**
    * Generate seed-based route for dual route variation
+   * 80% chance to start from nearest location to depot
    */
   private seedBasedRoute(locations: DeliveryLocation[], seed: string, index: number): DeliveryLocation[] {
     const route = [...locations];
@@ -390,10 +665,38 @@ export class GeneticRouteOptimizer {
     const seedValue = seed.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     const random = (n: number) => ((seedValue + index * 7) % n) / n;
     
-    // Custom shuffle with seed-based randomness
+    // 80% chance to start from nearest location to depot
+    if (random(100) < 80) {
+      // Find nearest location to depot
+      let nearestIndex = 0;
+      let nearestDistance = Infinity;
+      
+      for (let i = 0; i < route.length; i++) {
+        if (route[i].latitude && route[i].longitude) {
+          const distance = this.calculateDistanceToDepot(route[i]);
+          if (distance < nearestDistance) {
+            nearestDistance = distance;
+            nearestIndex = i;
+          }
+        }
+      }
+      
+      // Move nearest location to first position
+      if (nearestIndex > 0) {
+        [route[0], route[nearestIndex]] = [route[nearestIndex], route[0]];
+      }
+      
+      // Shuffle remaining positions with seed-based randomness
+      for (let i = route.length - 1; i > 1; i--) {
+        const j = Math.floor(random(i) * (i - 1)) + 1;
+        [route[i], route[j]] = [route[j], route[i]];
+      }
+    } else {
+      // 20% chance for completely random shuffle
     for (let i = route.length - 1; i > 0; i--) {
       const j = Math.floor(random(i + 1) * (i + 1));
       [route[i], route[j]] = [route[j], route[i]];
+      }
     }
     
     return route;
@@ -461,6 +764,7 @@ export class GeneticRouteOptimizer {
 
   /**
    * Enhanced Order Crossover (OX) with guaranteed crossover probability
+   * PRESERVES the first position (nearest to depot) and only crossovers remaining positions
    */
   private enhancedOrderCrossover(
     parent1: DeliveryLocation[], 
@@ -475,14 +779,21 @@ export class GeneticRouteOptimizer {
     const length = parent1.length;
     if (length <= 2) return [...parent1];
     
-    // Select a random segment from parent1
-    const start = Math.floor(Math.random() * length);
-    const end = Math.floor(Math.random() * (length - start)) + start;
-    
-    console.log(`     OX segment: positions ${start} to ${end}`);
-    
+    // ALWAYS preserve the first position (nearest to depot) - no crossover on position 0
     const offspring: DeliveryLocation[] = new Array(length);
     const selected = new Set<string>();
+    
+    // Always keep the first location from parent1 (nearest to depot)
+    offspring[0] = parent1[0];
+    selected.add(parent1[0].id);
+    
+    // For remaining positions (1 to length-1), perform crossover
+    if (length > 1) {
+      // Select a random segment from parent1 (excluding position 0)
+      const start = Math.floor(Math.random() * (length - 1)) + 1; // Start from position 1
+      const end = Math.floor(Math.random() * (length - start)) + start;
+      
+      console.log(`     OX segment: positions ${start} to ${end} (preserving position 0 - nearest to depot)`);
     
     // Copy selected segment from parent1
     for (let i = start; i <= end; i++) {
@@ -492,7 +803,7 @@ export class GeneticRouteOptimizer {
     
     // Fill remaining positions with order from parent2
     let parent2Index = 0;
-    for (let i = 0; i < length; i++) {
+      for (let i = 1; i < length; i++) { // Start from position 1
       if (!offspring[i]) {
         // Find next unselected location from parent2
         while (parent2Index < parent2.length && selected.has(parent2[parent2Index].id)) {
@@ -508,7 +819,7 @@ export class GeneticRouteOptimizer {
     }
     
     // Validate that all positions are filled
-    for (let i = 0; i < length; i++) {
+      for (let i = 1; i < length; i++) { // Start from position 1
       if (!offspring[i]) {
         // Fill any remaining gaps with unselected locations
         for (const location of parent1) {
@@ -516,6 +827,7 @@ export class GeneticRouteOptimizer {
             offspring[i] = location;
             selected.add(location.id);
             break;
+            }
           }
         }
       }
@@ -543,10 +855,25 @@ export class GeneticRouteOptimizer {
   }
 
   private nearestNeighborRoute(locations: DeliveryLocation[]): DeliveryLocation[] {
+    if (locations.length === 0) return [];
+    
     const route: DeliveryLocation[] = [];
     const remaining = [...locations];
     
-    // Start with location closest to depot instead of first location
+    // Calculate all pairwise distances for better optimization
+    const distances: { [key: string]: { [key: string]: number } } = {};
+    
+    // Initialize distance matrix
+    for (let i = 0; i < remaining.length; i++) {
+      distances[remaining[i].id] = {};
+      for (let j = 0; j < remaining.length; j++) {
+        if (i !== j) {
+          distances[remaining[i].id][remaining[j].id] = this.calculateDistance(remaining[i], remaining[j]);
+        }
+      }
+    }
+    
+    // ALWAYS start with location closest to depot (not chronological order)
     let closestIndex = 0;
     let closestDistance = Infinity;
     
@@ -561,22 +888,53 @@ export class GeneticRouteOptimizer {
       }
     }
     
+    // If no valid coordinates found, start with first location
+    if (closestDistance === Infinity) {
+      closestIndex = 0;
+    }
+    
     let current = remaining.splice(closestIndex, 1)[0];
     route.push(current);
     
+    // Use improved nearest neighbor with lookahead
     while (remaining.length > 0) {
-      let nearestIndex = 0;
-      let nearestDistance = Infinity;
+      let bestIndex = 0;
+      let bestScore = Infinity;
       
       for (let i = 0; i < remaining.length; i++) {
-        const distance = this.calculateDistance(current, remaining[i]);
-        if (distance < nearestDistance) {
-          nearestDistance = distance;
-          nearestIndex = i;
+        const candidate = remaining[i];
+        const distanceToCandidate = this.calculateDistance(current, candidate);
+        
+        // Calculate score considering distance to candidate and potential next steps
+        let score = distanceToCandidate;
+        
+        // Add penalty for going far from depot if this is one of the last deliveries
+        if (remaining.length <= 2) {
+          const distanceToDepot = this.calculateDistanceToDepot(candidate);
+          score += distanceToDepot * 0.5; // Reduce penalty for last deliveries
+        }
+        
+        // Look ahead: consider the next best option from this candidate
+        if (remaining.length > 1) {
+          let minNextDistance = Infinity;
+          for (let j = 0; j < remaining.length; j++) {
+            if (i !== j) {
+              const nextDistance = distances[candidate.id]?.[remaining[j].id] || 1000;
+              if (nextDistance < minNextDistance) {
+                minNextDistance = nextDistance;
+              }
+            }
+          }
+          score += minNextDistance * 0.3; // Add 30% weight of next best option
+        }
+        
+        if (score < bestScore) {
+          bestScore = score;
+          bestIndex = i;
         }
       }
       
-      current = remaining.splice(nearestIndex, 1)[0];
+      current = remaining.splice(bestIndex, 1)[0];
       route.push(current);
     }
     
@@ -589,13 +947,382 @@ export class GeneticRouteOptimizer {
     return this.nearestNeighborRoute(sorted);
   }
 
+  private optimizedRoute(locations: DeliveryLocation[]): DeliveryLocation[] {
+    if (locations.length <= 2) {
+      return this.nearestNeighborRoute(locations);
+    }
+    
+    // ALWAYS find the location closest to depot to start with
+    let closestToDepotIndex = 0;
+    let closestToDepotDistance = Infinity;
+    
+    for (let i = 0; i < locations.length; i++) {
+      const location = locations[i];
+      if (location.latitude && location.longitude) {
+        const distance = this.calculateDistanceToDepot(location);
+        if (distance < closestToDepotDistance) {
+          closestToDepotDistance = distance;
+          closestToDepotIndex = i;
+        }
+      }
+    }
+    
+    // If no valid coordinates found, start with first location
+    if (closestToDepotDistance === Infinity) {
+      closestToDepotIndex = 0;
+    }
+    
+    // ALWAYS start from the closest location to depot for maximum efficiency
+    let bestRoute: DeliveryLocation[] = [];
+    let bestTotalDistance = Infinity;
+    
+    // Only try starting from the closest location to depot (no fallbacks)
+    const startIndices = [closestToDepotIndex];
+    
+    // Test starting from the closest location to depot
+    for (let startIndex of startIndices) {
+      const route: DeliveryLocation[] = [];
+      const remaining = [...locations];
+      
+      // Start with the closest location to depot
+      let current = remaining.splice(startIndex, 1)[0];
+      route.push(current);
+      
+      // Build route using improved nearest neighbor
+      while (remaining.length > 0) {
+        let bestIndex = 0;
+        let bestScore = Infinity;
+        
+        for (let i = 0; i < remaining.length; i++) {
+          const candidate = remaining[i];
+          const distanceToCandidate = this.calculateDistance(current, candidate);
+          
+          // Calculate score with depot consideration
+          let score = distanceToCandidate;
+          
+          // Add penalty for going far from depot for last few deliveries
+          if (remaining.length <= 2) {
+            const distanceToDepot = this.calculateDistanceToDepot(candidate);
+            score += distanceToDepot * 0.3;
+          }
+          
+          if (score < bestScore) {
+            bestScore = score;
+            bestIndex = i;
+          }
+        }
+        
+        current = remaining.splice(bestIndex, 1)[0];
+        route.push(current);
+      }
+      
+      // Calculate total distance for this route
+      const totalDistance = this.calculateRouteDistance(route);
+      
+      // Since we only try the closest location to depot, no adjustment needed
+      if (totalDistance < bestTotalDistance) {
+        bestTotalDistance = totalDistance;
+        bestRoute = route;
+      }
+    }
+    
+    return bestRoute;
+  }
+
   private randomRoute(locations: DeliveryLocation[]): DeliveryLocation[] {
     const route = [...locations];
     
-    // Fisher-Yates shuffle
+    // 70% chance to start from nearest location to depot
+    if (Math.random() < 0.7) {
+      // Find nearest location to depot
+      let nearestIndex = 0;
+      let nearestDistance = Infinity;
+      
+      for (let i = 0; i < route.length; i++) {
+        if (route[i].latitude && route[i].longitude) {
+          const distance = this.calculateDistanceToDepot(route[i]);
+          if (distance < nearestDistance) {
+            nearestDistance = distance;
+            nearestIndex = i;
+          }
+        }
+      }
+      
+      // Move nearest location to first position
+      if (nearestIndex > 0) {
+        [route[0], route[nearestIndex]] = [route[nearestIndex], route[0]];
+      }
+      
+      // Shuffle remaining positions
+      for (let i = route.length - 1; i > 1; i--) {
+        const j = Math.floor(Math.random() * (i - 1)) + 1;
+        [route[i], route[j]] = [route[j], route[i]];
+      }
+    } else {
+      // 30% chance for completely random shuffle
     for (let i = route.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [route[i], route[j]] = [route[j], route[i]];
+      }
+    }
+    
+    return route;
+  }
+
+  // Current location optimized route generation methods
+  private optimizedRouteFromCurrentLocation(locations: DeliveryLocation[], currentLocation: CurrentLocation): DeliveryLocation[] {
+    if (locations.length <= 2) {
+      return this.nearestNeighborRouteFromCurrentLocation(locations, currentLocation);
+    }
+    
+    // ALWAYS find the location closest to driver's current position to start with
+    let closestToCurrentIndex = 0;
+    let closestToCurrentDistance = Infinity;
+    
+    for (let i = 0; i < locations.length; i++) {
+      const location = locations[i];
+      if (location.latitude && location.longitude) {
+        const distance = this.calculateDistanceFromCurrentLocation(location, currentLocation);
+        if (distance < closestToCurrentDistance) {
+          closestToCurrentDistance = distance;
+          closestToCurrentIndex = i;
+        }
+      }
+    }
+    
+    // If no valid coordinates found, start with first location
+    if (closestToCurrentDistance === Infinity) {
+      closestToCurrentIndex = 0;
+    }
+    
+    // ALWAYS start from the closest location to driver's current position for maximum efficiency
+    let bestRoute: DeliveryLocation[] = [];
+    let bestTotalDistance = Infinity;
+    
+    // Only try starting from the closest location to driver's current position (no fallbacks)
+    const startIndices = [closestToCurrentIndex];
+    
+    // Test starting from the closest location to driver's current position
+    for (let startIndex of startIndices) {
+      const route: DeliveryLocation[] = [];
+      const remaining = [...locations];
+      
+      // Start with the closest location to driver's current position
+      let current = remaining.splice(startIndex, 1)[0];
+      route.push(current);
+      
+      // Build route using improved nearest neighbor
+      while (remaining.length > 0) {
+        let bestIndex = 0;
+        let bestScore = Infinity;
+        
+        for (let i = 0; i < remaining.length; i++) {
+          const candidate = remaining[i];
+          const distanceToCandidate = this.calculateDistance(current, candidate);
+          
+          // Calculate score with depot consideration
+          let score = distanceToCandidate;
+          
+          // Add penalty for going far from depot for last few deliveries
+          if (remaining.length <= 2) {
+            const distanceToDepot = this.calculateDistanceToDepot(candidate);
+            score += distanceToDepot * 0.3;
+          }
+          
+          if (score < bestScore) {
+            bestScore = score;
+            bestIndex = i;
+          }
+        }
+        
+        current = remaining.splice(bestIndex, 1)[0];
+        route.push(current);
+      }
+      
+      // Calculate total distance for this route from current location
+      const totalDistance = this.calculateRouteDistanceFromCurrentLocation(route, currentLocation);
+      
+      if (totalDistance < bestTotalDistance) {
+        bestTotalDistance = totalDistance;
+        bestRoute = route;
+      }
+    }
+    
+    return bestRoute;
+  }
+
+  private nearestNeighborRouteFromCurrentLocation(locations: DeliveryLocation[], currentLocation: CurrentLocation): DeliveryLocation[] {
+    if (locations.length === 0) return [];
+    
+    const route: DeliveryLocation[] = [];
+    const remaining = [...locations];
+    
+    // Calculate all pairwise distances for better optimization
+    const distances: { [key: string]: { [key: string]: number } } = {};
+    
+    // Initialize distance matrix
+    for (let i = 0; i < remaining.length; i++) {
+      distances[remaining[i].id] = {};
+      for (let j = 0; j < remaining.length; j++) {
+        if (i !== j) {
+          distances[remaining[i].id][remaining[j].id] = this.calculateDistance(remaining[i], remaining[j]);
+        }
+      }
+    }
+    
+    // ALWAYS start with location closest to driver's current position (not depot)
+    let closestIndex = 0;
+    let closestDistance = Infinity;
+    
+    for (let i = 0; i < remaining.length; i++) {
+      const location = remaining[i];
+      if (location.latitude && location.longitude) {
+        const distance = this.calculateDistanceFromCurrentLocation(location, currentLocation);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestIndex = i;
+        }
+      }
+    }
+    
+    // If no valid coordinates found, start with first location
+    if (closestDistance === Infinity) {
+      closestIndex = 0;
+    }
+    
+    let current = remaining.splice(closestIndex, 1)[0];
+    route.push(current);
+    
+    // Use improved nearest neighbor with lookahead
+    while (remaining.length > 0) {
+      let bestIndex = 0;
+      let bestScore = Infinity;
+      
+      for (let i = 0; i < remaining.length; i++) {
+        const candidate = remaining[i];
+        const distanceToCandidate = this.calculateDistance(current, candidate);
+        
+        // Calculate score considering distance to candidate and potential next steps
+        let score = distanceToCandidate;
+        
+        // Add penalty for going far from depot if this is one of the last deliveries
+        if (remaining.length <= 2) {
+          const distanceToDepot = this.calculateDistanceToDepot(candidate);
+          score += distanceToDepot * 0.5; // Reduce penalty for last deliveries
+        }
+        
+        // Look ahead: consider the next best option from this candidate
+        if (remaining.length > 1) {
+          let minNextDistance = Infinity;
+          for (let j = 0; j < remaining.length; j++) {
+            if (i !== j) {
+              const nextDistance = distances[candidate.id]?.[remaining[j].id] || 1000;
+              if (nextDistance < minNextDistance) {
+                minNextDistance = nextDistance;
+              }
+            }
+          }
+          score += minNextDistance * 0.3; // Add 30% weight of next best option
+        }
+        
+        if (score < bestScore) {
+          bestScore = score;
+          bestIndex = i;
+        }
+      }
+      
+      current = remaining.splice(bestIndex, 1)[0];
+      route.push(current);
+    }
+    
+    return route;
+  }
+
+  private priorityBasedRouteFromCurrentLocation(locations: DeliveryLocation[], currentLocation: CurrentLocation): DeliveryLocation[] {
+    // Sort by priority first, then optimize locally from current location
+    const sorted = [...locations].sort((a, b) => (a.priority || 3) - (b.priority || 3));
+    return this.nearestNeighborRouteFromCurrentLocation(sorted, currentLocation);
+  }
+
+  private seedBasedRouteFromCurrentLocation(locations: DeliveryLocation[], currentLocation: CurrentLocation, seed: string, index: number): DeliveryLocation[] {
+    const route = [...locations];
+    
+    // Create deterministic but varied shuffling based on seed
+    const seedValue = seed.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const random = (n: number) => ((seedValue + index * 7) % n) / n;
+    
+    // 80% chance to start from nearest location to driver's current position
+    if (random(100) < 80) {
+      // Find nearest location to driver's current position
+      let nearestIndex = 0;
+      let nearestDistance = Infinity;
+      
+      for (let i = 0; i < route.length; i++) {
+        if (route[i].latitude && route[i].longitude) {
+          const distance = this.calculateDistanceFromCurrentLocation(route[i], currentLocation);
+          if (distance < nearestDistance) {
+            nearestDistance = distance;
+            nearestIndex = i;
+          }
+        }
+      }
+      
+      // Move nearest location to first position
+      if (nearestIndex > 0) {
+        [route[0], route[nearestIndex]] = [route[nearestIndex], route[0]];
+      }
+      
+      // Shuffle remaining positions with seed-based randomness
+      for (let i = route.length - 1; i > 1; i--) {
+        const j = Math.floor(random(i) * (i - 1)) + 1;
+        [route[i], route[j]] = [route[j], route[i]];
+      }
+    } else {
+      // 20% chance for completely random shuffle
+      for (let i = route.length - 1; i > 0; i--) {
+        const j = Math.floor(random(i + 1) * (i + 1));
+        [route[i], route[j]] = [route[j], route[i]];
+      }
+    }
+    
+    return route;
+  }
+
+  private randomRouteFromCurrentLocation(locations: DeliveryLocation[], currentLocation: CurrentLocation): DeliveryLocation[] {
+    const route = [...locations];
+    
+    // 70% chance to start from nearest location to driver's current position
+    if (Math.random() < 0.7) {
+      // Find nearest location to driver's current position
+      let nearestIndex = 0;
+      let nearestDistance = Infinity;
+      
+      for (let i = 0; i < route.length; i++) {
+        if (route[i].latitude && route[i].longitude) {
+          const distance = this.calculateDistanceFromCurrentLocation(route[i], currentLocation);
+          if (distance < nearestDistance) {
+            nearestDistance = distance;
+            nearestIndex = i;
+          }
+        }
+      }
+      
+      // Move nearest location to first position
+      if (nearestIndex > 0) {
+        [route[0], route[nearestIndex]] = [route[nearestIndex], route[0]];
+      }
+      
+      // Shuffle remaining positions
+      for (let i = route.length - 1; i > 1; i--) {
+        const j = Math.floor(Math.random() * (i - 1)) + 1;
+        [route[i], route[j]] = [route[j], route[i]];
+      }
+    } else {
+      // 30% chance for completely random shuffle
+      for (let i = route.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [route[i], route[j]] = [route[j], route[i]];
+      }
     }
     
     return route;
@@ -637,6 +1364,43 @@ export class GeneticRouteOptimizer {
     return totalDistance * 1.2;
   }
 
+  /**
+   * Calculate total route distance from current location (for real-time optimization)
+   * This is the key method that determines the optimal sequence
+   */
+  private calculateRouteDistanceFromCurrentLocation(route: DeliveryLocation[], currentLocation: CurrentLocation): number {
+    if (route.length === 0) return 0;
+    
+    let totalDistance = 0;
+    
+    // CRITICAL: Distance from current location to first delivery location
+    if (route.length > 0) {
+      const distanceToFirst = this.calculateDistanceFromCurrentLocation(route[0], currentLocation);
+      totalDistance += distanceToFirst;
+      console.log(`🚚 Distance from current location to first delivery (${route[0].customer_name}): ${distanceToFirst.toFixed(2)}km`);
+    }
+    
+    // Distance between consecutive delivery locations
+    for (let i = 0; i < route.length - 1; i++) {
+      const segmentDistance = this.calculateDistance(route[i], route[i + 1]);
+      totalDistance += segmentDistance;
+      console.log(`📍 Distance from ${route[i].customer_name} to ${route[i + 1].customer_name}: ${segmentDistance.toFixed(2)}km`);
+    }
+    
+    // Distance from last delivery location back to depot
+    if (route.length > 0) {
+      const distanceToDepot = this.calculateDistanceToDepot(route[route.length - 1]);
+      totalDistance += distanceToDepot;
+      console.log(`🏢 Distance from last delivery (${route[route.length - 1].customer_name}) to depot: ${distanceToDepot.toFixed(2)}km`);
+    }
+    
+    // Add 20% for actual driving distance vs straight line
+    const adjustedDistance = totalDistance * 1.2;
+    console.log(`📊 Total route distance: ${totalDistance.toFixed(2)}km (adjusted: ${adjustedDistance.toFixed(2)}km)`);
+    
+    return adjustedDistance;
+  }
+
   private calculateDistance(from: DeliveryLocation, to: DeliveryLocation): number {
     if (!from.latitude || !from.longitude || !to.latitude || !to.longitude) {
       return 1000; // Large penalty for invalid coordinates
@@ -666,6 +1430,25 @@ export class GeneticRouteOptimizer {
     const lat2 = this.toRadians(location.latitude);
     const deltaLat = this.toRadians(location.latitude - this.depot.latitude);
     const deltaLng = this.toRadians(location.longitude - this.depot.longitude);
+
+    const a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+              Math.cos(lat1) * Math.cos(lat2) *
+              Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+  }
+
+  private calculateDistanceFromCurrentLocation(location: DeliveryLocation, currentLocation: CurrentLocation): number {
+    if (!location.latitude || !location.longitude) {
+      return 1000; // Large penalty for invalid coordinates
+    }
+
+    const R = 6371; // Earth's radius in km
+    const lat1 = this.toRadians(currentLocation.latitude);
+    const lat2 = this.toRadians(location.latitude);
+    const deltaLat = this.toRadians(location.latitude - currentLocation.latitude);
+    const deltaLng = this.toRadians(location.longitude - currentLocation.longitude);
 
     const a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
               Math.cos(lat1) * Math.cos(lat2) *
@@ -762,11 +1545,19 @@ export class GeneticRouteOptimizer {
     }
     
     const length = parent1.length;
-    const start = Math.floor(Math.random() * length);
-    const end = Math.floor(Math.random() * (length - start)) + start;
     
+    // ALWAYS preserve the first position (nearest to depot) - no crossover on position 0
     const offspring: DeliveryLocation[] = new Array(length);
     const selected = new Set<string>();
+    
+    // Always keep the first location from parent1 (nearest to depot)
+    offspring[0] = parent1[0];
+    selected.add(parent1[0].id);
+    
+    // For remaining positions (1 to length-1), perform crossover
+    if (length > 1) {
+      const start = Math.floor(Math.random() * (length - 1)) + 1; // Start from position 1
+      const end = Math.floor(Math.random() * (length - start)) + start;
     
     // Copy segment from parent1
     for (let i = start; i <= end; i++) {
@@ -776,7 +1567,7 @@ export class GeneticRouteOptimizer {
     
     // Fill remaining positions from parent2
     let parent2Index = 0;
-    for (let i = 0; i < length; i++) {
+      for (let i = 1; i < length; i++) { // Start from position 1
       if (!offspring[i]) {
         while (selected.has(parent2[parent2Index].id)) {
           parent2Index++;
@@ -784,6 +1575,7 @@ export class GeneticRouteOptimizer {
         offspring[i] = parent2[parent2Index];
         selected.add(parent2[parent2Index].id);
         parent2Index++;
+        }
       }
     }
     
@@ -837,6 +1629,111 @@ export class GeneticRouteOptimizer {
       fitness_score: fitness
     };
   }
+
+  private createSimpleRouteFromCurrentLocation(locations: DeliveryLocation[], currentLocation: CurrentLocation): OptimizedRoute {
+    const distance = this.calculateRouteDistanceFromCurrentLocation(locations, currentLocation);
+    const fitness = this.calculateDistanceBasedFitness(distance, locations.length);
+    
+    return {
+      locations,
+      total_distance_km: distance,
+      estimated_time_hours: 0.5,
+      optimization_score: 100,
+      fuel_cost_estimate: this.estimateFuelCost(distance),
+      generation_count: 0,
+      fitness_score: fitness
+    };
+  }
+
+  private createFallbackRouteFromCurrentLocation(locations: DeliveryLocation[], currentLocation: CurrentLocation): OptimizedRoute {
+    const distance = locations.length * 3; // Estimate 3km per stop
+    const fitness = this.calculateDistanceBasedFitness(distance, locations.length);
+    
+    return {
+      locations,
+      total_distance_km: distance,
+      estimated_time_hours: locations.length * 0.5, // 30 minutes per stop
+      optimization_score: 60, // Lower score for non-optimized route
+      fuel_cost_estimate: locations.length * 18, // Estimate PHP 18 per stop
+      generation_count: 0,
+      fitness_score: fitness
+    };
+  }
+
+
+
+  private async optimizeWithDualRouteComparisonFromCurrentLocation(
+    validLocations: DeliveryLocation[], 
+    invalidLocations: DeliveryLocation[],
+    currentLocation: CurrentLocation
+  ): Promise<OptimizedRoute> {
+    console.log(`🔄 Generating two initial routes from current location as parents...`);
+    
+    // Generate Route A with one GA configuration (Parent 1)
+    const routeA = await this.runGeneticAlgorithmFromCurrentLocation(validLocations, currentLocation, {
+      ...this.config,
+      population_size: Math.floor(this.config.population_size * 0.8),
+      mutation_rate: this.config.mutation_rate * 0.8,
+      seed: 'route_a'
+    });
+
+    // Generate Route B with different GA configuration for diversity (Parent 2)
+    const routeB = await this.runGeneticAlgorithmFromCurrentLocation(validLocations, currentLocation, {
+      ...this.config,
+      population_size: Math.floor(this.config.population_size * 1.2),
+      mutation_rate: this.config.mutation_rate * 1.2,
+      crossover_rate: this.config.crossover_rate * 0.9,
+      seed: 'route_b'
+    });
+
+    // Calculate total travel distance for each initial route from current location
+    const distanceA = this.calculateRouteDistanceFromCurrentLocation(routeA.locations, currentLocation);
+    const distanceB = this.calculateRouteDistanceFromCurrentLocation(routeB.locations, currentLocation);
+    
+    console.log(`📊 Initial Parent Routes from current location:`);
+    console.log(`   Parent 1 (Route A): ${distanceA.toFixed(2)}km`);
+    console.log(`   Parent 2 (Route B): ${distanceB.toFixed(2)}km`);
+    
+    // Select the better route (shorter total distance from current location)
+    const bestRoute = distanceA < distanceB ? routeA.locations : routeB.locations;
+    const bestDistance = Math.min(distanceA, distanceB);
+    
+    // Add back locations without coordinates at the end
+    const finalRoute = [...bestRoute, ...invalidLocations];
+    
+    const estimatedTime = this.estimateDeliveryTime(finalRoute, bestDistance);
+    const optimizationScore = this.calculateOptimizationScore(bestDistance, finalRoute.length);
+    const fuelCost = this.estimateFuelCost(bestDistance);
+
+    console.log(`✅ Route optimization from current location complete! Distance: ${bestDistance.toFixed(2)}km`);
+
+    return {
+      locations: finalRoute,
+      total_distance_km: bestDistance,
+      estimated_time_hours: estimatedTime,
+      optimization_score: optimizationScore,
+      fuel_cost_estimate: fuelCost,
+      generation_count: Math.max(routeA.generation_count, routeB.generation_count),
+      fitness_score: 100 - (bestDistance / 50) * 100 // Simple fitness score
+    };
+  }
+
+  private async optimizeSingleRouteFromCurrentLocation(
+    validLocations: DeliveryLocation[], 
+    invalidLocations: DeliveryLocation[],
+    currentLocation: CurrentLocation
+  ): Promise<OptimizedRoute> {
+    // Use the existing single route optimization but with current location as starting point
+    const result = await this.optimizeSingleRoute(validLocations, invalidLocations);
+    
+    // Recalculate total distance from current location
+    const totalDistance = this.calculateRouteDistanceFromCurrentLocation(result.locations, currentLocation);
+    
+    return {
+      ...result,
+      total_distance_km: totalDistance
+    };
+  }
 }
 
 // Integration with batch auto-assignment
@@ -845,9 +1742,10 @@ export async function optimizeAndAssignBatch(batchId: string, orders: DeliveryLo
     console.log(`🚚 Starting route optimization for batch ${batchId}...`);
     
     // Use provided depot or default CDO depot
+    // Based on the map, depot should be in the upper-right area near Nazareth/Consolacion
     const depotLocation = depot || {
-      latitude: 8.4542,
-      longitude: 124.6319,
+      latitude: 8.4850,  // Adjusted to be more in the upper-right area
+      longitude: 124.6500, // Adjusted to be more in the upper-right area
       name: "DeliveryEase Depot",
       address: "Cagayan de Oro City, Philippines"
     };

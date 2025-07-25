@@ -13,7 +13,8 @@ import {
   Route,
   Users,
   Weight,
-  TrendingUp
+  TrendingUp,
+  RefreshCw
 } from 'lucide-react';
 import { useProfile } from '../../lib/auth';
 import { toast } from 'react-hot-toast';
@@ -53,11 +54,34 @@ interface ActiveBatch {
   }>;
 }
 
+interface CompletedBatch {
+  id: string;
+  created_at: string;
+  completed_at?: string;
+  total_weight: number;
+  max_weight: number;
+  status: string;
+  orders: Array<{
+    id: string;
+    total: number;
+    delivery_status: string;
+    delivery_address: {
+      full_name: string;
+      phone: string;
+      street_address: string;
+    } | null;
+    customer: {
+      name: string | null;
+    } | null;
+  }>;
+}
+
 export default function DashboardPage() {
   const { profile } = useProfile();
   const navigate = useNavigate();
   const [stats, setStats] = useState<BatchStats | null>(null);
   const [activeBatch, setActiveBatch] = useState<ActiveBatch | null>(null);
+  const [recentCompletedBatch, setRecentCompletedBatch] = useState<CompletedBatch | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastNotificationTime, setLastNotificationTime] = useState<number>(0);
 
@@ -65,10 +89,13 @@ export default function DashboardPage() {
     if (profile?.id) {
       loadDashboardData();
       
-      // Set up real-time polling for new batch assignments
+      // Set up real-time polling for dashboard updates
       const interval = setInterval(() => {
         checkForNewAssignments();
-      }, 10000); // Check every 10 seconds
+        checkForBatchCompletion();
+        // Automatically refresh dashboard data every 5 seconds
+        loadDashboardData();
+      }, 5000); // Check every 5 seconds for faster updates
 
       return () => clearInterval(interval);
     }
@@ -78,67 +105,166 @@ export default function DashboardPage() {
     try {
       if (!profile?.id) return;
 
+      // Auto-fix any stuck batch statuses first
+      await autoFixStuckBatches();
+
       // Load batch statistics
       await Promise.all([
         loadBatchStats(),
-        loadActiveBatch()
+        loadActiveBatch(),
+        loadRecentCompletedBatch()
       ]);
 
     } catch (error) {
-      console.error('Error loading dashboard:', error);
       toast.error('Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
   }
 
+  async function autoFixStuckBatches() {
+    if (!profile?.id) return;
+
+    try {
+      console.log('🔧 Auto-fixing stuck batch statuses...');
+      
+      // Find batches that are still "delivering" but have all orders delivered
+      const { data: stuckBatches, error: batchError } = await supabase
+        .from('order_batches')
+        .select('id')
+        .eq('driver_id', profile.id)
+        .eq('status', 'delivering');
+
+      if (batchError) {
+        console.error('Error finding stuck batches:', batchError);
+        return;
+      }
+
+      if (!stuckBatches || stuckBatches.length === 0) {
+        console.log('✅ No stuck batches found');
+        return;
+      }
+
+      let fixedCount = 0;
+      for (const batch of stuckBatches) {
+        // Check if all orders in this batch are delivered
+        const { data: orders, error: ordersError } = await supabase
+          .from('orders')
+          .select('delivery_status')
+          .eq('batch_id', batch.id)
+          .eq('approval_status', 'approved');
+
+        if (ordersError) continue;
+
+        const allDelivered = orders?.every(order => order.delivery_status === 'delivered');
+        
+        if (allDelivered && orders.length > 0) {
+          // Update batch status to delivered
+          const { error: updateError } = await supabase
+            .from('order_batches')
+            .update({ status: 'delivered' })
+            .eq('id', batch.id);
+
+          if (!updateError) {
+            fixedCount++;
+            console.log(`✅ Fixed batch ${batch.id.slice(0, 8)}`);
+          }
+        }
+      }
+
+      if (fixedCount > 0) {
+        console.log(`🎉 Auto-fixed ${fixedCount} stuck batch(es)`);
+      }
+    } catch (error) {
+      console.error('Error auto-fixing stuck batches:', error);
+    }
+  }
+
   async function loadBatchStats() {
     if (!profile?.id) return;
 
-    // Get assigned batches count
-    const { count: assignedCount } = await supabase
-      .from('order_batches')
-      .select('*', { count: 'exact', head: true })
-      .eq('driver_id', profile.id)
-      .eq('status', 'assigned');
+    try {
+      console.log('📊 Loading batch statistics...');
 
-    // Get active batches count (in progress)
-    const { count: activeCount } = await supabase
-      .from('order_batches')
-      .select('*', { count: 'exact', head: true })
-      .eq('driver_id', profile.id)
-      .eq('status', 'delivering');
+      // Get assigned batches count
+      const { count: assignedCount, error: assignedError } = await supabase
+        .from('order_batches')
+        .select('*', { count: 'exact', head: true })
+        .eq('driver_id', profile.id)
+        .eq('status', 'assigned');
 
-    // Get completed batches
-    const { data: completedBatches } = await supabase
-      .from('order_batches')
-      .select(`
-        id,
-        orders:orders!batch_id(total)
-      `)
-      .eq('driver_id', profile.id)
-      .eq('status', 'delivered');
+      if (assignedError) {
+        console.error('Error loading assigned batches:', assignedError);
+      }
 
-    const completedCount = completedBatches?.length || 0;
-    const totalEarnings = completedBatches?.reduce((sum, batch) => {
-      const batchTotal = batch.orders.reduce((orderSum, order) => orderSum + order.total, 0);
-      return sum + batchTotal;
-    }, 0) || 0;
+      // Get active batches count (in progress)
+      const { count: activeCount, error: activeError } = await supabase
+        .from('order_batches')
+        .select('*', { count: 'exact', head: true })
+        .eq('driver_id', profile.id)
+        .eq('status', 'delivering');
 
-    setStats({
-      assignedBatches: assignedCount || 0,
-      activeBatches: activeCount || 0,
-      completedBatches: completedCount,
-      totalEarnings
-    });
+      if (activeError) {
+        console.error('Error loading active batches:', activeError);
+      }
+
+      // Get completed batches
+      const { data: completedBatches, error: completedError } = await supabase
+        .from('order_batches')
+        .select('id')
+        .eq('driver_id', profile.id)
+        .eq('status', 'delivered');
+
+      if (completedError) {
+        console.error('Error loading completed batches:', completedError);
+      }
+
+      const completedCount = completedBatches?.length || 0;
+      
+      // Calculate total earnings from completed batches
+      let totalEarnings = 0;
+      if (completedBatches && completedBatches.length > 0) {
+        const batchIds = completedBatches.map(batch => batch.id);
+        const { data: completedOrders, error: ordersError } = await supabase
+          .from('orders')
+          .select('total')
+          .in('batch_id', batchIds)
+          .eq('approval_status', 'approved');
+
+        if (ordersError) {
+          console.error('Error loading completed orders:', ordersError);
+        } else {
+          totalEarnings = completedOrders?.reduce((sum, order) => sum + order.total, 0) || 0;
+        }
+      }
+
+      const newStats = {
+        assignedBatches: assignedCount || 0,
+        activeBatches: activeCount || 0,
+        completedBatches: completedCount,
+        totalEarnings
+      };
+
+      console.log('📈 Updated batch statistics:', newStats);
+      setStats(newStats);
+    } catch (error) {
+      console.error('Error in loadBatchStats:', error);
+      // Set default values if there's an error
+      setStats({
+        assignedBatches: 0,
+        activeBatches: 0,
+        completedBatches: 0,
+        totalEarnings: 0
+      });
+    }
   }
 
   async function loadActiveBatch() {
     if (!profile?.id) return;
 
     try {
-      // First, get the active batch
-      const { data: batch, error: batchError } = await supabase
+      // First, get the active batch (including delivered status to check if it was just completed)
+      const { data: batchData, error: batchError } = await supabase
         .from('order_batches')
         .select(`
           id,
@@ -148,15 +274,15 @@ export default function DashboardPage() {
           status
         `)
         .eq('driver_id', profile.id)
-        .in('status', ['assigned', 'delivering'])
+        .in('status', ['assigned', 'delivering', 'delivered'])
         .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+        .limit(1);
 
       if (batchError && batchError.code !== 'PGRST116') {
-        console.error('Error loading active batch:', batchError);
         return;
       }
+
+      const batch = batchData?.[0];
 
       if (batch) {
         // Then get the orders for this batch separately
@@ -165,6 +291,7 @@ export default function DashboardPage() {
           .select(`
             id,
             total,
+            delivery_status,
             delivery_address,
             customer:profiles!orders_customer_id_fkey(name)
           `)
@@ -172,11 +299,21 @@ export default function DashboardPage() {
           .eq('approval_status', 'approved');
 
         if (ordersError) {
-          console.error('Error loading batch orders:', ordersError);
           return;
         }
 
         const estimatedDuration = calculateEstimatedDuration(orders?.length || 0);
+        
+        // Check if this batch is completed (all orders delivered)
+        const allOrdersDelivered = orders?.every(order => order.delivery_status === 'delivered');
+        
+        if (batch.status === 'delivered' || allOrdersDelivered) {
+          // This batch is completed, don't show as active
+          console.log('Batch is completed, loading as recent completed batch');
+          setActiveBatch(null);
+          return;
+        }
+
         setActiveBatch({
           ...batch,
           orders: orders || [],
@@ -196,11 +333,70 @@ export default function DashboardPage() {
     return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
   }
 
+  async function loadRecentCompletedBatch() {
+    if (!profile?.id) return;
+
+    try {
+      // Get the most recently completed batch
+      const { data: batchData, error: batchError } = await supabase
+        .from('order_batches')
+        .select(`
+          id,
+          created_at,
+          total_weight,
+          max_weight,
+          status
+        `)
+        .eq('driver_id', profile.id)
+        .eq('status', 'delivered')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (batchError) {
+        if (batchError.code === 'PGRST116') {
+          // No completed batches found, which is fine
+          setRecentCompletedBatch(null);
+          return;
+        }
+        throw batchError;
+      }
+
+      const batch = batchData?.[0];
+
+      if (batch) {
+        // Get the orders for this completed batch
+        const { data: orders, error: ordersError } = await supabase
+          .from('orders')
+          .select(`
+            id,
+            total,
+            delivery_status,
+            delivery_address,
+            customer:profiles!orders_customer_id_fkey(name)
+          `)
+          .eq('batch_id', batch.id)
+          .eq('approval_status', 'approved');
+
+        if (ordersError) {
+          console.error('Error loading orders for completed batch:', ordersError);
+          return;
+        }
+
+        setRecentCompletedBatch({
+          ...batch,
+          orders: orders || []
+        });
+      }
+    } catch (error) {
+      console.error('Error loading recent completed batch:', error);
+    }
+  }
+
   async function checkForNewAssignments() {
     try {
       if (!profile?.id) return;
 
-      // First, get the new batch
+      // Check for new assignments
       const { data: newBatch, error: batchError } = await supabase
         .from('order_batches')
         .select(`
@@ -213,16 +409,15 @@ export default function DashboardPage() {
         .eq('driver_id', profile.id)
         .eq('status', 'assigned')
         .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+        .limit(1);
 
       if (batchError && batchError.code !== 'PGRST116') {
-        console.error('Error checking for new assignments:', batchError);
         return;
       }
 
-      if (newBatch) {
-        const batchCreatedAt = new Date(newBatch.created_at).getTime();
+      if (newBatch && newBatch.length > 0) {
+        const batch = newBatch[0];
+        const batchCreatedAt = new Date(batch.created_at).getTime();
         
         // Check if this is a new assignment (created after last notification)
         if (batchCreatedAt > lastNotificationTime) {
@@ -235,19 +430,18 @@ export default function DashboardPage() {
               delivery_address,
               customer:profiles!orders_customer_id_fkey(name)
             `)
-            .eq('batch_id', newBatch.id)
+            .eq('batch_id', batch.id)
             .eq('approval_status', 'approved');
 
           if (ordersError) {
-            console.error('Error loading new batch orders:', ordersError);
             return;
           }
 
           const estimatedDuration = calculateEstimatedDuration(orders?.length || 0);
-          const capacityPercentage = ((newBatch.total_weight / (newBatch.max_weight || 3500)) * 100).toFixed(1);
+          const capacityPercentage = ((batch.total_weight / (batch.max_weight || 3500)) * 100).toFixed(1);
           
           setActiveBatch({
-            ...newBatch,
+            ...batch,
             orders: orders || [],
             estimated_duration: estimatedDuration
           });
@@ -264,8 +458,97 @@ export default function DashboardPage() {
           loadBatchStats();
         }
       }
+
+      // Check for batch completion
+      await checkForBatchCompletion();
     } catch (error) {
       console.error('Error checking for new assignments:', error);
+    }
+  }
+
+  async function checkForBatchCompletion() {
+    try {
+      if (!profile?.id || !activeBatch) return;
+
+      console.log('🔍 Checking for batch completion...', { batchId: activeBatch.id, currentStatus: activeBatch.status });
+
+      // Check if the current active batch has been completed
+      const { data: updatedBatch, error } = await supabase
+        .from('order_batches')
+        .select('status')
+        .eq('id', activeBatch.id)
+        .single();
+
+      if (error) {
+        console.error('Error checking batch status:', error);
+        return;
+      }
+
+      console.log('📊 Batch status check:', { 
+        batchId: activeBatch.id, 
+        oldStatus: activeBatch.status, 
+        newStatus: updatedBatch.status 
+      });
+
+      // Also check if all orders in the batch are delivered
+      const { data: orders, error: ordersError } = await supabase
+        .from('orders')
+        .select('delivery_status')
+        .eq('batch_id', activeBatch.id)
+        .eq('approval_status', 'approved');
+
+      if (ordersError) {
+        console.error('Error checking order delivery status:', ordersError);
+        return;
+      }
+
+      const allOrdersDelivered = orders?.every(order => order.delivery_status === 'delivered');
+      const deliveredCount = orders?.filter(order => order.delivery_status === 'delivered').length || 0;
+      const totalOrders = orders?.length || 0;
+
+      console.log('📦 Order delivery status:', { 
+        deliveredCount, 
+        totalOrders, 
+        allOrdersDelivered 
+      });
+
+      // If batch is now completed, update the dashboard
+      if ((updatedBatch.status === 'delivered' && activeBatch.status !== 'delivered') || allOrdersDelivered) {
+        console.log('🎉 Batch completed! Updating dashboard...');
+        
+        // If all orders are delivered but batch status isn't updated, fix it automatically
+        if (allOrdersDelivered && updatedBatch.status !== 'delivered') {
+          console.log('🔧 Auto-fixing batch status to delivered...');
+          const { error: updateError } = await supabase
+            .from('order_batches')
+            .update({ status: 'delivered' })
+            .eq('id', activeBatch.id);
+
+          if (updateError) {
+            console.error('Error auto-fixing batch status:', updateError);
+          } else {
+            console.log('✅ Batch status auto-fixed to delivered');
+          }
+        }
+        
+        // Show completion notification
+        const totalRevenue = activeBatch.orders.reduce((sum, order) => sum + order.total, 0);
+        toast.success(`🎉 Batch completed! Earned ${formatCurrency(totalRevenue)}`, {
+          duration: 10000,
+          icon: '🎉'
+        });
+
+        // Clear active batch and refresh data
+        setActiveBatch(null);
+        await Promise.all([
+          loadBatchStats(),
+          loadRecentCompletedBatch()
+        ]);
+
+        console.log('✅ Dashboard updated successfully');
+      }
+    } catch (error) {
+      console.error('Error checking for batch completion:', error);
     }
   }
 
@@ -295,6 +578,20 @@ export default function DashboardPage() {
     }
     navigate('/driver/route');
   };
+
+  const handleRefreshDashboard = async () => {
+    setLoading(true);
+    try {
+      await loadDashboardData();
+      toast.success('Dashboard refreshed!');
+    } catch (error) {
+      toast.error('Failed to refresh dashboard');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
 
   if (loading) {
     return <Loader label="Loading dashboard..." />;
@@ -335,8 +632,20 @@ export default function DashboardPage() {
     <div className="space-y-6 pb-20 md:pb-6">
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-blue-700 -mx-6 -mt-6 px-6 pt-6 pb-8 text-white">
-        <h1 className="text-2xl font-bold mb-2">Driver Dashboard</h1>
-        <p className="text-blue-100">Welcome back, {profile?.name}!</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold mb-2">Driver Dashboard</h1>
+            <p className="text-blue-100">Welcome back, {profile?.name}!</p>
+          </div>
+          <button
+            onClick={handleRefreshDashboard}
+            disabled={loading}
+            className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Stats Grid */}
@@ -430,7 +739,7 @@ export default function DashboardPage() {
                 ></div>
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                Auto-assigned at 100% capacity threshold (3500kg)
+                Auto-assigned at 100% capacity threshold
               </p>
             </div>
 
@@ -491,6 +800,126 @@ export default function DashboardPage() {
             <h3 className="text-lg font-semibold text-gray-900 mb-2">No Active Batches</h3>
             <p className="text-gray-600">You don't have any assigned batches at the moment.</p>
             <p className="text-sm text-gray-500 mt-2">New batches will appear here when assigned automatically.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Recently Completed Batch Section */}
+      {recentCompletedBatch && !activeBatch && (
+        <Card className="border-2 border-green-200 bg-green-50">
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 mb-2">Recently Completed</h2>
+                <p className="text-sm text-gray-600">Batch #{recentCompletedBatch.id.slice(0, 8)}</p>
+              </div>
+              <div className="px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                ✅ Completed
+              </div>
+            </div>
+
+            {/* Batch Summary */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-gray-500" />
+                <div>
+                  <p className="text-sm text-gray-600">Orders Delivered</p>
+                  <p className="font-semibold">{recentCompletedBatch.orders.length}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Weight className="h-5 w-5 text-gray-500" />
+                <div>
+                  <p className="text-sm text-gray-600">Total Weight</p>
+                  <p className="font-semibold">{recentCompletedBatch.total_weight.toFixed(1)}kg</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-gray-500" />
+                <div>
+                  <p className="text-sm text-gray-600">Completed</p>
+                  <p className="font-semibold">
+                    {new Date(recentCompletedBatch.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Package className="h-5 w-5 text-gray-500" />
+                <div>
+                  <p className="text-sm text-gray-600">Revenue Earned</p>
+                  <p className="font-semibold text-green-600">
+                    {formatCurrency(recentCompletedBatch.orders.reduce((sum, order) => sum + order.total, 0))}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Delivery Summary */}
+            <div className="bg-white rounded-lg p-4 mb-4">
+              <h3 className="font-semibold mb-3 flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                Delivery Summary
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-green-600">
+                    {recentCompletedBatch.orders.filter(order => order.delivery_status === 'delivered').length}
+                  </p>
+                  <p className="text-sm text-gray-600">Successfully Delivered</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-gray-600">
+                    {recentCompletedBatch.orders.length}
+                  </p>
+                  <p className="text-sm text-gray-600">Total Orders</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-blue-600">
+                    {Math.round((recentCompletedBatch.orders.filter(order => order.delivery_status === 'delivered').length / recentCompletedBatch.orders.length) * 100)}%
+                  </p>
+                  <p className="text-sm text-gray-600">Success Rate</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={handleRefreshDashboard}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+              >
+                <RefreshCw className="h-5 w-5" />
+                Refresh Dashboard
+              </button>
+              <button
+                onClick={() => navigate('/driver/route')}
+                className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+              >
+                <MapPin className="h-5 w-5" />
+                View Route History
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* No Active Batches - Enhanced Message */}
+      {!activeBatch && !recentCompletedBatch && (
+        <Card className="border-2 border-gray-200">
+          <CardContent className="p-6 text-center">
+            <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No Active Batches</h3>
+            <p className="text-gray-600">You don't have any assigned batches at the moment.</p>
+            <p className="text-sm text-gray-500 mt-2">New batches will appear here when assigned automatically.</p>
+            <div className="mt-4">
+              <button
+                onClick={handleRefreshDashboard}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg flex items-center justify-center gap-2 mx-auto transition-colors"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Check for New Assignments
+              </button>
+            </div>
           </CardContent>
         </Card>
       )}

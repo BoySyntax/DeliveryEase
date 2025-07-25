@@ -98,7 +98,7 @@ export interface Database {
           {
             foreignKeyName: "order_batches_driver_id_fkey"
             columns: ["driver_id"]
-            referencedRelation: "users"
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           }
         ]
@@ -509,6 +509,18 @@ export interface Database {
       consolidate_batches_for_barangay: {
         Args: { target_barangay: string }
         Returns: undefined
+      }
+      consolidate_underweight_batches: {
+        Args: Record<string, never>
+        Returns: string
+      }
+      fix_overweight_batches: {
+        Args: Record<string, never>
+        Returns: string
+      }
+      cleanup_empty_batches: {
+        Args: Record<string, never>
+        Returns: number
       }
     }
     Enums: {

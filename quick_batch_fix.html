@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quick Batch Fix</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .step {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-left: 4px solid #007bff;
+            background-color: #f8f9fa;
+        }
+        .success {
+            border-left-color: #28a745;
+            background-color: #d4edda;
+        }
+        .error {
+            border-left-color: #dc3545;
+            background-color: #f8d7da;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .urgent {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Quick Batch Fix</h1>
+        <p>This will immediately fix the issue where your 3 approved orders aren't all showing in the same batch.</p>
+        
+        <div class="urgent">
+            <h3>⚠️ Issue: 3 Orders, Only 1 in Batch</h3>
+            <p><strong>Problem:</strong> You approved 3 orders from the same barangay, but only 1 order is showing in the batch. The other 2 orders are either unassigned or in different batches.</p>
+        </div>
+        
+        <div class="step">
+            <h3>Step 1: Apply the Quick Fix</h3>
+            <p>Copy and paste this SQL into your Supabase SQL editor and run it:</p>
+            <button onclick="copyToClipboard('fix-sql')">Copy Fix SQL to Clipboard</button>
+            <pre id="fix-sql">
+-- Quick fix to assign unassigned orders to existing batches
+-- This will fix the issue where approved orders aren't being assigned to batches
+
+-- 1. First, let's see what we're working with
+SELECT '=== CURRENT STATE ===' as info;
+
+SELECT 
+    'Approved orders without batch:' as status,
+    COUNT(*) as count
+FROM orders 
+WHERE approval_status = 'approved' 
+AND batch_id IS NULL;
+
+SELECT 
+    'Batches by barangay:' as status,
+    barangay,
+    COUNT(*) as batch_count,
+    SUM(total_weight) as total_weight,
+    MAX(max_weight) as max_weight
+FROM order_batches
+WHERE status = 'pending'
+GROUP BY barangay
+ORDER BY barangay;
+
+-- 2. Show all approved orders and their batch assignments
+SELECT 
+    'All approved orders:' as status,
+    o.id,
+    o.approval_status,
+    o.batch_id,
+    o.total_weight,
+    o.delivery_address->>'barangay' as barangay,
+    o.created_at
+FROM orders o
+WHERE o.approval_status = 'approved'
+ORDER BY o.created_at;
+
+-- 3. Manually assign unassigned orders to existing batches
+-- This will fix the immediate issue
+DO $$
+DECLARE
+    order_record RECORD;
+    target_batch_id uuid;
+    batch_weight decimal;
+BEGIN
+    -- Loop through all approved orders without batch_id
+    FOR order_record IN 
+        SELECT 
+            o.id,
+            o.total_weight,
+            o.delivery_address->>'barangay' as barangay
+        FROM orders o
+        WHERE o.approval_status = 'approved' 
+        AND o.batch_id IS NULL
+    LOOP
+        -- Find an existing batch for this barangay with capacity
+        SELECT b.id, b.total_weight
+        INTO target_batch_id, batch_weight
+        FROM order_batches b
+        WHERE b.status = 'pending'
+        AND b.barangay = order_record.barangay
+        AND b.total_weight + order_record.total_weight <= b.max_weight
+        ORDER BY b.created_at ASC  -- Use oldest batch first
+        LIMIT 1;
+        
+        -- If no suitable batch found, create a new one
+        IF target_batch_id IS NULL THEN
+            INSERT INTO order_batches (barangay, total_weight, max_weight, status)
+            VALUES (order_record.barangay, order_record.total_weight, 3500, 'pending')
+            RETURNING id INTO target_batch_id;
+            
+            RAISE NOTICE 'Created new batch % for order % (barangay: %)', target_batch_id, order_record.id, order_record.barangay;
+        ELSE
+            -- Update existing batch weight
+            UPDATE order_batches 
+            SET total_weight = batch_weight + order_record.total_weight
+            WHERE id = target_batch_id;
+            
+            RAISE NOTICE 'Added order % to existing batch % (barangay: %)', order_record.id, target_batch_id, order_record.barangay;
+        END IF;
+        
+        -- Assign the order to the batch
+        UPDATE orders 
+        SET batch_id = target_batch_id
+        WHERE id = order_record.id;
+        
+    END LOOP;
+END $$;
+
+-- 4. Check the results
+SELECT '=== AFTER FIX ===' as info;
+
+SELECT 
+    'Approved orders without batch (should be 0):' as status,
+    COUNT(*) as count
+FROM orders 
+WHERE approval_status = 'approved' 
+AND batch_id IS NULL;
+
+SELECT 
+    'Final batch distribution:' as status,
+    barangay,
+    COUNT(*) as batch_count,
+    SUM(total_weight) as total_weight,
+    MAX(max_weight) as max_weight
+FROM order_batches
+WHERE status = 'pending'
+GROUP BY barangay
+ORDER BY barangay;
+
+SELECT 
+    'Individual batches with orders:' as status,
+    b.id,
+    b.barangay,
+    b.total_weight,
+    b.max_weight,
+    b.status,
+    (SELECT COUNT(*) FROM orders WHERE batch_id = b.id) as order_count,
+    (SELECT STRING_AGG(o.id::text, ', ') FROM orders o WHERE o.batch_id = b.id) as order_ids
+FROM order_batches b
+WHERE status = 'pending'
+ORDER BY b.created_at;
+            </pre>
+        </div>
+
+        <div class="step">
+            <h3>Step 2: Check the Results</h3>
+            <p>After running the SQL, go to <a href="http://localhost:3008/admin/batch-orders" target="_blank">Batch Orders</a> to see if all 3 orders are now in the same batch.</p>
+        </div>
+
+        <div class="step success">
+            <h3>Expected Results</h3>
+            <ul>
+                <li>✅ All 3 approved orders should now be in the same batch</li>
+                <li>✅ The batch should show the correct total weight</li>
+                <li>✅ No more unassigned orders</li>
+                <li>✅ Orders from the same barangay should be grouped together</li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <h3>Step 3: Test Future Orders</h3>
+            <p>Go to <a href="http://localhost:3008/admin/verify-orders" target="_blank">Verify Orders</a> and approve more orders to test if they get assigned correctly to existing batches.</p>
+        </div>
+
+        <div class="step">
+            <h3>What This Fix Does</h3>
+            <ul>
+                <li><strong>Immediate Fix:</strong> Manually assigns all unassigned orders to appropriate batches</li>
+                <li><strong>Batch Consolidation:</strong> Groups orders from the same barangay into the same batch</li>
+                <li><strong>Capacity Management:</strong> Ensures batches don't exceed the 3500kg limit</li>
+                <li><strong>FIFO Ordering:</strong> Uses oldest batches first for new orders</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function copyToClipboard(elementId) {
+            const element = document.getElementById(elementId);
+            const text = element.textContent || element.innerText;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('Copied to clipboard!');
+            });
+        }
+    </script>
+</body>
+</html> 

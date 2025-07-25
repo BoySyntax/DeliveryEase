@@ -142,7 +142,7 @@ export default function BatchOrdersPage() {
     }, 0);
   };
 
-  // Auto-assign batches that reach 3500kg capacity
+  // Auto-assign batches that reach their maximum capacity
   const checkAndAutoAssignBatches = async (batches: BatchData[]) => {
     const batchesToAssign = batches.filter(batch => {
       const weight = calculateBatchWeight(batch);
@@ -393,6 +393,10 @@ export default function BatchOrdersPage() {
     .filter((barangay): barangay is string => barangay !== undefined && barangay !== null && barangay !== '')
   )];
 
+
+
+
+
   if (loading) {
     return <Loader label="Loading order batches..." />;
   }
@@ -413,7 +417,9 @@ export default function BatchOrdersPage() {
         </div>
       )}
       
-            {/* Auto-Assignment Alert */}
+
+
+      {/* Auto-Assignment Alert */}
       {batchesReadyForAssignment.length > 0 && (
         <div className="bg-gradient-to-r from-purple-50 to-purple-100 border-2 border-purple-200 rounded-lg p-4">
           <div className="flex items-center gap-3">
@@ -425,68 +431,25 @@ export default function BatchOrdersPage() {
                 🤖 {batchesReadyForAssignment.length} Batch{batchesReadyForAssignment.length !== 1 ? 'es' : ''} Ready for Auto-Assignment
               </h3>
               <p className="text-purple-700 text-sm">
-                These batches have reached {(3500).toLocaleString()}kg capacity and can be automatically assigned to available drivers.
+                These batches have reached their maximum capacity and will be automatically assigned to available drivers.
               </p>
               <p className="text-purple-600 text-xs mt-1 font-medium">
-                ✨ New orders will now go to a new batch automatically!
+                ✨ The system automatically manages batching and consolidation!
               </p>
             </div>
-            <Button
-              onClick={async () => {
-                for (const batch of batchesReadyForAssignment) {
-                  await autoAssignBatch(batch);
-                }
-              }}
-              className="bg-purple-600 hover:bg-purple-700 text-white"
-            >
-              Auto-Assign All
-            </Button>
           </div>
         </div>
       )}
 
-      {/* Batch Capacity Info */}
-      {batches.length > 0 && (
-        <div className="bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-500 p-2 rounded-full">
-              <Package className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold text-blue-900">📦 Batch Management System</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2 text-sm">
-                <div>
-                  <p className="text-blue-700 font-medium">🎯 Optimal Capacity</p>
-                  <p className="text-blue-600">Batches fill to 3,500kg then auto-assign</p>
-                </div>
-                <div>
-                  <p className="text-blue-700 font-medium">🔄 Smart Creation</p>
-                  <p className="text-blue-600">New batches created when current ones are full</p>
-                </div>
-                <div>
-                  <p className="text-blue-700 font-medium">⚡ Auto-Assignment</p>
-                  <p className="text-blue-600">Full batches automatically assigned to drivers</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+
+
+
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Order Batches</h1>
           <p className="text-gray-600 mt-1">Manage delivery batches grouped by location</p>
         </div>
         <div className="flex gap-4">
-          <Button
-            variant="outline"
-            onClick={refreshData}
-            disabled={refreshing}
-            className="flex items-center gap-2"
-          >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? 'Refreshing...' : 'Refresh'}
-          </Button>
           <Select
             options={[
               { value: '', label: 'All Barangays' },
@@ -501,6 +464,8 @@ export default function BatchOrdersPage() {
           />
         </div>
       </div>
+
+
 
       <div className="grid gap-6">
         {batches.map((batch) => (
@@ -596,55 +561,16 @@ export default function BatchOrdersPage() {
                           {((batch.max_weight || 3500) - calculateBatchWeight(batch)) < 50 && (
                             <div className="flex items-center gap-1 bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-medium">
                               <AlertTriangle className="w-3 h-3" />
-                              NEAR CAPACITY - New batch will be created soon
+                              NEAR CAPACITY - Next order will create new batch
                             </div>
                           )}
+
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Driver Assignment */}
-                  {batch.status === 'pending' && (
-                    <div className="flex items-center gap-2">
-                      {calculateBatchWeight(batch) >= (batch.max_weight || 3500) ? (
-                        <div className="flex flex-col gap-2">
-                          <Button
-                            onClick={() => autoAssignBatch(batch)}
-                            className="bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-2"
-                          >
-                            <Zap className="w-4 h-4" />
-                            Auto-Assign Now
-                          </Button>
-                          <Select
-                            options={[
-                              { value: '', label: 'Or Manual Select' },
-                              ...drivers.map(driver => ({
-                                value: driver.id,
-                                label: driver.name || driver.id
-                              }))
-                            ]}
-                            value=""
-                            onChange={(e) => assignDriver(batch.id, e.target.value)}
-                            className="w-48 text-sm"
-                          />
-                        </div>
-                      ) : (
-                        <Select
-                          options={[
-                            { value: '', label: 'Select Driver' },
-                            ...drivers.map(driver => ({
-                              value: driver.id,
-                              label: driver.name || driver.id
-                            }))
-                          ]}
-                          value=""
-                          onChange={(e) => assignDriver(batch.id, e.target.value)}
-                          className="w-48"
-                        />
-                      )}
-                    </div>
-                  )}
+
 
                   {batch.driver?.name && (
                     <div className="flex items-center gap-2 bg-green-100 px-3 py-2 rounded-lg">
@@ -703,33 +629,44 @@ export default function BatchOrdersPage() {
                       {/* Order Items */}
                       <div className="space-y-2">
                         <h4 className="text-sm font-medium text-gray-700">Order Items:</h4>
-                        <div className="grid gap-2">
-                          {order.items.map((item, index) => (
-                            <div key={index} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-100">
-                              <ProductImage 
-                                imageUrl={item.product?.image_url} 
-                                productName={item.product?.name} 
-                              />
-                              <div className="flex-1">
-                                <p className="font-medium text-gray-900">
-                                  {item.product?.name || 'Unknown Product'}
-                                </p>
-                                <div className="flex items-center gap-4 text-sm text-gray-600">
-                                  <span>Qty: {item.quantity}</span>
-                                  <span>Price: {formatCurrency(item.price)}</span>
-                                  {item.product?.weight && (
-                                    <span>Weight: {(item.product.weight * item.quantity).toFixed(2)} kg</span>
-                                  )}
+                        {order.items && order.items.length > 0 ? (
+                          <div className="grid gap-2">
+                            {order.items.map((item, index) => (
+                              <div key={index} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-100">
+                                <ProductImage 
+                                  imageUrl={item.product?.image_url} 
+                                  productName={item.product?.name} 
+                                />
+                                <div className="flex-1">
+                                  <p className="font-medium text-gray-900">
+                                    {item.product?.name || 'Unknown Product'}
+                                  </p>
+                                  <div className="flex items-center gap-4 text-sm text-gray-600">
+                                    <span>Qty: {item.quantity}</span>
+                                    <span>Price: {formatCurrency(item.price)}</span>
+                                    {item.product?.weight && (
+                                      <span>Weight: {(item.product.weight * item.quantity).toFixed(2)} kg</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <p className="font-medium text-gray-900">
+                                    {formatCurrency(item.price * item.quantity)}
+                                  </p>
                                 </div>
                               </div>
-                              <div className="text-right">
-                                <p className="font-medium text-gray-900">
-                                  {formatCurrency(item.price * item.quantity)}
-                                </p>
-                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <div className="flex items-center gap-2">
+                              <AlertTriangle className="w-4 h-4 text-yellow-600" />
+                              <span className="text-sm text-yellow-800">
+                                No order items found. This order may need to be fixed in the database.
+                              </span>
                             </div>
-                          ))}
-                        </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -1,6 +1,5 @@
 import { supabase } from './supabase';
 import { toast } from 'react-hot-toast';
-import { GeneticRouteOptimizer, DeliveryLocation, optimizeAndAssignBatch } from './genetic-route-optimizer';
 
 interface BatchData {
   id: string;
@@ -78,16 +77,13 @@ export async function checkBatchAutoAssignment(orderId: string) {
     const actualWeight = calculateBatchWeight(batchOrders || []);
     console.log(`Batch ${batch.id} weight: ${actualWeight}kg / ${batch.max_weight || 3500}kg`);
 
-    // Check if batch has reached 100% capacity threshold for auto-assignment
+    // Check if batch has reached capacity (3500kg or max_weight)
     const maxWeight = batch.max_weight || 3500;
-    const capacityThreshold = maxWeight; // 100% capacity threshold (3500kg)
-    const capacityPercentage = (actualWeight / maxWeight) * 100;
-    
-    if (actualWeight >= capacityThreshold && batch.status === 'pending' && !batch.driver_id) {
-      console.log(`🚚 Batch ${batch.id} ready for auto-assignment at ${capacityPercentage.toFixed(1)}% capacity!`);
+    if (actualWeight >= maxWeight && batch.status === 'pending' && !batch.driver_id) {
+      console.log(`🚚 Batch ${batch.id} ready for auto-assignment!`);
       await autoAssignBatch(batch.id, batchOrders || []);
     } else {
-      console.log(`Batch not ready: Weight ${actualWeight}kg (${capacityPercentage.toFixed(1)}%) / ${maxWeight}kg (100% threshold: ${capacityThreshold}kg), Status: ${batch.status}`);
+      console.log(`Batch not ready: Weight ${actualWeight}/${maxWeight}kg, Status: ${batch.status}`);
     }
 
   } catch (error) {
@@ -172,37 +168,17 @@ async function autoAssignBatch(batchId: string, orders: any[]) {
     console.log(`✅ Batch ${batchId} auto-assigned to ${driver.name}`);
     
     // Show success message
-    toast.success(`🚚 Batch auto-assigned to driver ${driver.name} at 100% capacity!`, {
+    toast.success(`🚚 Batch auto-assigned to driver ${driver.name}!`, {
       duration: 5000,
       icon: '🚚'
     });
 
-    // Generate optimized route using genetic algorithm
-    try {
-      const deliveryLocations: DeliveryLocation[] = orders.map((order, index) => ({
-        id: order.id,
-        order_id: order.id,
-        customer_name: 'Customer', // Would need to fetch from database
-        address: order.delivery_address?.street_address || 'Unknown',
-        barangay: order.delivery_address?.barangay || 'Unknown',
-        latitude: order.delivery_address?.latitude || null,
-        longitude: order.delivery_address?.longitude || null,
-        phone: order.delivery_address?.phone,
-        total: order.total || 0,
-        delivery_status: 'pending',
-        priority: 3 // Default priority
-      }));
-
-      // Run genetic algorithm optimization in background
-      optimizeAndAssignBatch(batchId, deliveryLocations).catch(error => {
-        console.error('Background route optimization failed:', error);
-      });
-      
-    } catch (error) {
-      console.error('Route optimization setup failed:', error);
-    }
+    // Here you could also:
+    // - Generate optimized route using genetic algorithm
+    // - Send notification to driver's mobile app
+    // - Create delivery schedule
     
-    console.log(`📍 ${orders.length} orders ready for delivery by ${driver.name} with genetic algorithm optimization`);
+    console.log(`📍 ${orders.length} orders ready for delivery by ${driver.name}`);
     
   } catch (error) {
     console.error('Error in auto-assignment:', error);

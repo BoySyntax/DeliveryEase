@@ -12,6 +12,8 @@ interface OrderNotification {
   delivery_status: 'pending' | 'assigned' | 'delivering' | 'delivered';
   batch_id: string | null;
   total: number;
+  notification_read: boolean;
+  status_changed_at?: string;
 }
 
 interface NotificationDisplay {
@@ -50,7 +52,8 @@ export default function NotificationsPage() {
           approval_status,
           delivery_status,
           batch_id,
-          total
+          total,
+          notification_read
         `)
         .eq('customer_id', user.id)
         .order('created_at', { ascending: false })
@@ -59,6 +62,20 @@ export default function NotificationsPage() {
       if (error) throw error;
       
       setOrders(data || []);
+      
+      // Reset notification_read to false for orders with recent status changes
+      // This ensures users get notified of status changes
+      if (data && data.length > 0) {
+        const ordersWithRecentChanges = data.filter(order => hasRecentStatusChange(order));
+        
+        if (ordersWithRecentChanges.length > 0) {
+          const orderIdsToReset = ordersWithRecentChanges.map(order => order.id);
+          await supabase
+            .from('orders')
+            .update({ notification_read: false })
+            .in('id', orderIdsToReset);
+        }
+      }
     } catch (error) {
       console.error('Error loading notifications:', error);
     } finally {
@@ -69,8 +86,30 @@ export default function NotificationsPage() {
   // Convert order data to display notifications
   function createNotificationDisplay(order: OrderNotification): NotificationDisplay | null {
     const orderId = order.id.slice(0, 8);
+    const now = new Date();
+    const orderCreatedAt = new Date(order.created_at);
+    const timeDiff = now.getTime() - orderCreatedAt.getTime();
+    const hoursDiff = timeDiff / (1000 * 60 * 60);
 
-    // Show delivery status notifications and approval status notifications
+    // Only show notifications for recent status changes (within last 24 hours)
+    if (hoursDiff > 24) {
+      return null;
+    }
+
+    // Show notification for pending orders (only if recently created)
+    if (order.approval_status === 'pending' && hoursDiff < 1) {
+      return {
+        id: order.id,
+        title: 'Order Pending',
+        message: `Order #${orderId} is pending approval. Please wait while we verify your payment.`,
+        timestamp: order.created_at,
+        icon: <Clock className="w-5 h-5" />,
+        color: 'text-yellow-600 bg-yellow-50 border-yellow-200',
+        urgency: 'medium'
+      };
+    }
+
+    // Show notification for rejected orders
     if (order.approval_status === 'rejected') {
       return {
         id: order.id,
@@ -83,11 +122,12 @@ export default function NotificationsPage() {
       };
     }
 
-    if (order.delivery_status === 'delivered') {
+    // Show notification for verified orders (approved) - only if recently approved
+    if (order.approval_status === 'approved' && hoursDiff < 6) {
       return {
         id: order.id,
-        title: 'Order Delivered',
-        message: `Order #${orderId} has been successfully delivered! Thank you for choosing DeliveryEase.`,
+        title: 'Payment Verified',
+        message: `Order #${orderId} payment has been verified. Your order is preparing for delivery.`,
         timestamp: order.created_at,
         icon: <CheckCircle className="w-5 h-5" />,
         color: 'text-green-600 bg-green-50 border-green-200',
@@ -95,19 +135,8 @@ export default function NotificationsPage() {
       };
     }
 
-    if (order.delivery_status === 'delivering') {
-      return {
-        id: order.id,
-        title: 'Out for Delivery',
-        message: `Order #${orderId} is now out for delivery. Your order will arrive soon!`,
-        timestamp: order.created_at,
-        icon: <Truck className="w-5 h-5" />,
-        color: 'text-blue-600 bg-blue-50 border-blue-200',
-        urgency: 'high'
-      };
-    }
-
-    if (order.delivery_status === 'assigned') {
+    // Show notification for delivery statuses (only if recent)
+    if (order.delivery_status === 'assigned' && hoursDiff < 12) {
       return {
         id: order.id,
         title: 'Driver Assigned',
@@ -119,25 +148,23 @@ export default function NotificationsPage() {
       };
     }
 
-    // Show notification for batched orders (approved + has batch_id)
-    if (order.approval_status === 'approved' && order.batch_id) {
+    if (order.delivery_status === 'delivering' && hoursDiff < 12) {
       return {
         id: order.id,
-        title: 'Order Batched for Delivery',
-        message: `Order #${orderId} has been processed and added to a delivery batch. Waiting for driver assignment.`,
+        title: 'Out for Delivery',
+        message: `Order #${orderId} is now out for delivery. Your order will arrive soon!`,
         timestamp: order.created_at,
-        icon: <Package className="w-5 h-5" />,
-        color: 'text-green-600 bg-green-50 border-green-200',
-        urgency: 'medium'
+        icon: <Truck className="w-5 h-5" />,
+        color: 'text-blue-600 bg-blue-50 border-blue-200',
+        urgency: 'high'
       };
     }
 
-    // Show notification for approved orders (without batch)
-    if (order.approval_status === 'approved') {
+    if (order.delivery_status === 'delivered' && hoursDiff < 6) {
       return {
         id: order.id,
-        title: 'Payment Verified',
-        message: `Order #${orderId} payment has been verified. Your order is being prepared for delivery.`,
+        title: 'Order Delivered',
+        message: `Order #${orderId} has been successfully delivered! Thank you for choosing DeliveryEase.`,
         timestamp: order.created_at,
         icon: <CheckCircle className="w-5 h-5" />,
         color: 'text-green-600 bg-green-50 border-green-200',
@@ -145,13 +172,49 @@ export default function NotificationsPage() {
       };
     }
 
-    // Return null only for pending approval status
+    // Return null for any other cases
     return null;
   }
 
+  // Function to check if order has recent status changes
+  function hasRecentStatusChange(order: OrderNotification): boolean {
+    const now = new Date();
+    const orderCreatedAt = new Date(order.created_at);
+    const timeDiff = now.getTime() - orderCreatedAt.getTime();
+    const hoursDiff = timeDiff / (1000 * 60 * 60);
+    
+    // Consider it recent if within 24 hours
+    return hoursDiff <= 24;
+  }
+
   // Handle notification click
-  const handleNotificationClick = (id: string) => {
+  const handleNotificationClick = async (id: string) => {
+    // Mark this specific notification as read
+    await supabase
+      .from('orders')
+      .update({ notification_read: true })
+      .eq('id', id);
+    
     navigate(`/customer/orders/${id}`);
+  };
+
+  // Function to mark all notifications as read
+  const markAllAsRead = async () => {
+    if (orders.length > 0) {
+      const unreadOrderIds = orders
+        .filter(order => !order.notification_read)
+        .map(order => order.id);
+      
+      if (unreadOrderIds.length > 0) {
+        await supabase
+          .from('orders')
+          .update({ notification_read: true })
+          .in('id', unreadOrderIds);
+        
+        // Reload notifications to update the UI
+        await loadNotifications();
+      }
+    }
   };
 
   if (loading) return <Loader label="Loading notifications..." />;
@@ -165,7 +228,7 @@ export default function NotificationsPage() {
       <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Order Notifications</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
             <p className="text-gray-600 mt-1">
               Stay updated on your delivery progress
               {urgentCount > 0 && (
@@ -177,10 +240,10 @@ export default function NotificationsPage() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={loadNotifications}
+              onClick={markAllAsRead}
               className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
             >
-              Refresh
+              Mark all as read
             </button>
           </div>
         </div>
@@ -195,48 +258,53 @@ export default function NotificationsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {displayNotifications.map((notification) => (
-            <div key={notification.id} className="group relative">
-              <div className={`bg-white rounded-lg shadow-sm border-l-4 p-4 transition-all duration-200 hover:shadow-md cursor-pointer ${notification.color}`}>
-                {/* Content */}
-                <div 
-                  className="flex items-start gap-3"
-                  onClick={() => handleNotificationClick(notification.id)}
-                >
-                  <div className={`p-2 rounded-full ${notification.color.replace('text-', 'bg-').replace('bg-', 'bg-').replace('-600', '-100')}`}>
-                    {notification.icon}
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-sm font-semibold text-gray-900">
-                        {notification.title}
-                      </h3>
-                      {notification.urgency === 'high' && (
-                        <span className="inline-block w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                      )}
+          {displayNotifications.map((notification) => {
+            const order = orders.find(o => o.id === notification.id);
+            const isUnread = order && !order.notification_read;
+            
+            return (
+              <div key={notification.id} className="group relative">
+                <div className={`bg-white rounded-lg shadow-sm border-l-4 p-4 transition-all duration-200 hover:shadow-md cursor-pointer ${notification.color} ${isUnread ? 'border-l-4 border-l-blue-500' : ''}`}>
+                  {/* Content */}
+                  <div 
+                    className="flex items-start gap-3"
+                    onClick={() => handleNotificationClick(notification.id)}
+                  >
+                    <div className={`p-2 rounded-full ${notification.color.replace('text-', 'bg-').replace('bg-', 'bg-').replace('-600', '-100')}`}>
+                      {notification.icon}
                     </div>
                     
-                    <p className="text-sm text-gray-700 mb-2">
-                      {notification.message}
-                    </p>
-                    
-                    <div className="flex items-center gap-4 text-xs text-gray-500">
-                      <span>{new Date(notification.timestamp).toLocaleString()}</span>
-                      <span className={`px-2 py-1 rounded-full ${
-                        notification.urgency === 'high' ? 'bg-red-100 text-red-700' :
-                        notification.urgency === 'medium' ? 'bg-blue-100 text-blue-700' :
-                        'bg-gray-100 text-gray-700'
-                      }`}>
-                        {notification.urgency === 'high' ? 'Urgent' : 
-                         notification.urgency === 'medium' ? 'Important' : 'Info'}
-                      </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="text-sm font-semibold text-gray-900">
+                          {notification.title}
+                        </h3>
+                        {notification.urgency === 'high' && (
+                          <span className="inline-block w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                        )}
+                        {isUnread && (
+                          <span className="inline-block w-2 h-2 bg-blue-500 rounded-full"></span>
+                        )}
+                      </div>
+                      
+                      <p className="text-sm text-gray-700 mb-2">
+                        {notification.message}
+                      </p>
+                      
+                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                        <span>{new Date(notification.timestamp).toLocaleString()}</span>
+                        {isUnread && (
+                          <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs">
+                            New
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
