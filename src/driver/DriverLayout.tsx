@@ -27,7 +27,7 @@ export default function DriverLayout() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    navigate('/login');
+    navigate('/');
   };
 
   const navItems = [

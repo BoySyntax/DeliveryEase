@@ -526,14 +526,14 @@ BEGIN
         -- 1. Is pending (not assigned to driver yet)
         -- 2. Has orders from the same barangay
         -- 3. Has enough remaining capacity
-        -- 4. Prioritize the batch with the most remaining space (but still under max capacity)
+        -- 4. Prioritize the batch that needs the LEAST additional weight to reach capacity
         SELECT b.id, b.total_weight 
         INTO current_batch_id, batch_total_weight
         FROM order_batches b
         WHERE b.status = 'pending'
         AND b.barangay = order_barangay
         AND b.total_weight + NEW.total_weight <= b.max_weight
-        ORDER BY (b.max_weight - b.total_weight) DESC, b.created_at ASC
+        ORDER BY (b.max_weight - b.total_weight) ASC, b.created_at ASC
         LIMIT 1;
 
         RAISE NOTICE 'Found existing batch: %, total_weight: %', current_batch_id, batch_total_weight;

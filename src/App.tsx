@@ -39,6 +39,7 @@ const DriverLayout = lazy(() => import('./driver/DriverLayout'));
 const DriverDashboard = lazy(() => import('./driver/pages/DashboardPage'));
 const DriverProfile = lazy(() => import('./driver/pages/ProfilePage'));
 const DriverRoute = lazy(() => import('./driver/pages/RoutePage'));
+const DriverOrderDetails = lazy(() => import('./driver/pages/OrderDetailsPage'));
 
 // Protected Route Component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -132,6 +133,7 @@ function App() {
           <Route index element={<DriverDashboard />} />
           <Route path="route" element={<DriverRoute />} />
           <Route path="profile" element={<DriverProfile />} />
+          <Route path="order/:orderId" element={<DriverOrderDetails />} />
         </Route>
 
         {/* Catch all route - redirect to login */}

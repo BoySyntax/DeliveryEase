@@ -569,7 +569,7 @@ export default function ProfilePage() {
     try {
       await supabase.auth.signOut();
       toast.success('Signed out successfully');
-      navigate('/');
+      navigate('/login');
     } catch (error) {
       console.error('Error signing out:', error);
       toast.error('Failed to sign out');

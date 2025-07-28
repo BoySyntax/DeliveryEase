@@ -68,7 +68,7 @@ export default function ProfilePage() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    navigate('/login');
+    navigate('/');
   };
 
   if (loading) {

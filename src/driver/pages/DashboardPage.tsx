@@ -51,6 +51,15 @@ interface ActiveBatch {
     customer: {
       name: string | null;
     } | null;
+    items?: Array<{
+      quantity: number;
+      price: number;
+      product: {
+        name: string;
+        image_url?: string;
+        weight: number;
+      } | null;
+    }>;
   }>;
 }
 
@@ -73,6 +82,15 @@ interface CompletedBatch {
     customer: {
       name: string | null;
     } | null;
+    items?: Array<{
+      quantity: number;
+      price: number;
+      product: {
+        name: string;
+        image_url?: string;
+        weight: number;
+      } | null;
+    }>;
   }>;
 }
 
@@ -293,7 +311,16 @@ export default function DashboardPage() {
             total,
             delivery_status,
             delivery_address,
-            customer:profiles!orders_customer_id_fkey(name)
+            customer:profiles!orders_customer_id_fkey(name),
+            items:order_items(
+              quantity,
+              price,
+              product:products(
+                name,
+                image_url,
+                weight
+              )
+            )
           `)
           .eq('batch_id', batch.id)
           .eq('approval_status', 'approved');
@@ -372,7 +399,16 @@ export default function DashboardPage() {
             total,
             delivery_status,
             delivery_address,
-            customer:profiles!orders_customer_id_fkey(name)
+            customer:profiles!orders_customer_id_fkey(name),
+            items:order_items(
+              quantity,
+              price,
+              product:products(
+                name,
+                image_url,
+                weight
+              )
+            )
           `)
           .eq('batch_id', batch.id)
           .eq('approval_status', 'approved');
@@ -771,17 +807,63 @@ export default function DashboardPage() {
               </h3>
               <div className="space-y-2 max-h-40 overflow-y-auto">
                 {activeBatch.orders.slice(0, 3).map((order, index) => (
-                  <div key={order.id} className="flex items-center justify-between bg-white rounded-lg p-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-medium">
-                        {index + 1}
+                  <div key={order.id} className="bg-white rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <div className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-medium">
+                          {index + 1}
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">{order.customer?.name || 'N/A'}</p>
+                          <p className="text-xs text-gray-500">{order.delivery_address?.street_address || 'N/A'}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-sm">{order.customer?.name || 'N/A'}</p>
-                        <p className="text-xs text-gray-500">{order.delivery_address?.street_address || 'N/A'}</p>
-                      </div>
+                      <p className="text-sm font-medium">{formatCurrency(order.total)}</p>
                     </div>
-                    <p className="text-sm font-medium">{formatCurrency(order.total)}</p>
+                    
+                    {/* Order Items */}
+                    {order.items && order.items.length > 0 && (
+                      <div className="mt-3 pt-3 border-t">
+                        <p className="text-xs font-semibold text-gray-700 mb-2">Items:</p>
+                        <div className="space-y-2 max-h-24 overflow-y-auto">
+                          {order.items.slice(0, 3).map((item, itemIndex) => (
+                            <div key={itemIndex} className="flex items-center gap-2 bg-gray-50 rounded p-2">
+                              {item.product?.image_url ? (
+                                <img
+                                  src={item.product.image_url}
+                                  alt={item.product.name}
+                                  className="w-8 h-8 rounded object-cover border"
+                                />
+                              ) : (
+                                <div className="w-8 h-8 bg-gray-200 rounded flex items-center justify-center">
+                                  <Package className="w-4 h-4 text-gray-400" />
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium text-gray-900 truncate">
+                                  {item.product?.name || 'Unknown'}
+                                </p>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                                    x{item.quantity}
+                                  </span>
+                                  {item.product?.weight && (
+                                    <span className="text-xs text-gray-500">
+                                      {item.product.weight.toFixed(1)}kg
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          {order.items.length > 3 && (
+                            <div className="text-xs text-gray-500 text-center py-1">
+                              +{order.items.length - 3} more items
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
                 {activeBatch.orders.length > 3 && (

@@ -35,8 +35,13 @@ export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState<string>('pending');
   const prevOrderStatuses = useRef<{ [id: string]: string } | null>(null);
 
-  // Helper function to calculate estimated delivery date range
-  function getEstimatedDeliveryDate(orderCreatedAt: string): string {
+  // Helper function to calculate estimated delivery date range or show delivered status
+  function getEstimatedDeliveryDate(orderCreatedAt: string, deliveryStatus?: string): string {
+    // If order is delivered, show "Delivered" instead of estimated date
+    if (deliveryStatus === 'delivered') {
+      return 'Delivered';
+    }
+    
     const createdDate = new Date(orderCreatedAt);
     const now = new Date();
     
@@ -73,9 +78,9 @@ export default function OrdersPage() {
     return `${formatDate(minDeliveryDate)}-${formatDate(maxDeliveryDate)}`;
   }
 
-  // Helper function to check if order is assigned to driver (should show estimated delivery)
+  // Helper function to check if order is assigned to driver or delivered (should show estimated delivery)
   function isOrderAssignedToDriver(order: Order): boolean {
-    return order.delivery_status === 'assigned' || order.delivery_status === 'delivering';
+    return order.delivery_status === 'assigned' || order.delivery_status === 'delivering' || order.delivery_status === 'delivered';
   }
 
   // Helper function to determine the display status based on approval and delivery status
@@ -101,11 +106,8 @@ export default function OrdersPage() {
     
     // If approved, check delivery status
     if (order.approval_status === 'approved') {
-      if (order.delivery_status === 'delivered') {
-        console.log(`   → Returning 'delivered'`);
-        return 'delivered';
-      } else if (order.delivery_status === 'assigned' || order.delivery_status === 'delivering') {
-        console.log(`   → Returning 'out_for_delivery'`);
+      if (order.delivery_status === 'delivered' || order.delivery_status === 'assigned' || order.delivery_status === 'delivering') {
+        console.log(`   → Returning 'out_for_delivery' (delivery status: ${order.delivery_status})`);
         return 'out_for_delivery';
       } else {
         console.log(`   → Returning 'verified' (pending delivery status)`);
@@ -135,8 +137,7 @@ export default function OrdersPage() {
               'pending': 'Pending Verification',
               'rejected': 'Rejected',
               'verified': 'Verified',
-              'out_for_delivery': 'Out for Delivery',
-              'delivered': 'Delivered'
+              'out_for_delivery': 'Out for Delivery'
             };
             toast.success(`Order #${order.id.slice(0, 8)} status updated: ${statusLabels[currentDisplayStatus] || currentDisplayStatus}`);
           }
@@ -230,13 +231,12 @@ export default function OrdersPage() {
     { code: 'pending', icon: <Clock size={18} />, label: 'Pending', color: 'bg-yellow-400 border-yellow-400 text-white', labelColor: 'text-yellow-500' },
     { code: 'verified', icon: <CheckCircle size={18} />, label: 'Verified', color: 'bg-blue-500 border-blue-500 text-white', labelColor: 'text-blue-500' },
     { code: 'out_for_delivery', icon: <Truck size={18} />, label: 'Delivery', color: 'bg-green-500 border-green-500 text-white', labelColor: 'text-green-500' },
-    { code: 'delivered', icon: <CheckCircle size={18} />, label: 'Delivered', color: 'bg-green-600 border-green-600 text-white', labelColor: 'text-green-600' },
   ];
 
   // Filter orders based on statusFilter
   const filteredOrders = statusFilter
     ? orders.filter(order => getDisplayStatus(order) === statusFilter)
-    : []; // Show no orders when no filter is active
+    : orders; // Show all orders when no filter is active
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -320,12 +320,12 @@ export default function OrdersPage() {
                           <div className="flex items-center gap-1 mt-1">
                             <Calendar size={12} className="text-green-600" />
                             <span className="text-xs font-medium text-green-600">
-                              Estimated delivery: {getEstimatedDeliveryDate(order.created_at)}
+                              {order.delivery_status === 'delivered' ? 'Delivery: ' : 'Estimated delivery: '}{getEstimatedDeliveryDate(order.created_at, order.delivery_status || undefined)}
                             </span>
                           </div>
                         )}
                       </div>
-                      {!['out_for_delivery', 'delivered'].includes(getDisplayStatus(order)) && (
+                      {!['out_for_delivery'].includes(getDisplayStatus(order)) && (
                         <span
                           className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
                           style={{ 
@@ -335,8 +335,7 @@ export default function OrdersPage() {
                                 'pending': '#FEF3C7',
                                 'rejected': '#FEE2E2', 
                                 'verified': '#DBEAFE',
-                                'out_for_delivery': '#D1FAE5',
-                                'delivered': '#D1FAE5'
+                                'out_for_delivery': '#D1FAE5'
                               };
                               return statusColors[displayStatus] || '#eee';
                             })(), 
@@ -346,8 +345,7 @@ export default function OrdersPage() {
                                 'pending': '#D97706',
                                 'rejected': '#DC2626',
                                 'verified': '#2563EB', 
-                                'out_for_delivery': '#059669',
-                                'delivered': '#059669'
+                                'out_for_delivery': '#059669'
                               };
                               return textColors[displayStatus] || '#222';
                             })()
@@ -359,11 +357,21 @@ export default function OrdersPage() {
                               'pending': 'Pending',
                               'rejected': 'Rejected',
                               'verified': 'Verified',
-                              'out_for_delivery': '',
-                              'delivered': 'Delivered'
+                              'out_for_delivery': ''
                             };
                             return statusLabels[displayStatus] || displayStatus;
                           })()}
+                        </span>
+                      )}
+                      {order.delivery_status === 'delivered' && getDisplayStatus(order) === 'out_for_delivery' && (
+                        <span
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                          style={{ 
+                            backgroundColor: '#D1FAE5',
+                            color: '#059669'
+                          }}
+                        >
+                          Delivered
                         </span>
                       )}
                     </div>
@@ -415,7 +423,6 @@ export default function OrdersPage() {
                 {statusFilter === 'pending' && "No Pending Orders"}
                 {statusFilter === 'verified' && "No Verified Orders"}
                 {statusFilter === 'out_for_delivery' && "No Orders Out for Delivery"}
-                {statusFilter === 'delivered' && "No Delivered Orders"}
                 {!statusFilter && "No Orders"}
               </h3>
               <p className="text-sm text-gray-500">
@@ -423,7 +430,6 @@ export default function OrdersPage() {
                 {statusFilter === 'pending' && "Orders waiting for verification will appear here"}
                 {statusFilter === 'verified' && "Orders that have been verified will appear here"}
                 {statusFilter === 'out_for_delivery' && "Orders that are being delivered will appear here"}
-                {statusFilter === 'delivered' && "Orders that have been delivered will appear here"}
                 {!statusFilter && "When you place orders, they will appear here"}
               </p>
             </div>

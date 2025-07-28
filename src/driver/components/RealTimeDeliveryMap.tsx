@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { GeneticRouteOptimizer, DeliveryLocation, OptimizedRoute, DepotLocation } from '../../lib/genetic-route-optimizer';
 import { Card, CardContent } from '../../ui/components/Card';
@@ -17,7 +18,9 @@ import {
   TrendingUp,
   Maximize,
   Minimize,
-  Home
+  Home,
+  Eye,
+  Package
 } from 'lucide-react';
 import truckIcon from '../../assets/truck-icon.png';
 
@@ -52,6 +55,7 @@ interface ExtendedDeliveryLocation extends DeliveryLocation {
     product: {
       name: string;
       image_url?: string;
+      weight: number;
     };
   }[];
 }
@@ -65,6 +69,7 @@ interface GoogleMapsWindow extends Window {
 declare const window: GoogleMapsWindow;
 
 export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: DeliveryMapProps) {
+  const navigate = useNavigate();
   const [deliveryLocations, setDeliveryLocations] = useState<ExtendedDeliveryLocation[]>([]);
   const [optimizedOrder, setOptimizedOrder] = useState<string[]>([]);
   const [isOptimizing, setIsOptimizing] = useState(false);
@@ -702,12 +707,20 @@ export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: Deliv
         .eq('batch_id', batchId)
         .eq('approval_status', 'approved');
 
+      console.log('🔍 Orders query result:', { orders, error });
+      if (orders && orders.length > 0) {
+        console.log('🔍 First order:', orders[0]);
+      }
+
       if (error) throw error;
 
       // Fetch order items separately for better reliability
       let directOrderItems: any[] = [];
       if (orders && orders.length > 0) {
         const orderIds = orders.map(o => o.id);
+        
+        // Test direct access to order_items
+        console.log('🔍 Testing direct order_items access for order IDs:', orderIds);
         
         const { data: directItems, error: directError } = await supabase
           .from('order_items')
@@ -716,9 +729,26 @@ export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: Deliv
             order_id,
             quantity,
             price,
-            product:products(name, image_url)
+            product:products(name, image_url, weight)
           `)
           .in('order_id', orderIds);
+        
+        console.log('🔍 Direct order items query result:', { directItems, directError });
+        if (directItems && directItems.length > 0) {
+          console.log('🔍 First direct item:', directItems[0]);
+        } else {
+          console.log('🔍 No order items found. This might be an RLS policy issue.');
+          
+          // Test with a single order to see if it's a batch issue
+          if (orderIds.length > 0) {
+            const { data: singleOrderItems, error: singleError } = await supabase
+              .from('order_items')
+              .select('*')
+              .eq('order_id', orderIds[0]);
+            
+            console.log('🔍 Single order test:', { singleOrderItems, singleError });
+          }
+        }
         
         directOrderItems = directItems || [];
       }
@@ -735,6 +765,8 @@ export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: Deliv
       const locations: ExtendedDeliveryLocation[] = (orders || []).map(order => {
         // Use the direct query results
         const orderItems = itemsByOrder[order.id] || [];
+        
+        console.log(`🔍 Order ${order.id} (${order.customer?.name}) has ${orderItems.length} items:`, orderItems);
 
         return {
           id: order.id,
@@ -1416,7 +1448,12 @@ export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: Deliv
                 
                 // For sorted list, the index IS the sequence number
                 const sequenceNumber = index + 1;
-                const isCurrent = index === currentStopIndex && !isCompleted;
+                
+                // Find the next uncompleted stop to highlight
+                const nextUncompletedIndex = getSortedDeliveryLocations().findIndex(loc => 
+                  !completedStops.has(loc.id)
+                );
+                const isNextToDeliver = index === nextUncompletedIndex && !isCompleted;
                 
 
                 
@@ -1428,14 +1465,14 @@ export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: Deliv
                     className={`p-3 rounded-lg border ${
                       isCompleted 
                         ? 'bg-green-50 border-green-200' 
-                        : isCurrent 
+                        : isNextToDeliver 
                         ? 'bg-yellow-50 border-yellow-200' 
                         : 'bg-gray-50 border-gray-200'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white ${
-                        isCompleted ? 'bg-green-500' : isCurrent ? 'bg-yellow-500' : 'bg-gray-400'
+                        isCompleted ? 'bg-green-500' : isNextToDeliver ? 'bg-yellow-500' : 'bg-gray-400'
                       }`}>
                         {isCompleted ? '✓' : sequenceNumber}
                       </div>
@@ -1445,12 +1482,59 @@ export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: Deliv
                     <p className="text-xs text-gray-600">{location.address}</p>
                     <p className="text-xs text-blue-600 font-medium">{location.barangay}</p>
                     
+                    {/* Order Items */}
+                    {(location as ExtendedDeliveryLocation).order_items && (location as ExtendedDeliveryLocation).order_items!.length > 0 && (
+                      <div className="mt-3 border-t pt-3">
+                        <p className="text-sm font-semibold text-gray-800 mb-3">Order Items:</p>
+                        <div className="space-y-3 max-h-40 overflow-y-auto">
+                          {(location as ExtendedDeliveryLocation).order_items!.map((item: any, itemIndex: number) => (
+                            <div key={itemIndex} className="flex items-center gap-3 bg-white rounded-lg p-3 border shadow-sm">
+                              {item.product?.image_url ? (
+                                <img
+                                  src={item.product.image_url}
+                                  alt={item.product.name}
+                                  className="w-12 h-12 rounded-lg object-cover border"
+                                />
+                              ) : (
+                                <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
+                                  <Package className="w-6 h-6 text-gray-400" />
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-gray-900 truncate">
+                                  {item.product?.name || 'Unknown Product'}
+                                </p>
+                                <div className="flex items-center gap-3 text-sm text-gray-600 mt-1">
+                                  <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-medium">
+                                    Qty: {item.quantity}
+                                  </span>
+                                  {item.product?.weight && (
+                                    <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs font-medium">
+                                      {item.product.weight.toFixed(1)}kg
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm font-bold text-green-600">
+                                  ₱{(item.price * item.quantity).toLocaleString()}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  ₱{item.price.toLocaleString()} each
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
                     {!isCompleted && (
                       <Button
                         size="sm"
                         onClick={() => markStopCompleted(location.id)}
-                        className={`mt-2 w-full ${
-                          isCurrent 
+                        className={`mt-3 w-full ${
+                          isNextToDeliver 
                             ? 'bg-green-600 hover:bg-green-700 text-white' 
                             : 'bg-blue-600 hover:bg-blue-700 text-white'
                         }`}

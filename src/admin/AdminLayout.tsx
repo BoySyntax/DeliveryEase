@@ -23,7 +23,7 @@ export default function AdminLayout() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    navigate('/login');
+    navigate('/');
   };
 
   const navItems = [
