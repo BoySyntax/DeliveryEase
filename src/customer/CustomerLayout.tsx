@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { ShoppingBag, Home, Package, User, ShoppingCart, Bell, Truck, Search, Mail } from 'lucide-react';
+import { ShoppingBag, Home, Package, User, ShoppingCart, Truck, Search, Mail } from 'lucide-react';
 import { useProfile } from '../lib/auth';
 import Loader from '../ui/components/Loader';
 import { cn } from '../lib/utils';
@@ -31,7 +31,6 @@ export default function CustomerLayout() {
     '/customer/cart',
     '/customer/checkout',
     '/customer/orders',
-    '/customer/notifications',
     '/customer/profile',
     '/customer/add-address',
     '/customer/edit-address'
@@ -40,75 +39,8 @@ export default function CustomerLayout() {
   // Check if search bar should be hidden on current page
   const shouldHideSearch = hideSearchOnPages.some(page => location.pathname.startsWith(page));
 
-  // Notification badge for orders
-  const [orderNotifCount, setOrderNotifCount] = useState(0);
   const [cartCount, setCartCount] = useState(0);
-  
-  // Clear notification badge when on notifications page
   useEffect(() => {
-    if (location.pathname === '/customer/notifications') {
-      setOrderNotifCount(0);
-    }
-  }, [location.pathname]);
-  useEffect(() => {
-    async function fetchOrderNotif() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      
-      // Get all orders for the user
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          id,
-          created_at,
-          approval_status,
-          delivery_status,
-          batch_id,
-          notification_read
-        `)
-        .eq('customer_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (!error && data) {
-        // Count only unread notifications using the same logic as NotificationsPage
-        let notificationCount = 0;
-        
-        data.forEach(order => {
-          // Only count if notification is not read
-          if (!order.notification_read) {
-            const now = new Date();
-            const orderCreatedAt = new Date(order.created_at);
-            const timeDiff = now.getTime() - orderCreatedAt.getTime();
-            const hoursDiff = timeDiff / (1000 * 60 * 60);
-
-            // Only count notifications for recent status changes (within last 24 hours)
-            if (hoursDiff <= 24) {
-              // Count pending orders (only if recently created)
-              if (order.approval_status === 'pending' && hoursDiff < 1) {
-                notificationCount++;
-              }
-              // Count rejected orders
-              else if (order.approval_status === 'rejected') {
-                notificationCount++;
-              }
-              // Count verified orders (approved) - only if recently approved
-              else if (order.approval_status === 'approved' && hoursDiff < 6) {
-                notificationCount++;
-              }
-              // Count delivery statuses (only if recent)
-              else if ((order.delivery_status === 'assigned' && hoursDiff < 12) || 
-                       (order.delivery_status === 'delivering' && hoursDiff < 12) || 
-                       (order.delivery_status === 'delivered' && hoursDiff < 6)) {
-                notificationCount++;
-              }
-            }
-          }
-        });
-        
-        setOrderNotifCount(notificationCount);
-      }
-    }
     async function fetchCartCount() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -131,10 +63,8 @@ export default function CustomerLayout() {
         setCartCount(items.length);
       }
     }
-    fetchOrderNotif();
     fetchCartCount();
     const interval = setInterval(() => {
-      fetchOrderNotif();
       fetchCartCount();
     }, 5000);
     return () => clearInterval(interval);
@@ -185,9 +115,7 @@ export default function CustomerLayout() {
     { icon: <Home size={20} />, label: 'Home', path: '/customer' },
     { icon: <ShoppingCart size={20} />, label: 'Cart', path: '/customer/cart' },
     { icon: <Package size={20} />, label: 'Orders', path: '/customer/orders' },
-    { icon: <Bell size={20} />, label: 'Notifications', path: '/customer/notifications' },
     { icon: <User size={20} />, label: 'Profile', path: '/customer/profile' },
-    { icon: <Mail size={20} />, label: 'Test Email', path: '/customer/test-email' },
   ];
 
   const handleSearch = (e: React.FormEvent) => {
@@ -248,11 +176,6 @@ export default function CustomerLayout() {
                   >
                     <span className="relative">
                       {item.icon}
-                      {(item.label === 'Notifications' && orderNotifCount > 0) && (
-                        <span className="absolute -top-1 -right-2 min-w-[1.1rem] h-5 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold shadow z-10">
-                          {orderNotifCount}
-                        </span>
-                      )}
                       {(item.label === 'Cart' && cartCount > 0) && (
                         <span className="absolute -top-1 -right-2 min-w-[1.1rem] h-5 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold shadow z-10">
                           {cartCount}
@@ -323,11 +246,6 @@ export default function CustomerLayout() {
             >
               <span className="relative">
                 {item.icon}
-                {(item.label === 'Notifications' && orderNotifCount > 0) && (
-                  <span className="absolute -top-1 -right-2 min-w-[1.1rem] h-5 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold shadow z-10">
-                    {orderNotifCount}
-                  </span>
-                )}
                 {(item.label === 'Cart' && cartCount > 0) && (
                   <span className="absolute -top-1 -right-2 min-w-[1.1rem] h-5 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold shadow z-10">
                     {cartCount}

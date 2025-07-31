@@ -29,7 +29,7 @@ const CustomerCart = lazy(() => import('./customer/pages/CartPage'));
 const CustomerCheckout = lazy(() => import('./customer/pages/CheckoutPage'));
 const CustomerOrders = lazy(() => import('./customer/pages/OrdersPage'));
 const CustomerProfile = lazy(() => import('./customer/pages/ProfilePage'));
-const CustomerNotifications = lazy(() => import('./customer/pages/NotificationsPage'));
+
 const CustomerOrderDetails = lazy(() => import('./customer/pages/OrderDetailsPage'));
 const CustomerAddAddress = lazy(() => import('./customer/pages/AddAddressPage'));
 const CustomerEditAddress = lazy(() => import('./customer/pages/EditAddressPage'));
@@ -118,7 +118,7 @@ function App() {
           <Route path="profile" element={<CustomerProfile />} />
           <Route path="add-address" element={<CustomerAddAddress />} />
           <Route path="edit-address/:id" element={<CustomerEditAddress />} />
-          <Route path="notifications" element={<CustomerNotifications />} />
+          
         </Route>
 
         {/* Driver Routes */}

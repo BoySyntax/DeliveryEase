@@ -286,8 +286,7 @@ export interface Database {
             street_address: string
             barangay: string
           } | null
-          notification_read: boolean
-          notification_dismissed: boolean
+          
         }
         Insert: {
           id?: string
@@ -325,8 +324,6 @@ export interface Database {
             street_address: string
             barangay: string
           } | null
-          notification_read?: boolean
-          notification_dismissed?: boolean
         }
         Relationships: [
           {

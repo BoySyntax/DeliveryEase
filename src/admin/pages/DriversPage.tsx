@@ -7,7 +7,7 @@ import { toast } from 'react-hot-toast';
 
 type Driver = {
   id: string;
-  name: string;
+  name: string | null;
   avatar_url: string | null;
   active_orders: number;
   total_orders: number;
@@ -39,14 +39,14 @@ export default function DriversPage() {
             .from('orders')
             .select('*', { count: 'exact', head: true })
             .eq('driver_id', driver.id)
-            .in('status', ['assigned', 'delivering']);
+            .in('delivery_status', ['assigned', 'delivering']);
 
           // Get total completed orders
           const { count: totalOrders } = await supabase
             .from('orders')
             .select('*', { count: 'exact', head: true })
             .eq('driver_id', driver.id)
-            .eq('status', 'delivered');
+            .eq('delivery_status', 'delivered');
 
           return {
             ...driver,
@@ -86,12 +86,12 @@ export default function DriversPage() {
                   />
                 ) : (
                   <div className="h-12 w-12 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center font-medium">
-                    {getInitials(driver.name)}
+                    {getInitials(driver.name || 'Unknown Driver')}
                   </div>
                 )}
                 <div>
                   <h3 className="text-lg font-medium text-gray-900">
-                    {driver.name}
+                    {driver.name || 'Unknown Driver'}
                   </h3>
                   <p className="text-sm text-gray-500">
                     ID: {driver.id.slice(0, 8)}

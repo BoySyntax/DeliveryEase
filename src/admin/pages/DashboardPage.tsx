@@ -21,7 +21,7 @@ type DashboardStats = {
 };
 
 type OrderStatusResponse = {
-  status: OrderStatus;
+  delivery_status: OrderStatus;
 };
 
 export default function DashboardPage() {
@@ -50,18 +50,18 @@ export default function DashboardPage() {
         .select('*', { count: 'exact', head: true })
         .eq('role', 'driver');
 
-      // Get total revenue
+      // Get total revenue from delivered orders
       const { data: orders } = await supabase
         .from('orders')
         .select('total')
-        .eq('status', 'delivered');
+        .eq('delivery_status', 'delivered');
 
       const totalRevenue = orders?.reduce((sum, order) => sum + order.total, 0) || 0;
 
-      // Get orders by status
+      // Get orders by delivery status
       const { data: ordersByStatus } = await supabase
         .from('orders')
-        .select('status') as { data: OrderStatusResponse[] | null };
+        .select('delivery_status') as { data: OrderStatusResponse[] | null };
 
       const statusCounts = {
         pending: 0,
@@ -71,8 +71,8 @@ export default function DashboardPage() {
       };
 
       ordersByStatus?.forEach((order) => {
-        if (order.status in statusCounts) {
-          statusCounts[order.status]++;
+        if (order.delivery_status in statusCounts) {
+          statusCounts[order.delivery_status]++;
         }
       });
 

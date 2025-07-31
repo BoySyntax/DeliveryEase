@@ -34,7 +34,7 @@ export default function HomePage() {
   const navigate = useNavigate();
   const [cartCount, setCartCount] = useState(0);
   const [orderCount, setOrderCount] = useState(0);
-  const [notifCount, setNotifCount] = useState(0);
+
   const [currentCategoryPage, setCurrentCategoryPage] = useState(0);
   const categoriesScrollRef = useRef<HTMLDivElement>(null);
   const [categoriesPerPage, setCategoriesPerPage] = useState(2);
@@ -118,14 +118,7 @@ export default function HomePage() {
         .eq('customer_id', user.id)
         .in('order_status_code', ['pending', 'verified', 'out_for_delivery']);
       setOrderCount(orders ? orders.length : 0);
-      // Notifications count
-      const { data: notifs } = await supabase
-        .from('orders')
-        .select('id')
-        .eq('customer_id', user.id)
-        .eq('notification_dismissed', false)
-        .in('order_status_code', ['pending', 'verified', 'out_for_delivery']);
-      setNotifCount(notifs ? notifs.length : 0);
+
     }
     fetchStats();
   }, []);
