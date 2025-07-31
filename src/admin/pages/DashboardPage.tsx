@@ -98,6 +98,8 @@ export default function DashboardPage() {
     return <div>Failed to load dashboard statistics.</div>;
   }
 
+
+
   const statCards = [
     {
       title: 'Total Orders',
@@ -175,6 +177,8 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
+
+
       </div>
     </div>
   );

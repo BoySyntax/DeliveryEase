@@ -97,6 +97,14 @@ allowed_mime_types = ["image/png", "image/jpeg", "image/jpg"]
 
 [auth]
 enabled = true
+
+[auth.email.smtp]
+host = "smtp.resend.com"
+port = 587
+user = "resend"
+pass = "env(RESEND_API_KEY)"
+admin_email = "noreply@yourdomain.com"
+sender_name = "DeliveryEase"
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
 site_url = "http://127.0.0.1:3008"
@@ -138,14 +146,14 @@ otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 
-# Use a production-ready SMTP server
-# [auth.email.smtp]
-# host = "smtp.sendgrid.net"
-# port = 587
-# user = "apikey"
-# pass = "env(SENDGRID_API_KEY)"
-# admin_email = "admin@email.com"
-# sender_name = "Admin"
+# Use Resend for email notifications
+[auth.email.smtp]
+host = "smtp.resend.com"
+port = 587
+user = "resend"
+pass = "env(RESEND_API_KEY)"
+admin_email = "noreply@yourdomain.com"
+sender_name = "DeliveryEase"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]
@@ -250,13 +258,10 @@ policy = "oneshot"
 inspector_port = 8083
 
 # Use these configurations to customize your Edge Function.
-# [functions.MY_FUNCTION_NAME]
-# enabled = true
-# verify_jwt = true
-# import_map = "./functions/MY_FUNCTION_NAME/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
-# entrypoint = "./functions/MY_FUNCTION_NAME/index.ts"
+[functions.send-order-notification]
+enabled = true
+verify_jwt = false
+import_map = "./functions/send-order-notification/deno.json"
 
 [analytics]
 enabled = true

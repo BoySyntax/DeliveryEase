@@ -7,6 +7,7 @@ import { Database } from '../../lib/database.types';
 import Loader from '../../ui/components/Loader';
 import { toast } from 'react-hot-toast';
 import { checkBatchAutoAssignment } from '../../lib/batch-auto-assignment';
+import { EmailService } from '../../lib/emailService';
 
 type OrderStatus = Database['public']['Enums']['order_status'];
 
@@ -231,7 +232,8 @@ export default function VerifyOrdersPage() {
         .from('orders')
         .select(`
           id,
-          customer_id
+          customer_id,
+          total
         `)
         .eq('id', orderId)
         .single();
@@ -239,6 +241,13 @@ export default function VerifyOrdersPage() {
       if (orderError) throw orderError;
 
       console.log('Order data:', orderData); // Debug log
+
+      // Get customer name from profiles
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('name')
+        .eq('id', orderData.customer_id)
+        .single();
 
       // Get addresses directly (now allowed by admin policy)
       const { data: addresses, error: addressError } = await supabase
@@ -285,6 +294,21 @@ export default function VerifyOrdersPage() {
       }
 
       toast.success(`Order ${approved ? 'approved' : 'rejected'} successfully`);
+      
+      // Send email notification (email will be fetched by the edge function)
+      try {
+        await EmailService.sendOrderStatusUpdate(
+          orderId,
+          approved ? 'approved' : 'rejected',
+          '', // Email will be fetched by the edge function
+          profileData?.name || 'Customer',
+          orderData.total
+        );
+        console.log('Email notification sent successfully');
+      } catch (emailError) {
+        console.error('Failed to send email notification:', emailError);
+        // Don't fail the order update if email fails
+      }
       
       // Check for auto-assignment if order was approved
       if (approved) {

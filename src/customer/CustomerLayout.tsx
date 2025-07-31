@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { ShoppingBag, Home, Package, User, ShoppingCart, Bell, Truck, Search } from 'lucide-react';
+import { ShoppingBag, Home, Package, User, ShoppingCart, Bell, Truck, Search, Mail } from 'lucide-react';
 import { useProfile } from '../lib/auth';
 import Loader from '../ui/components/Loader';
 import { cn } from '../lib/utils';
@@ -187,6 +187,7 @@ export default function CustomerLayout() {
     { icon: <Package size={20} />, label: 'Orders', path: '/customer/orders' },
     { icon: <Bell size={20} />, label: 'Notifications', path: '/customer/notifications' },
     { icon: <User size={20} />, label: 'Profile', path: '/customer/profile' },
+    { icon: <Mail size={20} />, label: 'Test Email', path: '/customer/test-email' },
   ];
 
   const handleSearch = (e: React.FormEvent) => {
