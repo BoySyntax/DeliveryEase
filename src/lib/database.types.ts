@@ -457,6 +457,47 @@ export interface Database {
           }
         ]
       }
+      notifications: {
+        Row: {
+          id: string
+          user_id: string
+          title: string
+          message: string
+          type: 'info' | 'success' | 'warning' | 'error'
+          read: boolean
+          data: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          title: string
+          message: string
+          type?: 'info' | 'success' | 'warning' | 'error'
+          read?: boolean
+          data?: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          title?: string
+          message?: string
+          type?: 'info' | 'success' | 'warning' | 'error'
+          read?: boolean
+          data?: Json
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       order_batches_with_drivers: {
@@ -516,6 +557,28 @@ export interface Database {
         Returns: string
       }
       cleanup_empty_batches: {
+        Args: Record<string, never>
+        Returns: number
+      }
+      create_notification: {
+        Args: {
+          p_user_id: string
+          p_title: string
+          p_message: string
+          p_type?: string
+          p_data?: Json
+        }
+        Returns: string
+      }
+      mark_notification_read: {
+        Args: { p_notification_id: string }
+        Returns: boolean
+      }
+      mark_all_notifications_read: {
+        Args: Record<string, never>
+        Returns: number
+      }
+      get_unread_notification_count: {
         Args: Record<string, never>
         Returns: number
       }

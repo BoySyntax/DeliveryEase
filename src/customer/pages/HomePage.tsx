@@ -354,6 +354,8 @@ export default function HomePage() {
       {/* Quick Stats / Shortcuts */}
       {/* Removed dashboard cards for Cart Items, Orders in Progress, and Notifications as requested */}
 
+
+
       {/* Featured Products Section */}
       <section>
         <div className="flex justify-between items-center mb-4">

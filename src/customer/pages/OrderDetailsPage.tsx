@@ -25,7 +25,8 @@ export default function OrderDetailsPage() {
           created_at,
           order_status_code,
           total,
-          status:order_status(label, color),
+          approval_status,
+          delivery_status,
           items:order_items(
             quantity,
             price,
@@ -59,9 +60,23 @@ export default function OrderDetailsPage() {
       <div className="mb-4 flex items-center space-x-2">
         <span
           className="inline-block px-2 py-1 rounded-full text-xs font-semibold"
-          style={{ backgroundColor: order.status?.color || '#eee', color: '#222' }}
+          style={{ 
+            backgroundColor: 
+              order.delivery_status === 'delivered' ? '#10b981' :
+              order.delivery_status === 'delivering' ? '#3b82f6' :
+              order.approval_status === 'approved' ? '#10b981' :
+              order.approval_status === 'rejected' ? '#ef4444' :
+              order.approval_status === 'pending' ? '#f59e0b' :
+              '#eee', 
+            color: '#fff' 
+          }}
         >
-          {order.status?.label || order.order_status_code}
+          {order.delivery_status === 'delivered' ? 'Delivered' :
+           order.delivery_status === 'delivering' ? 'Out for Delivery' :
+           order.approval_status === 'approved' ? 'Approved' :
+           order.approval_status === 'rejected' ? 'Rejected' :
+           order.approval_status === 'pending' ? 'Pending' :
+           order.order_status_code || 'Pending'}
         </span>
         <span className="text-xs text-gray-400">
           {order.created_at ? new Date(order.created_at).toLocaleString() : 'N/A'}

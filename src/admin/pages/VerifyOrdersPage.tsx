@@ -7,6 +7,7 @@ import { Database } from '../../lib/database.types';
 import Loader from '../../ui/components/Loader';
 import { toast } from 'react-hot-toast';
 import { checkBatchAutoAssignment } from '../../lib/batch-auto-assignment';
+import { orderNotificationService } from '../../lib/orderNotificationService';
 
 
 type OrderStatus = Database['public']['Enums']['order_status'];
@@ -226,6 +227,13 @@ export default function VerifyOrdersPage() {
   }
 
   const handleVerifyOrder = async (orderId: string, approved: boolean) => {
+    console.log('=== HANDLE VERIFY ORDER CALLED ===');
+    console.log('Order ID:', orderId);
+    console.log('Approved:', approved);
+    
+    // Add a simple alert to confirm the function is called
+    alert(`Function called: ${approved ? 'APPROVE' : 'REJECT'} order ${orderId}`);
+    
     try {
       // Get the order's current address through customer_id
       const { data: orderData, error: orderError } = await supabase
@@ -295,7 +303,8 @@ export default function VerifyOrdersPage() {
 
       toast.success(`Order ${approved ? 'approved' : 'rejected'} successfully`);
       
-
+      // Notification will be automatically created by the database trigger
+      console.log('Order status updated - notification will be created automatically by trigger');
       
       // Check for auto-assignment if order was approved
       if (approved) {

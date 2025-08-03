@@ -34,14 +34,29 @@ export default function DriversPage() {
       // Get orders count for each driver
       const driversWithStats = await Promise.all(
         (driversData || []).map(async (driver) => {
-          // Get active orders (assigned or delivering)
-          const { count: activeOrders } = await supabase
-            .from('orders')
-            .select('*', { count: 'exact', head: true })
+          // Get active batches assigned to this driver
+          const { data: activeBatches, error: batchesError } = await supabase
+            .from('order_batches')
+            .select('id, status')
             .eq('driver_id', driver.id)
-            .in('delivery_status', ['assigned', 'delivering']);
+            .in('status', ['assigned', 'delivering']);
 
-          // Get total completed orders
+          if (batchesError) {
+            console.error('Error fetching batches:', batchesError);
+          }
+
+          // Get total orders in active batches
+          let activeOrders = 0;
+          if (activeBatches && activeBatches.length > 0) {
+            const batchIds = activeBatches.map(batch => batch.id);
+            const { count: ordersInBatches } = await supabase
+              .from('orders')
+              .select('*', { count: 'exact', head: true })
+              .in('batch_id', batchIds);
+            activeOrders = ordersInBatches || 0;
+          }
+
+          // Get total completed orders (delivered)
           const { count: totalOrders } = await supabase
             .from('orders')
             .select('*', { count: 'exact', head: true })
@@ -50,7 +65,7 @@ export default function DriversPage() {
 
           return {
             ...driver,
-            active_orders: activeOrders || 0,
+            active_orders: activeOrders,
             total_orders: totalOrders || 0,
           };
         })
@@ -81,7 +96,7 @@ export default function DriversPage() {
                 {driver.avatar_url ? (
                   <img
                     src={driver.avatar_url}
-                    alt={driver.name}
+                    alt={driver.name || 'Driver'}
                     className="h-12 w-12 rounded-full"
                   />
                 ) : (
@@ -101,7 +116,7 @@ export default function DriversPage() {
 
               <div className="mt-6 grid grid-cols-2 gap-4 border-t pt-4">
                 <div>
-                  <p className="text-sm text-gray-500">Active Orders</p>
+                  <p className="text-sm text-gray-500">Active Deliveries</p>
                   <p className="mt-1 text-2xl font-semibold text-primary-600">
                     {driver.active_orders}
                   </p>

@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { Card, CardContent } from '../../ui/components/Card';
 import Loader from '../../ui/components/Loader';
 import { formatCurrency } from '../../lib/utils';
+import { orderNotificationService } from '../../lib/orderNotificationService';
 import { 
   Package, 
   CheckCircle, 
@@ -598,6 +599,9 @@ export default function DashboardPage() {
         .eq('id', activeBatch.id);
 
       if (error) throw error;
+
+      // Notifications will be automatically created by the database trigger when delivery_status changes
+      console.log('Batch delivery started - notifications will be created automatically by trigger');
 
       setActiveBatch({ ...activeBatch, status: 'delivering' });
       toast.success('🚚 Delivery started! Safe driving!');

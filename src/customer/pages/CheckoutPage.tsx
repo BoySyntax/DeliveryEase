@@ -9,6 +9,7 @@ import Input from '../../ui/components/Input';
 import { formatCurrency } from '../../lib/utils';
 import Loader from '../../ui/components/Loader';
 import instapayQR from '../../assets/instapay-qr.png';
+import { orderNotificationService } from '../../lib/orderNotificationService';
 
 type CheckoutForm = {
   addressId: string;
@@ -261,6 +262,31 @@ export default function CheckoutPage() {
         .single();
 
       if (orderError) throw new Error('Error creating order: ' + orderError.message);
+
+      // Notification will be created automatically by database trigger
+      // But let's add a fallback in case the trigger fails
+      setTimeout(async () => {
+        try {
+          // Check if notification was created by trigger
+          const { data: notifications } = await supabase
+            .from('notifications')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('data->>orderId', order.id)
+            .limit(1);
+          
+          if (!notifications || notifications.length === 0) {
+            console.log('No notification found, creating fallback notification');
+            await orderNotificationService.createNotification({
+              orderId: order.id,
+              title: 'Order Placed',
+              message: 'Your order has been successfully placed and is pending approval.'
+            });
+          }
+        } catch (error) {
+          console.error('Error in fallback notification creation:', error);
+        }
+      }, 2000); // Wait 2 seconds for trigger to execute
 
       // Create order items
       const orderItems = itemsToOrder.map(item => ({

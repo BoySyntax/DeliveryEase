@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { ShoppingBag, Home, Package, User, ShoppingCart, Truck, Search, Mail } from 'lucide-react';
+import { ShoppingBag, Home, Package, User, ShoppingCart, Truck, Search, Mail, Bell } from 'lucide-react';
 import { useProfile } from '../lib/auth';
 import Loader from '../ui/components/Loader';
 import { cn } from '../lib/utils';
@@ -9,6 +9,7 @@ import logo from '../assets/logo.png';
 import Input from '../ui/components/Input';
 import Select from '../ui/components/Select';
 import { useSearchParams } from 'react-router-dom';
+import NotificationIcon from '../ui/components/NotificationIcon';
 
 type Category = {
   id: string;
@@ -31,6 +32,7 @@ export default function CustomerLayout() {
     '/customer/cart',
     '/customer/checkout',
     '/customer/orders',
+    '/customer/notifications',
     '/customer/profile',
     '/customer/add-address',
     '/customer/edit-address'
@@ -115,6 +117,7 @@ export default function CustomerLayout() {
     { icon: <Home size={20} />, label: 'Home', path: '/customer' },
     { icon: <ShoppingCart size={20} />, label: 'Cart', path: '/customer/cart' },
     { icon: <Package size={20} />, label: 'Orders', path: '/customer/orders' },
+    { icon: <Bell size={20} />, label: 'Notifications', path: '/customer/notifications' },
     { icon: <User size={20} />, label: 'Profile', path: '/customer/profile' },
   ];
 
@@ -185,6 +188,8 @@ export default function CustomerLayout() {
                     <span className="text-xs mt-1">{item.label}</span>
                   </NavLink>
                 ))}
+                {/* Notification Icon with Dropdown */}
+                <NotificationIcon />
               </nav>
             </div>
             {/* Mobile search bar (below logo/title) */}

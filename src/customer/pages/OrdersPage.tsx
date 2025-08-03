@@ -167,7 +167,6 @@ export default function OrdersPage() {
           approval_status,
           delivery_status,
           total,
-          status:order_status(*),
           items:order_items (
             quantity,
             price,
@@ -196,7 +195,7 @@ export default function OrdersPage() {
         approval_status: order.approval_status,
         delivery_status: order.delivery_status,
         total: order.total,
-        status: order.status || null,
+        status: null, // Removed order_status join
         items: order.items,
       })) as Order[];
       

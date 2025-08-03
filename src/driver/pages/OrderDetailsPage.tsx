@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { Card, CardContent } from '../../ui/components/Card';
 import Loader from '../../ui/components/Loader';
 import { formatCurrency } from '../../lib/utils';
+import { orderNotificationService } from '../../lib/orderNotificationService';
 import { 
   Package, 
   MapPin, 
@@ -122,6 +123,9 @@ export default function OrderDetailsPage() {
         toast.error('Failed to complete order');
         return;
       }
+
+      // Notification will be automatically created by the database trigger
+      console.log('Order delivered - notification will be created automatically by trigger');
 
       toast.success('Order completed successfully!');
       navigate('/driver');
