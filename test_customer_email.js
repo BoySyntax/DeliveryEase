@@ -1,94 +1,57 @@
-// Test Customer Email Service
-// This will test the email system with a real customer ID
+// Test to check customer email in profiles table
+import { createClient } from '@supabase/supabase-js';
 
-const RESEND_API_KEY = 're_9mbohhSC_8Qjsdd1R93WNED3NewD11f47';
-const TEST_CUSTOMER_ID = 'fd636309-2b9c-4bf5-a7a7-1b4ac7cefaef'; // The customer ID from your error
-const TEST_EMAIL = 'tokyobaby466@gmail.com';
+const supabaseUrl = 'https://vpwskrytguoiybqrpebp.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZwd3Nrcnl0Z3VvaXlicXJwZWJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc0NjY3MDMsImV4cCI6MjA2MzA0MjcwM30.-kdF6gL8ffsENAMCRXpr8wtnQoNG1JS5LDcEeHqYrkc';
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function testCustomerEmail() {
-  console.log('🧪 Testing Customer Email Service...');
-  console.log('👤 Customer ID:', TEST_CUSTOMER_ID);
-  console.log('📧 Test Email:', TEST_EMAIL);
+  console.log('🔍 Checking customer profiles for emails...');
   
   try {
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: 'onboarding@resend.dev',
-        to: TEST_EMAIL,
-        subject: '🎉 Your Order is Verified!',
-        html: `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="utf-8">
-            <title>Order Verified</title>
-            <style>
-              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-              .header { background-color: #4F46E5; color: white; padding: 20px; text-align: center; }
-              .content { padding: 20px; background-color: #f9f9f9; }
-              .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="header">
-                <h1>🎉 DeliveryEase</h1>
-              </div>
-              <div class="content">
-                <h2>Your Order is Verified!</h2>
-                <p>Hi Customer,</p>
-                <p>Your order #TEST-123 has been verified and is being processed.</p>
-                <p><strong>Customer ID:</strong> ${TEST_CUSTOMER_ID}</p>
-                <p><strong>Email:</strong> ${TEST_EMAIL}</p>
-                <p>You will receive another email when your order is out for delivery.</p>
-              </div>
-              <div class="footer">
-                <p>This is a test email from your working DeliveryEase system.</p>
-              </div>
-            </div>
-          </body>
-          </html>
-        `,
-      }),
-    });
+    // Get all profiles with emails
+    const { data: profiles, error } = await supabase
+      .from('profiles')
+      .select('id, name, email')
+      .not('email', 'is', null);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.log('❌ Failed to send email:', response.status, errorText);
-      return false;
+    if (error) {
+      console.error('❌ Error fetching profiles:', error);
+      return;
     }
 
-    const result = await response.json();
-    console.log('✅ Email sent successfully!');
-    console.log('📧 Check your Gmail inbox (and spam folder)');
-    console.log('📋 Email ID:', result.id);
-    return true;
+    console.log('📊 Found profiles with emails:', profiles?.length || 0);
+    
+    if (profiles && profiles.length > 0) {
+      console.log('👥 Profiles with emails:');
+      profiles.forEach(profile => {
+        console.log(`- ID: ${profile.id}, Name: ${profile.name}, Email: ${profile.email}`);
+      });
+    } else {
+      console.log('❌ No profiles found with email addresses');
+    }
 
-  } catch (error) {
-    console.error('❌ Error sending email:', error.message);
-    return false;
+    // Also check recent orders
+    const { data: orders, error: ordersError } = await supabase
+      .from('orders')
+      .select('id, customer_id, approval_status')
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (ordersError) {
+      console.error('❌ Error fetching orders:', ordersError);
+      return;
+    }
+
+    console.log('📦 Recent orders:');
+    orders?.forEach(order => {
+      console.log(`- Order ID: ${order.id}, Customer ID: ${order.customer_id}, Status: ${order.approval_status}`);
+    });
+
+  } catch (err) {
+    console.error('❌ Exception:', err);
   }
 }
 
-// Run the test
-testCustomerEmail().then(success => {
-  if (success) {
-    console.log('\n🎉 SUCCESS! Your email system is working!');
-    console.log('📧 Check your Gmail for the test email');
-    console.log('🚀 Now you can approve orders and customers will receive emails');
-    console.log('\n📝 Next Steps:');
-    console.log('1. Place a test order in your app');
-    console.log('2. Go to Admin → Verify Orders');
-    console.log('3. Approve the order');
-    console.log('4. Check your Gmail for the order verification email');
-  } else {
-    console.log('\n❌ Email system needs configuration');
-    console.log('🔧 Check your Resend API key');
-  }
-}); 
+testCustomerEmail(); 
