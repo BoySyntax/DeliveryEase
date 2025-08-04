@@ -188,8 +188,6 @@ export default function CustomerLayout() {
                     <span className="text-xs mt-1">{item.label}</span>
                   </NavLink>
                 ))}
-                {/* Notification Icon with Dropdown */}
-                <NotificationIcon />
               </nav>
             </div>
             {/* Mobile search bar (below logo/title) */}

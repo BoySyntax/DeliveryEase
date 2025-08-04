@@ -8,6 +8,7 @@ import Loader from '../../ui/components/Loader';
 import { toast } from 'react-hot-toast';
 import { checkBatchAutoAssignment } from '../../lib/batch-auto-assignment';
 import { orderNotificationService } from '../../lib/orderNotificationService';
+import { directEmailService } from '../../lib/directEmailService';
 
 
 type OrderStatus = Database['public']['Enums']['order_status'];
@@ -302,6 +303,45 @@ export default function VerifyOrdersPage() {
       }
 
       toast.success(`Order ${approved ? 'approved' : 'rejected'} successfully`);
+      
+      // Send email notification if order was approved
+      if (approved) {
+        try {
+          // Get customer email from profiles table
+          const { data: emailResult, error: emailError } = await supabase
+            .from('profiles')
+            .select('id, email')
+            .eq('id', orderData.customer_id)
+            .single();
+          
+          if (emailResult && emailResult.email) {
+            const customerName = profileData?.name || 'Customer';
+            
+            console.log('🔍 Sending email notification for customer:', orderData.customer_id);
+            console.log('📧 Customer email:', emailResult.email);
+            
+            // Send email notification using direct email service
+            const emailSent = await directEmailService.sendOrderVerifiedEmail(
+              orderId,
+              emailResult.email,
+              customerName
+            );
+            
+            if (emailSent) {
+              console.log('✅ Email notification sent successfully!');
+              toast.success('Order approved and email sent!');
+            } else {
+              console.error('❌ Failed to send email notification');
+              toast.error('Order approved but email failed to send');
+            }
+          } else {
+            console.log('❌ No profile found for customer:', orderData.customer_id);
+            toast.error('Order approved but no customer profile found');
+          }
+        } catch (emailError) {
+          console.error('Error sending email notification:', emailError);
+        }
+      }
       
       // Notification will be automatically created by the database trigger
       console.log('Order status updated - notification will be created automatically by trigger');

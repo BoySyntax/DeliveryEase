@@ -433,18 +433,21 @@ export interface Database {
           avatar_url: string | null
           id: string
           name: string | null
+          email: string | null
           role: Database["public"]["Enums"]["user_role"]
         }
         Insert: {
           avatar_url?: string | null
           id: string
           name?: string | null
+          email?: string | null
           role?: Database["public"]["Enums"]["user_role"]
         }
         Update: {
           avatar_url?: string | null
           id?: string
           name?: string | null
+          email?: string | null
           role?: Database["public"]["Enums"]["user_role"]
         }
         Relationships: [
@@ -581,6 +584,10 @@ export interface Database {
       get_unread_notification_count: {
         Args: Record<string, never>
         Returns: number
+      }
+      get_user_email: {
+        Args: { user_id: string }
+        Returns: string | null
       }
     }
     Enums: {

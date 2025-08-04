@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { emailService } from './emailService';
 
 export interface Notification {
   id: string;
@@ -16,6 +17,14 @@ export interface CreateNotificationData {
   message: string;
   type?: 'info' | 'success' | 'warning' | 'error';
   data?: any;
+}
+
+export interface OrderStatusEmailData {
+  orderId: string;
+  customerName: string;
+  customerEmail: string;
+  status: 'verified' | 'out_for_delivery';
+  estimatedDeliveryDate?: string;
 }
 
 class NotificationService {
@@ -216,6 +225,61 @@ class NotificationService {
   // Unsubscribe from notifications
   unsubscribeFromNotifications() {
     supabase.removeAllChannels();
+  }
+
+  // Send email notification for order status changes
+  async sendOrderStatusEmail(emailData: OrderStatusEmailData): Promise<boolean> {
+    try {
+      // First, try to call the edge function directly
+      const { data, error } = await supabase.functions.invoke('send-order-notification', {
+        body: {
+          orderId: emailData.orderId,
+          customerName: emailData.customerName,
+          customerEmail: emailData.customerEmail,
+          status: emailData.status,
+          estimatedDeliveryDate: emailData.estimatedDeliveryDate
+        }
+      });
+
+      if (error) {
+        console.error('Error calling edge function:', error);
+        // Fallback to local email service
+        return await emailService.sendOrderStatusEmail(emailData);
+      }
+
+      console.log('Email notification sent via edge function:', data);
+      return true;
+    } catch (error) {
+      console.error('Error sending order status email:', error);
+      // Fallback to local email service
+      return await emailService.sendOrderStatusEmail(emailData);
+    }
+  }
+
+  // Send order verified email
+  async sendOrderVerifiedEmail(orderId: string, customerName: string, customerEmail: string): Promise<boolean> {
+    return this.sendOrderStatusEmail({
+      orderId,
+      customerName,
+      customerEmail,
+      status: 'verified'
+    });
+  }
+
+  // Send order out for delivery email
+  async sendOrderOutForDeliveryEmail(
+    orderId: string, 
+    customerName: string, 
+    customerEmail: string, 
+    estimatedDeliveryDate?: string
+  ): Promise<boolean> {
+    return this.sendOrderStatusEmail({
+      orderId,
+      customerName,
+      customerEmail,
+      status: 'out_for_delivery',
+      estimatedDeliveryDate
+    });
   }
 }
 
