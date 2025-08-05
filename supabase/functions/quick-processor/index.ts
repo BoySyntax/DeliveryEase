@@ -22,7 +22,13 @@ serve(async (req) => {
     const body = await req.json()
     console.log('Quick-processor received:', body);
 
-    const { orderId, customerName, customerEmail, status, estimatedDeliveryDate } = body;
+    const { orderId, customerName, customerEmail, status, estimatedDeliveryDate, orderItems, totalAmount } = body;
+    
+    // Log additional details if provided
+    if (orderItems && orderItems.length > 0) {
+      console.log('Order items included:', orderItems.length, 'items');
+      console.log('Total amount:', totalAmount);
+    }
 
     if (!orderId || !customerName || !customerEmail || !status) {
       console.log('Missing required fields');
@@ -148,7 +154,34 @@ serve(async (req) => {
               <p style="margin: 0; color: #64748b;">
                 <strong>Order ID:</strong> #${orderId.slice(0, 8).toUpperCase()}<br>
                 <strong>Order Date:</strong> ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                ${totalAmount ? `<br><strong>Total Amount:</strong> ₱${totalAmount.toFixed(2)}` : ''}
               </p>
+              
+              ${orderItems && orderItems.length > 0 ? `
+                <div style="margin-top: 20px;">
+                  <h4 style="margin: 0 0 10px 0; color: #1e293b; font-size: 16px;">Order Items:</h4>
+                  <div style="background: white; border-radius: 8px; overflow: hidden;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                      <thead style="background-color: #f8fafc;">
+                        <tr>
+                          <th style="padding: 12px; text-align: left; font-size: 12px; color: #64748b; font-weight: 600;">Item</th>
+                          <th style="padding: 12px; text-align: center; font-size: 12px; color: #64748b; font-weight: 600;">Qty</th>
+                          <th style="padding: 12px; text-align: right; font-size: 12px; color: #64748b; font-weight: 600;">Price</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${orderItems.map(item => `
+                          <tr style="border-top: 1px solid #e2e8f0;">
+                            <td style="padding: 12px; font-size: 14px; color: #1e293b;">${item.productName || 'Product'}</td>
+                            <td style="padding: 12px; text-align: center; font-size: 14px; color: #64748b;">${item.quantity}</td>
+                            <td style="padding: 12px; text-align: right; font-size: 14px; color: #1e293b;">₱${(item.price || 0).toFixed(2)}</td>
+                          </tr>
+                        `).join('')}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ` : ''}
             </div>
 
             <div style="text-align: center; margin: 30px 0;">
@@ -178,7 +211,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'onboarding@resend.dev',
+        from: 'noreply@fordago.site', // Use custom domain
         to: customerEmail,
         subject: subject,
         html: htmlContent,
