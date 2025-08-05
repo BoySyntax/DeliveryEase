@@ -7,8 +7,7 @@ import { Database } from '../../lib/database.types';
 import Loader from '../../ui/components/Loader';
 import { toast } from 'react-hot-toast';
 import { checkBatchAutoAssignment } from '../../lib/batch-auto-assignment';
-import { orderNotificationService } from '../../lib/orderNotificationService';
-import { directEmailService } from '../../lib/directEmailService';
+import { EmailService } from '../../lib/emailService';
 
 
 type OrderStatus = Database['public']['Enums']['order_status'];
@@ -242,7 +241,14 @@ export default function VerifyOrdersPage() {
         .select(`
           id,
           customer_id,
-          total
+          total,
+          items:order_items(
+            quantity,
+            price,
+            product:products(
+              name
+            )
+          )
         `)
         .eq('id', orderId)
         .single();
@@ -320,12 +326,8 @@ export default function VerifyOrdersPage() {
             console.log('🔍 Sending email notification for customer:', orderData.customer_id);
             console.log('📧 Customer email:', emailResult.email);
             
-            // Send email notification using direct email service
-            const emailSent = await directEmailService.sendOrderVerifiedEmail(
-              orderId,
-              emailResult.email,
-              customerName
-            );
+            // Send email notification using EmailService
+            const emailSent = await EmailService.sendOrderVerifiedEmail(orderId);
             
             if (emailSent) {
               console.log('✅ Email notification sent successfully!');

@@ -9,6 +9,12 @@ export interface DirectEmailData {
   customerEmail: string;
   status: 'verified' | 'out_for_delivery';
   estimatedDeliveryDate?: string;
+  orderItems?: Array<{
+    productName: string;
+    quantity: number;
+    price: number;
+  }>;
+  totalAmount?: number;
 }
 
 class DirectEmailService {
@@ -48,14 +54,22 @@ class DirectEmailService {
   }
 
   // Send order verified email
-  async sendOrderVerifiedEmail(orderId: string, customerEmail: string, customerName: string): Promise<boolean> {
+  async sendOrderVerifiedEmail(
+    orderId: string, 
+    customerEmail: string, 
+    customerName: string,
+    orderItems?: Array<{productName: string; quantity: number; price: number}>,
+    totalAmount?: number
+  ): Promise<boolean> {
     console.log('🚀 Sending verification email via Edge Function...');
     
     return this.sendOrderEmail({
       orderId,
       customerName,
       customerEmail,
-      status: 'verified'
+      status: 'verified',
+      orderItems,
+      totalAmount
     });
   }
 
@@ -64,7 +78,9 @@ class DirectEmailService {
     orderId: string, 
     customerEmail: string,
     customerName: string, 
-    estimatedDeliveryDate?: string
+    estimatedDeliveryDate?: string,
+    orderItems?: Array<{productName: string; quantity: number; price: number}>,
+    totalAmount?: number
   ): Promise<boolean> {
     console.log('🚀 Sending delivery email via Edge Function...');
     
@@ -73,7 +89,9 @@ class DirectEmailService {
       customerName,
       customerEmail,
       status: 'out_for_delivery',
-      estimatedDeliveryDate
+      estimatedDeliveryDate,
+      orderItems,
+      totalAmount
     });
   }
 }
