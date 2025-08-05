@@ -24,7 +24,7 @@ class DirectEmailService {
       console.log('📧 Sending email via Edge Function to:', emailData.customerEmail);
 
       // Call our Supabase Edge Function instead of Resend API directly
-      const { data, error } = await supabase.functions.invoke('basic-test', {
+      const { data, error } = await supabase.functions.invoke('simple-order-email', {
         body: {
           orderId: emailData.orderId,
           customerName: emailData.customerName,
