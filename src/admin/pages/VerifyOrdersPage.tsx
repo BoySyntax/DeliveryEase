@@ -8,6 +8,7 @@ import Loader from '../../ui/components/Loader';
 import { toast } from 'react-hot-toast';
 import { checkBatchAutoAssignment } from '../../lib/batch-auto-assignment';
 import { directEmailService } from '../../lib/directEmailService';
+import { testEmailService } from '../../lib/testEmailService';
 
 
 type OrderStatus = Database['public']['Enums']['order_status'];
@@ -418,6 +419,27 @@ export default function VerifyOrdersPage() {
 
   return (
     <div className="space-y-6">
+      {/* Test Function Button */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <h3 className="text-lg font-medium text-blue-900 mb-2">Debug Test</h3>
+        <p className="text-sm text-blue-700 mb-3">Test if Edge Functions are working at all</p>
+        <button
+          onClick={async () => {
+            console.log('🧪 Testing function...');
+            const result = await testEmailService.testFunction();
+            console.log('🧪 Test result:', result);
+            if (result.success) {
+              toast.success('✅ Test function works!');
+            } else {
+              toast.error('❌ Test function failed: ' + (result.error?.message || 'Unknown error'));
+            }
+          }}
+          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+        >
+          Test Edge Function
+        </button>
+      </div>
+      
       <div className="grid gap-4">
         {orders.map((order) => (
           <Card key={order.id} className="overflow-hidden">
