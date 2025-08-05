@@ -6,7 +6,7 @@ export interface OrderNotificationData {
   estimatedDeliveryDate?: string;
 }
 
-class EmailService {
+class EmailNotificationService {
   async sendOrderStatusUpdate(data: OrderNotificationData): Promise<boolean> {
     try {
       console.log('📧 Sending order status update:', data);
@@ -47,4 +47,4 @@ class EmailService {
   }
 }
 
-export const EmailService = new EmailService(); 
+export const EmailService = new EmailNotificationService(); 
