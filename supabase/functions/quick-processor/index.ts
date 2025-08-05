@@ -21,8 +21,7 @@ interface EmailNotificationData {
   customerEmail: string;
   status: 'verified' | 'out_for_delivery';
   estimatedDeliveryDate?: string;
-  orderItems?: OrderItem[];
-  totalAmount?: number;
+  orderDetails?: string;
 }
 
 async function sendEmailViaResend(emailData: EmailNotificationData): Promise<boolean> {
@@ -77,21 +76,11 @@ function createEmailContent(emailData: EmailNotificationData): string {
     day: 'numeric'
   });
 
-  const itemsHtml = emailData.orderItems?.map(item => `
-    <tr>
-      <td style="padding: 12px; border-bottom: 1px solid #eee;">
-        <div style="display: flex; align-items: center;">
-          <div>
-            <div style="font-weight: 600; color: #333;">${item.productName}</div>
-            <div style="color: #666; font-size: 14px;">Qty: ${item.quantity}</div>
-          </div>
-        </div>
-      </td>
-      <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: right; font-weight: 600;">
-        ₱${item.price.toFixed(2)}
-      </td>
-    </tr>
-  `).join('') || '<tr><td colspan="2" style="padding: 12px; text-align: center; color: #666;">No items available</td></tr>';
+  const orderDetailsHtml = emailData.orderDetails ? 
+    `<div style="background-color: #f8fafc; border-radius: 12px; padding: 20px; margin: 20px 0;">
+      <h3 style="margin: 0 0 15px 0; color: #1e293b;">Order Items</h3>
+      <pre style="margin: 0; color: #64748b; font-family: inherit; white-space: pre-wrap;">${emailData.orderDetails}</pre>
+    </div>` : '';
 
   const statusMessage = emailData.status === 'verified' 
     ? `Great news! Your payment has been verified and your order is being prepared for delivery.`
@@ -217,31 +206,11 @@ function createEmailContent(emailData: EmailNotificationData): string {
             <h3 style="margin: 0 0 15px 0; color: #1e293b;">Order Details</h3>
             <p style="margin: 0; color: #64748b;">
               <strong>Order ID:</strong> #${emailData.orderId.slice(0, 8).toUpperCase()}<br>
-              <strong>Order Date:</strong> ${orderDate}<br>
-              <strong>Total Amount:</strong> ₱${emailData.totalAmount?.toFixed(2) || '0.00'}
+              <strong>Order Date:</strong> ${orderDate}
             </p>
           </div>
 
-          <h3 style="margin: 30px 0 15px 0; color: #1e293b;">Order Items</h3>
-          <table class="order-table">
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th style="text-align: right;">Price</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${itemsHtml}
-              <tr class="total-row">
-                <td style="padding: 16px 12px; border-top: 2px solid #e2e8f0;">
-                  <strong>Total</strong>
-                </td>
-                <td style="padding: 16px 12px; border-top: 2px solid #e2e8f0; text-align: right;">
-                  <strong>₱${emailData.totalAmount?.toFixed(2) || '0.00'}</strong>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          ${orderDetailsHtml}
 
           <div style="text-align: center; margin: 30px 0;">
             <a href="#" class="cta-button">Track Your Order</a>
@@ -268,7 +237,7 @@ serve(async (req) => {
   }
 
   try {
-    const { orderId, customerName, customerEmail, status, estimatedDeliveryDate, orderItems, totalAmount } = await req.json()
+    const { orderId, customerName, customerEmail, status, estimatedDeliveryDate, orderDetails } = await req.json()
 
     if (!orderId || !customerName || !customerEmail || !status) {
       return new Response(
@@ -296,8 +265,7 @@ serve(async (req) => {
       customerEmail,
       status,
       estimatedDeliveryDate,
-      orderItems,
-      totalAmount
+      orderDetails
     };
 
     const success = await sendEmailViaResend(emailData);
