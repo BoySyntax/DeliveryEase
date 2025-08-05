@@ -17,10 +17,10 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Function called successfully');
+    console.log('Quick-processor function called');
     
     const body = await req.json()
-    console.log('Received request body:', body);
+    console.log('Quick-processor received:', body);
 
     const { orderId, customerName, customerEmail, status, estimatedDeliveryDate } = body;
 
@@ -50,7 +50,7 @@ serve(async (req) => {
       )
     }
 
-    // Create simple email content
+    // Create email content
     const subject = status === 'verified' ? '✅ Order Payment Verified - DeliveryEase' : '🚚 Order Out for Delivery - DeliveryEase';
     const htmlContent = `
       <!DOCTYPE html>
@@ -58,12 +58,112 @@ serve(async (req) => {
       <head>
         <meta charset="utf-8">
         <title>${subject}</title>
+        <style>
+          body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            line-height: 1.6; 
+            color: #333; 
+            margin: 0; 
+            padding: 0; 
+            background-color: #f5f5f5;
+          }
+          .container { 
+            max-width: 600px; 
+            margin: 0 auto; 
+            background-color: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          }
+          .header { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; 
+            padding: 30px 20px; 
+            text-align: center; 
+          }
+          .header h1 { 
+            margin: 0; 
+            font-size: 28px; 
+            font-weight: 700;
+          }
+          .content { 
+            padding: 30px 20px; 
+          }
+          .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 20px;
+            background-color: ${status === 'verified' ? '#10b981' : '#3b82f6'};
+            color: white;
+          }
+          .order-info {
+            background-color: #f8fafc;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+          }
+          .footer { 
+            text-align: center; 
+            padding: 30px 20px; 
+            color: #64748b; 
+            font-size: 14px;
+            background-color: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+          }
+          .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            margin: 20px 0;
+          }
+        </style>
       </head>
       <body>
-        <h1>${subject}</h1>
-        <p>Hi ${customerName}!</p>
-        <p>Your order #${orderId.slice(0, 8).toUpperCase()} has been ${status === 'verified' ? 'verified' : 'sent for delivery'}.</p>
-        <p>Thank you for choosing DeliveryEase!</p>
+        <div class="container">
+          <div class="header">
+            <h1>🚚 DeliveryEase</h1>
+          </div>
+          <div class="content">
+            <div class="status-badge">
+              ${status === 'verified' ? 'Payment Verified' : 'Out for Delivery'}
+            </div>
+            
+            <h2 style="margin: 0 0 10px 0; color: #1e293b;">Hi ${customerName}!</h2>
+            <p style="margin: 0 0 20px 0; color: #475569; font-size: 16px;">
+              ${status === 'verified' 
+                ? 'Great news! Your payment has been verified and your order is being prepared for delivery.'
+                : `Your order is now out for delivery and will arrive ${estimatedDeliveryDate ? `on ${estimatedDeliveryDate}` : 'soon'}!`
+              }
+            </p>
+
+            <div class="order-info">
+              <h3 style="margin: 0 0 15px 0; color: #1e293b;">Order Details</h3>
+              <p style="margin: 0; color: #64748b;">
+                <strong>Order ID:</strong> #${orderId.slice(0, 8).toUpperCase()}<br>
+                <strong>Order Date:</strong> ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+              </p>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="#" class="cta-button">Track Your Order</a>
+            </div>
+
+            <p style="color: #64748b; font-size: 14px; margin: 20px 0 0 0;">
+              Thank you for choosing DeliveryEase! We're committed to delivering your order safely and on time.
+            </p>
+          </div>
+          <div class="footer">
+            <p>This is an automated message from DeliveryEase. Please do not reply to this email.</p>
+            <p>Need help? Contact our support team at support@deliveryease.com</p>
+          </div>
+        </div>
       </body>
       </html>
     `;
