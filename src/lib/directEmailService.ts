@@ -24,13 +24,15 @@ class DirectEmailService {
       console.log('📧 Sending email via Edge Function to:', emailData.customerEmail);
 
       // Call our Supabase Edge Function instead of Resend API directly
-      const { data, error } = await supabase.functions.invoke('quick-processor', {
+      const { data, error } = await supabase.functions.invoke('send-order-notification', {
         body: {
           orderId: emailData.orderId,
           customerName: emailData.customerName,
           customerEmail: emailData.customerEmail,
           status: emailData.status,
-          estimatedDeliveryDate: emailData.estimatedDeliveryDate
+          estimatedDeliveryDate: emailData.estimatedDeliveryDate,
+          orderItems: emailData.orderItems,
+          totalAmount: emailData.totalAmount
         }
       });
 

@@ -12,28 +12,22 @@ const corsHeaders = {
 }
 
 interface OrderItem {
+  productName: string;
   quantity: number;
   price: number;
-  product: {
-    name: string;
-    image_url?: string;
-  };
-}
-
-interface OrderDetails {
-  id: string;
-  total: number;
-  created_at: string;
-  items: OrderItem[];
 }
 
 interface EmailNotificationData {
   orderId: string;
+  customerName: string;
+  customerEmail: string;
   status: 'verified' | 'out_for_delivery';
   estimatedDeliveryDate?: string;
+  orderItems?: OrderItem[];
+  totalAmount?: number;
 }
 
-async function sendEmailViaResend(emailData: EmailNotificationData, orderDetails: OrderDetails, customerEmail: string, customerName: string): Promise<boolean> {
+async function sendEmailViaResend(emailData: EmailNotificationData): Promise<boolean> {
   try {
     const apiKey = Deno.env.get('RESEND_API_KEY');
     if (!apiKey) {
@@ -42,7 +36,7 @@ async function sendEmailViaResend(emailData: EmailNotificationData, orderDetails
     }
 
     const subject = createEmailSubject(emailData.status);
-    const htmlContent = createEmailContent(emailData, orderDetails, customerName);
+    const htmlContent = createEmailContent(emailData);
 
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -52,7 +46,7 @@ async function sendEmailViaResend(emailData: EmailNotificationData, orderDetails
       },
       body: JSON.stringify({
         from: 'onboarding@resend.dev',
-        to: customerEmail,
+        to: emailData.customerEmail,
         subject: subject,
         html: htmlContent,
       }),
@@ -78,20 +72,19 @@ function createEmailSubject(status: string): string {
   return `${emoji} Order ${statusText} - DeliveryEase`;
 }
 
-function createEmailContent(emailData: EmailNotificationData, orderDetails: OrderDetails, customerName: string): string {
-  const orderDate = new Date(orderDetails.created_at).toLocaleDateString('en-US', {
+function createEmailContent(emailData: EmailNotificationData): string {
+  const orderDate = new Date().toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric'
   });
 
-  const itemsHtml = orderDetails.items.map(item => `
+  const itemsHtml = emailData.orderItems?.map(item => `
     <tr>
       <td style="padding: 12px; border-bottom: 1px solid #eee;">
         <div style="display: flex; align-items: center;">
-          ${item.product.image_url ? `<img src="${item.product.image_url}" alt="${item.product.name}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px; margin-right: 12px;">` : ''}
           <div>
-            <div style="font-weight: 600; color: #333;">${item.product.name}</div>
+            <div style="font-weight: 600; color: #333;">${item.productName}</div>
             <div style="color: #666; font-size: 14px;">Qty: ${item.quantity}</div>
           </div>
         </div>
@@ -100,7 +93,7 @@ function createEmailContent(emailData: EmailNotificationData, orderDetails: Orde
         ₱${item.price.toFixed(2)}
       </td>
     </tr>
-  `).join('');
+  `).join('') || '<tr><td colspan="2" style="padding: 12px; text-align: center; color: #666;">No items available</td></tr>';
 
   const statusMessage = emailData.status === 'verified' 
     ? `Great news! Your payment has been verified and your order is being prepared for delivery.`
@@ -217,7 +210,7 @@ function createEmailContent(emailData: EmailNotificationData, orderDetails: Orde
             ${emailData.status === 'verified' ? 'Payment Verified' : 'Out for Delivery'}
           </div>
           
-          <h2 style="margin: 0 0 10px 0; color: #1e293b;">Hi ${customerName}!</h2>
+          <h2 style="margin: 0 0 10px 0; color: #1e293b;">Hi ${emailData.customerName}!</h2>
           <p style="margin: 0 0 20px 0; color: #475569; font-size: 16px;">
             ${statusMessage}
           </p>
@@ -225,9 +218,9 @@ function createEmailContent(emailData: EmailNotificationData, orderDetails: Orde
           <div class="order-info">
             <h3 style="margin: 0 0 15px 0; color: #1e293b;">Order Details</h3>
             <p style="margin: 0; color: #64748b;">
-              <strong>Order ID:</strong> #${orderDetails.id.slice(0, 8).toUpperCase()}<br>
+              <strong>Order ID:</strong> #${emailData.orderId.slice(0, 8).toUpperCase()}<br>
               <strong>Order Date:</strong> ${orderDate}<br>
-              <strong>Total Amount:</strong> ₱${orderDetails.total.toFixed(2)}
+              <strong>Total Amount:</strong> ₱${emailData.totalAmount?.toFixed(2) || '0.00'}
             </p>
           </div>
 
@@ -246,7 +239,7 @@ function createEmailContent(emailData: EmailNotificationData, orderDetails: Orde
                   <strong>Total</strong>
                 </td>
                 <td style="padding: 16px 12px; border-top: 2px solid #e2e8f0; text-align: right;">
-                  <strong>₱${orderDetails.total.toFixed(2)}</strong>
+                  <strong>₱${emailData.totalAmount?.toFixed(2) || '0.00'}</strong>
                 </td>
               </tr>
             </tbody>
@@ -277,11 +270,11 @@ serve(async (req) => {
   }
 
   try {
-    const { orderId, status, estimatedDeliveryDate } = await req.json()
+    const { orderId, customerName, customerEmail, status, estimatedDeliveryDate, orderItems, totalAmount } = await req.json()
 
-    if (!orderId || !status) {
+    if (!orderId || !customerName || !customerEmail || !status) {
       return new Response(
-        JSON.stringify({ error: 'Missing required fields: orderId, status' }),
+        JSON.stringify({ error: 'Missing required fields: orderId, customerName, customerEmail, status' }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -299,78 +292,17 @@ serve(async (req) => {
       )
     }
 
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('Supabase environment variables not found');
-      return new Response(
-        JSON.stringify({ error: 'Server configuration error' }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Fetch order details with items
-    const { data: orderData, error: orderError } = await supabase
-      .from('orders')
-      .select(`
-        id,
-        total,
-        created_at,
-        customer_id,
-        items:order_items (
-          quantity,
-          price,
-          product:products (
-            name,
-            image_url
-          )
-        )
-      `)
-      .eq('id', orderId)
-      .single();
-
-    if (orderError || !orderData) {
-      console.error('Error fetching order:', orderError);
-      return new Response(
-        JSON.stringify({ error: 'Order not found' }),
-        { 
-          status: 404, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
-    }
-
-    // Fetch customer details using admin API
-    const { data: userData, error: userError } = await supabase.auth.admin.getUserById(orderData.customer_id);
-    
-    if (userError || !userData.user) {
-      console.error('Error fetching user:', userError);
-      return new Response(
-        JSON.stringify({ error: 'Customer not found' }),
-        { 
-          status: 404, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
-    }
-
-    const customerEmail = userData.user.email;
-    const customerName = userData.user.user_metadata?.full_name || userData.user.email?.split('@')[0] || 'Customer';
-
     const emailData: EmailNotificationData = {
       orderId,
+      customerName,
+      customerEmail,
       status,
-      estimatedDeliveryDate
+      estimatedDeliveryDate,
+      orderItems,
+      totalAmount
     };
 
-    const success = await sendEmailViaResend(emailData, orderData, customerEmail, customerName);
+    const success = await sendEmailViaResend(emailData);
 
     if (success) {
       return new Response(
