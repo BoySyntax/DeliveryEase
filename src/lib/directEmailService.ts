@@ -23,13 +23,6 @@ class DirectEmailService {
     try {
       console.log('📧 Sending email via Edge Function to:', emailData.customerEmail);
 
-      // Create order details text for the email
-      const orderDetailsText = emailData.orderItems?.map(item => 
-        `• ${item.productName} - Qty: ${item.quantity} - ₱${item.price.toFixed(2)}`
-      ).join('\n') || 'No items available';
-      
-      const totalText = emailData.totalAmount ? `\n\nTotal Amount: ₱${emailData.totalAmount.toFixed(2)}` : '';
-
       // Call our Supabase Edge Function instead of Resend API directly
       const { data, error } = await supabase.functions.invoke('quick-processor', {
         body: {
@@ -37,8 +30,7 @@ class DirectEmailService {
           customerName: emailData.customerName,
           customerEmail: emailData.customerEmail,
           status: emailData.status,
-          estimatedDeliveryDate: emailData.estimatedDeliveryDate,
-          orderDetails: orderDetailsText + totalText
+          estimatedDeliveryDate: emailData.estimatedDeliveryDate
         }
       });
 
