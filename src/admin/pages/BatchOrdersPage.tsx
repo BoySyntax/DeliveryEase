@@ -8,6 +8,7 @@ import Loader from '../../ui/components/Loader';
 import { toast } from 'react-hot-toast';
 import Select from '../../ui/components/Select';
 import { Package, Users, MapPin, Weight, Truck, RefreshCw, Zap, AlertTriangle } from 'lucide-react';
+import { batchAssignmentEmailService } from '../../lib/batchAssignmentEmailService';
 
 type OrderStatus = Database['public']['Enums']['order_status'];
 
@@ -208,18 +209,30 @@ export default function BatchOrdersPage() {
       const weight = calculateBatchWeight(batch);
       console.log(`✅ Batch ${batch.batch_number} auto-assigned to ${selectedDriver.name}`);
       
-             // Show success toast with batch details
-       toast.success(
-         `🚚 Batch ${batch.batch_number} auto-assigned to ${selectedDriver.name}!\n` +
-         `📦 ${batch.orders.length} orders, ${weight.toFixed(1)}kg total`,
-         { 
-           duration: 6000,
-           icon: '🤖'
-         }
-       );
+      // Send batch assignment email to customers
+      try {
+        const emailSent = await batchAssignmentEmailService.sendBatchAssignmentEmailForBatch(batch.id, selectedDriver.id);
+        if (emailSent) {
+          console.log('📧 Batch assignment email sent successfully');
+        } else {
+          console.error('❌ Failed to send batch assignment email');
+        }
+      } catch (emailError) {
+        console.error('❌ Error sending batch assignment email:', emailError);
+      }
+      
+      // Show success toast with batch details
+      toast.success(
+        `🚚 Batch ${batch.batch_number} auto-assigned to ${selectedDriver.name}!\n` +
+        `📦 ${batch.orders.length} orders, ${weight.toFixed(1)}kg total`,
+        { 
+          duration: 6000,
+          icon: '🤖'
+        }
+      );
 
-       // Reload data to update UI
-       await loadData();
+      // Reload data to update UI
+      await loadData();
 
     } catch (error) {
       console.error('Error in auto-assignment:', error);
@@ -379,6 +392,18 @@ export default function BatchOrdersPage() {
 
       if (error) throw error;
 
+      // Send batch assignment email to customers
+      try {
+        const emailSent = await batchAssignmentEmailService.sendBatchAssignmentEmailForBatch(batchId, driverId);
+        if (emailSent) {
+          console.log('📧 Batch assignment email sent successfully');
+        } else {
+          console.error('❌ Failed to send batch assignment email');
+        }
+      } catch (emailError) {
+        console.error('❌ Error sending batch assignment email:', emailError);
+      }
+
       toast.success('Driver assigned successfully');
       loadData();
     } catch (error) {
@@ -419,27 +444,7 @@ export default function BatchOrdersPage() {
       
 
 
-      {/* Auto-Assignment Alert */}
-      {batchesReadyForAssignment.length > 0 && (
-        <div className="bg-gradient-to-r from-purple-50 to-purple-100 border-2 border-purple-200 rounded-lg p-4">
-          <div className="flex items-center gap-3">
-            <div className="bg-purple-500 p-2 rounded-full">
-              <Zap className="w-5 h-5 text-white animate-pulse" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold text-purple-900">
-                🤖 {batchesReadyForAssignment.length} Batch{batchesReadyForAssignment.length !== 1 ? 'es' : ''} Ready for Auto-Assignment
-              </h3>
-              <p className="text-purple-700 text-sm">
-                These batches have reached their maximum capacity and will be automatically assigned to available drivers.
-              </p>
-              <p className="text-purple-600 text-xs mt-1 font-medium">
-                ✨ The system automatically manages batching and consolidation!
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+
 
 
 
