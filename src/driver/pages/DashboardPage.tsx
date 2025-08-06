@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useProfile } from '../../lib/auth';
 import { toast } from 'react-hot-toast';
+import { directEmailService } from '../../lib/directEmailService';
 
 interface BatchStats {
   assignedBatches: number;
@@ -50,6 +51,7 @@ interface ActiveBatch {
       street_address: string;
     } | null;
     customer: {
+      id: string;
       name: string | null;
     } | null;
     items?: Array<{
@@ -81,6 +83,7 @@ interface CompletedBatch {
       street_address: string;
     } | null;
     customer: {
+      id: string;
       name: string | null;
     } | null;
     items?: Array<{
@@ -312,7 +315,7 @@ export default function DashboardPage() {
             total,
             delivery_status,
             delivery_address,
-            customer:profiles!orders_customer_id_fkey(name),
+            customer:profiles!orders_customer_id_fkey(id, name),
             items:order_items(
               quantity,
               price,
@@ -400,7 +403,7 @@ export default function DashboardPage() {
             total,
             delivery_status,
             delivery_address,
-            customer:profiles!orders_customer_id_fkey(name),
+            customer:profiles!orders_customer_id_fkey(id, name),
             items:order_items(
               quantity,
               price,
@@ -465,7 +468,7 @@ export default function DashboardPage() {
               id,
               total,
               delivery_address,
-              customer:profiles!orders_customer_id_fkey(name)
+              customer:profiles!orders_customer_id_fkey(id, name)
             `)
             .eq('batch_id', batch.id)
             .eq('approval_status', 'approved');
@@ -593,18 +596,84 @@ export default function DashboardPage() {
     if (!activeBatch) return;
 
     try {
-      const { error } = await supabase
+      // Update batch status to delivering
+      const { error: batchError } = await supabase
         .from('order_batches')
         .update({ status: 'delivering' })
         .eq('id', activeBatch.id);
 
-      if (error) throw error;
+      if (batchError) throw batchError;
 
-      // Notifications will be automatically created by the database trigger when delivery_status changes
-      console.log('Batch delivery started - notifications will be created automatically by trigger');
+      // Update all orders in the batch to delivering status
+      const orderIds = activeBatch.orders.map(order => order.id);
+      const { error: ordersError } = await supabase
+        .from('orders')
+        .update({ delivery_status: 'delivering' })
+        .in('id', orderIds);
+
+      if (ordersError) throw ordersError;
+
+      // Send out_for_delivery emails to all customers
+      let emailSuccessCount = 0;
+      const totalEmails = activeBatch.orders.length;
+
+      for (const order of activeBatch.orders) {
+        try {
+          // Get customer email
+          const { data: customerData, error: customerError } = await supabase
+            .from('profiles')
+            .select('email')
+            .eq('id', order.customer?.id || '')
+            .single();
+
+          if (customerError || !customerData?.email) {
+            console.error('❌ No customer email found for order:', order.id);
+            continue;
+          }
+
+          // Calculate estimated delivery date (1-2 hours from now)
+          const estimatedDeliveryDate = new Date();
+          estimatedDeliveryDate.setHours(estimatedDeliveryDate.getHours() + 2);
+          const formattedDate = estimatedDeliveryDate.toLocaleDateString('en-US', { 
+            weekday: 'long',
+            month: 'short', 
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+
+          // Send out_for_delivery email
+          const emailSent = await directEmailService.sendOrderOutForDeliveryEmail(
+            order.id,
+            customerData.email,
+            order.customer?.name || 'Customer',
+            formattedDate,
+            order.items?.map(item => ({
+              productName: item.product?.name || 'Unknown Product',
+              quantity: item.quantity,
+              price: item.price
+            })) || [],
+            order.total
+          );
+
+          if (emailSent) {
+            emailSuccessCount++;
+            console.log('✅ Out for delivery email sent to:', customerData.email);
+          } else {
+            console.error('❌ Failed to send out for delivery email to:', customerData.email);
+          }
+
+          // Add a small delay between emails
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (emailError) {
+          console.error('❌ Error sending email for order:', order.id, emailError);
+        }
+      }
+
+      console.log(`📧 Out for delivery emails sent: ${emailSuccessCount}/${totalEmails} successful`);
 
       setActiveBatch({ ...activeBatch, status: 'delivering' });
-      toast.success('🚚 Delivery started! Safe driving!');
+      toast.success(`🚚 Delivery started! ${emailSuccessCount} customers notified. Safe driving!`);
     } catch (error) {
       console.error('Error starting delivery:', error);
       toast.error('Failed to start delivery');

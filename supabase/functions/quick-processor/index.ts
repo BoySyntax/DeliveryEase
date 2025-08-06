@@ -21,6 +21,9 @@ serve(async (req) => {
     
     const body = await req.json()
     console.log('Quick-processor received:', body);
+    console.log('Status:', body.status);
+    console.log('OrderId:', body.orderId);
+    console.log('CustomerEmail:', body.customerEmail);
 
     const { orderId, customerName, customerEmail, status, estimatedDeliveryDate, orderItems, totalAmount, batchId, batchNumber, driverName, barangay, orderCount, totalWeight } = body;
 
@@ -36,7 +39,7 @@ serve(async (req) => {
           }
         )
       }
-    } else {
+    } else if (status === 'verified' || status === 'out_for_delivery') {
       // Handle regular order emails
       if (!orderId || !customerName || !customerEmail || !status) {
         console.log('Missing required fields for order email');
@@ -48,6 +51,15 @@ serve(async (req) => {
           }
         )
       }
+    } else {
+      console.log('Unknown status:', status);
+      return new Response(
+        JSON.stringify({ error: 'Unknown email status' }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
     }
 
     // Check if Resend API key exists
