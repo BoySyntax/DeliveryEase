@@ -246,9 +246,7 @@ serve(async (req) => {
                 </div>
               ` : ''}
 
-              <div style="text-align: center; margin: 30px 0;">
-                <a href="#" class="cta-button">Track Your Order</a>
-              </div>
+              
 
               <p style="color: #64748b; font-size: 14px; margin: 20px 0 0 0;">
                 Thank you for choosing DeliveryEase! We're committed to delivering your order safely and on time.
@@ -364,9 +362,7 @@ serve(async (req) => {
                 </p>
               </div>
 
-              <div style="text-align: center; margin: 30px 0;">
-                <a href="#" class="cta-button">Track Your Order</a>
-              </div>
+              
 
               <p style="color: #64748b; font-size: 14px; margin: 20px 0 0 0;">
                 Thank you for choosing DeliveryEase! We're committed to delivering your order safely and on time.
@@ -386,7 +382,7 @@ serve(async (req) => {
 
     // Send email via Resend
     const emailData: any = {
-      from: 'onboarding@resend.dev',
+      from: 'noreply@fordago.site',
       to: customerEmail,
       subject: subject,
       html: htmlContent,

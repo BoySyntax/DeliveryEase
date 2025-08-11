@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingBag, ArrowRight, ShoppingCart, Loader2, Bell, Package, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowRight, ShoppingCart, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Card, CardContent } from '../../ui/components/Card';
 import Button from '../../ui/components/Button';
 import { formatCurrency } from '../../lib/utils';
-import Loader from '../../ui/components/Loader';
+
 import { toast } from 'react-hot-toast';
 
 type Category = {
@@ -32,8 +32,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [addingToCart, setAddingToCart] = useState<string | null>(null);
   const navigate = useNavigate();
-  const [cartCount, setCartCount] = useState(0);
-  const [orderCount, setOrderCount] = useState(0);
+
 
   const [currentCategoryPage, setCurrentCategoryPage] = useState(0);
   const categoriesScrollRef = useRef<HTMLDivElement>(null);
@@ -94,34 +93,7 @@ export default function HomePage() {
     loadData();
   }, []);
 
-  useEffect(() => {
-    async function fetchStats() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      // Cart count
-      const { data: cart } = await supabase
-        .from('carts')
-        .select('id')
-        .eq('customer_id', user.id)
-        .single();
-      if (cart) {
-        const { data: items } = await supabase
-          .from('cart_items')
-          .select('id')
-          .eq('cart_id', cart.id);
-        setCartCount(items ? items.length : 0);
-      }
-      // Orders count
-      const { data: orders } = await supabase
-        .from('orders')
-        .select('id')
-        .eq('customer_id', user.id)
-        .in('order_status_code', ['pending', 'verified', 'out_for_delivery']);
-      setOrderCount(orders ? orders.length : 0);
 
-    }
-    fetchStats();
-  }, []);
 
   const totalPages = Math.ceil(categories.length / categoriesPerPage);
 
@@ -149,7 +121,6 @@ export default function HomePage() {
 
     const handleScroll = () => {
       const scrollLeft = container.scrollLeft;
-      const containerWidth = container.clientWidth;
       const totalPages = Math.ceil(categories.length / categoriesPerPage);
       const itemWidth = container.scrollWidth / totalPages;
       
@@ -172,7 +143,7 @@ export default function HomePage() {
       }
 
       // Get or create cart in a single query
-      const { data: cart, error: cartError } = await supabase
+      const { data: cart } = await supabase
         .from('carts')
         .select('id')
         .eq('customer_id', user.id)
@@ -194,6 +165,15 @@ export default function HomePage() {
         cartId = cart.id;
       }
 
+      // Get product stock information
+      const { data: product, error: productError } = await supabase
+        .from('products')
+        .select('quantity')
+        .eq('id', productId)
+        .single();
+
+      if (productError) throw productError;
+
       // First try to get existing item
       const { data: existingItem } = await supabase
         .from('cart_items')
@@ -201,6 +181,13 @@ export default function HomePage() {
         .eq('cart_id', cartId)
         .eq('product_id', productId)
         .maybeSingle();
+
+      // Check stock availability
+      const currentCartQuantity = existingItem ? existingItem.quantity : 0;
+      if (currentCartQuantity >= product.quantity) {
+        toast.error(`Only ${product.quantity} items available in stock`);
+        return;
+      }
 
       // Add or update cart item
       if (existingItem) {
@@ -245,7 +232,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-10 pb-20">
       {/* Categories Section */}
       <section className="mb-8 relative">
         <div className="max-w-6xl mx-auto">

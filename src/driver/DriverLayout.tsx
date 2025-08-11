@@ -82,7 +82,7 @@ export default function DriverLayout() {
       </main>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden bg-white shadow-lg fixed bottom-0 left-0 right-0 z-10">
+      <nav className="md:hidden bg-white shadow-lg fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200">
         <div className="flex justify-between">
           {navItems.map((item) => (
             <NavLink

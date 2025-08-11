@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ShoppingCart, ArrowLeft, Minus, Plus, Loader2 } from 'lucide-react';
+import { useParams } from 'react-router-dom';
+import { Minus, Plus, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '../../lib/utils';
 import Button from '../../ui/components/Button';
-import Loader from '../../ui/components/Loader';
+
 import { toast } from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 
@@ -25,7 +25,6 @@ type Product = {
 
 export default function ProductDetailsPage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
@@ -69,7 +68,7 @@ export default function ProductDetailsPage() {
       }
 
       // Get or create cart in a single query
-      const { data: cart, error: cartError } = await supabase
+      const { data: cart } = await supabase
         .from('carts')
         .select('id')
         .eq('customer_id', user.id)
@@ -99,13 +98,27 @@ export default function ProductDetailsPage() {
         .eq('product_id', product.id)
         .maybeSingle();
 
+      // Check stock availability
+      const currentCartQuantity = existingItem ? existingItem.quantity : 0;
+      const newTotalQuantity = currentCartQuantity + quantity;
+      
+      if (newTotalQuantity > product.quantity) {
+        const availableToAdd = product.quantity - currentCartQuantity;
+        if (availableToAdd > 0) {
+          toast.error(`Only ${availableToAdd} more items can be added to cart (${product.quantity} total in stock)`);
+        } else {
+          toast.error(`Only ${product.quantity} items available in stock`);
+        }
+        return;
+      }
+
       // Add or update cart item
       const { error: upsertError } = await supabase
         .from('cart_items')
         .upsert({
           cart_id: cartId,
           product_id: product.id,
-          quantity: existingItem ? existingItem.quantity + quantity : quantity
+          quantity: newTotalQuantity
         });
 
       if (upsertError) throw upsertError;
@@ -170,6 +183,11 @@ export default function ProductDetailsPage() {
               {formatCurrency(product.price)}
               {product.unit ? ` per ${product.unit}` : ''}
               {product.unit && product.unit !== 'piece' && product.unit_quantity ? ` (${product.unit_quantity} pcs)` : ''}
+            </p>
+            <p className={`text-sm mt-2 ${product.quantity === 0 ? 'text-red-500 font-medium' : product.quantity <= 10 ? 'text-orange-500' : 'text-green-600'}`}>
+              {product.quantity === 0 ? 'Out of Stock' : 
+               product.quantity <= 10 ? `Only ${product.quantity} left in stock` : 
+               `${product.quantity} in stock`}
             </p>
           </div>
 

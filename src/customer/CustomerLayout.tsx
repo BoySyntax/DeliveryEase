@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { ShoppingBag, Home, Package, User, ShoppingCart, Truck, Search, Mail, Bell } from 'lucide-react';
+import { Home, Package, User, ShoppingCart, Search } from 'lucide-react';
 import { useProfile } from '../lib/auth';
 import Loader from '../ui/components/Loader';
 import { cn } from '../lib/utils';
@@ -9,7 +9,7 @@ import logo from '../assets/logo.png';
 import Input from '../ui/components/Input';
 import Select from '../ui/components/Select';
 import { useSearchParams } from 'react-router-dom';
-import NotificationIcon from '../ui/components/NotificationIcon';
+import NotificationBadge from '../ui/components/NotificationBadge';
 
 type Category = {
   id: string;
@@ -117,7 +117,7 @@ export default function CustomerLayout() {
     { icon: <Home size={20} />, label: 'Home', path: '/customer' },
     { icon: <ShoppingCart size={20} />, label: 'Cart', path: '/customer/cart' },
     { icon: <Package size={20} />, label: 'Orders', path: '/customer/orders' },
-    { icon: <Bell size={20} />, label: 'Notifications', path: '/customer/notifications' },
+    { icon: <NotificationBadge size={20} />, label: 'Notifications', path: '/customer/notifications' },
     { icon: <User size={20} />, label: 'Profile', path: '/customer/profile' },
   ];
 
@@ -233,7 +233,7 @@ export default function CustomerLayout() {
       </main>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="sm:hidden bg-white shadow-lg fixed bottom-0 left-0 right-0 z-10">
+      <nav className="sm:hidden bg-white shadow-lg fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200">
         <div className="flex justify-between">
           {navItems.map((item) => (
             <NavLink

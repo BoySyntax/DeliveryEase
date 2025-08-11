@@ -1,17 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, Loader2 } from 'lucide-react';
+
 import { supabase } from '../../lib/supabase';
 import ProductCard from '../components/ProductCard';
-import Input from '../../ui/components/Input';
-import Select from '../../ui/components/Select';
-import Loader from '../../ui/components/Loader';
-import { toast } from 'react-hot-toast';
 
-type Category = {
-  id: string;
-  name: string;
-};
+import { toast } from 'react-hot-toast';
 
 type Product = {
   id: string;
@@ -25,39 +18,15 @@ type Product = {
 };
 
 export default function ProductsPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(true);
-  const [loadingCategories, setLoadingCategories] = useState(true);
   const [addingToCart, setAddingToCart] = useState<string | null>(null);
 
   const categoryId = searchParams.get('category') || '';
   const searchQuery = searchParams.get('search') || '';
 
-  useEffect(() => {
-    async function loadCategories() {
-      setLoadingCategories(true);
-      try {
-        const { data: categoriesData } = await supabase
-          .from('categories')
-          .select('*')
-          .order('name');
-        
-        if (categoriesData) {
-          setCategories(categoriesData);
-        }
-      } catch (error) {
-        console.error('Error loading categories:', error);
-        toast.error('Failed to load categories');
-      } finally {
-        setLoadingCategories(false);
-      }
-    }
 
-    loadCategories();
-  }, []);
 
   useEffect(() => {
     async function loadProducts() {
@@ -95,25 +64,7 @@ export default function ProductsPage() {
     loadProducts();
   }, [categoryId, searchQuery]);
 
-  const handleSearch = (value: string) => {
-    const params = new URLSearchParams(searchParams);
-    if (value) {
-      params.set('search', value);
-    } else {
-      params.delete('search');
-    }
-    setSearchParams(params);
-  };
 
-  const handleCategoryChange = (value: string) => {
-    const params = new URLSearchParams(searchParams);
-    if (value) {
-      params.set('category', value);
-    } else {
-      params.delete('category');
-    }
-    setSearchParams(params);
-  };
 
   const handleAddToCart = async (productId: string) => {
     setAddingToCart(productId);
@@ -126,7 +77,7 @@ export default function ProductsPage() {
       }
 
       // Get or create cart in a single query
-      const { data: cart, error: cartError } = await supabase
+      const { data: cart } = await supabase
         .from('carts')
         .select('id')
         .eq('customer_id', user.id)
@@ -148,6 +99,15 @@ export default function ProductsPage() {
         cartId = cart.id;
       }
 
+      // Get product stock information
+      const { data: product, error: productError } = await supabase
+        .from('products')
+        .select('quantity')
+        .eq('id', productId)
+        .single();
+
+      if (productError) throw productError;
+
       // First try to get existing item
       const { data: existingItem } = await supabase
         .from('cart_items')
@@ -155,6 +115,13 @@ export default function ProductsPage() {
         .eq('cart_id', cartId)
         .eq('product_id', productId)
         .maybeSingle();
+
+      // Check stock availability
+      const currentCartQuantity = existingItem ? existingItem.quantity : 0;
+      if (currentCartQuantity >= product.quantity) {
+        toast.error(`Only ${product.quantity} items available in stock`);
+        return;
+      }
 
       // Add or update cart item
       if (existingItem) {
@@ -182,12 +149,10 @@ export default function ProductsPage() {
     }
   };
 
-  if (loadingCategories) {
-    return <Loader label="Loading categories..." />;
-  }
+
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20">
       {/* Removed search bar and category selector, now in layout */}
       {loadingProducts ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">

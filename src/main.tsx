@@ -6,6 +6,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Toaster } from 'react-hot-toast';
 import App from './App';
 import './index.css';
+import { registerSW } from 'virtual:pwa-register';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -15,6 +16,9 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Register service worker for PWA (auto-updates enabled in Vite config)
+registerSW({ immediate: true });
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

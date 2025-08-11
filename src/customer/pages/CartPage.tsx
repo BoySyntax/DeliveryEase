@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShoppingBag, Trash2, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -92,7 +92,8 @@ export default function CartPage() {
               id,
               name,
               price,
-              image_url
+              image_url,
+              quantity
             )
           `)
           .eq('cart_id', cartId);
@@ -131,6 +132,17 @@ export default function CartPage() {
 
   const handleUpdateQuantity = async (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
+    
+    // Find the cart item to check stock
+    const cartItem = cartItems.find(item => item.id === itemId);
+    if (!cartItem) return;
+    
+    // Check if the new quantity exceeds available stock
+    if (newQuantity > cartItem.product.quantity) {
+      toast.error(`Only ${cartItem.product.quantity} items available in stock`);
+      return;
+    }
+    
     setUpdatingItem(itemId);
 
     try {
@@ -197,7 +209,7 @@ export default function CartPage() {
   );
 
   return (
-    <div className="max-w-2xl mx-auto pb-8">
+    <div className="max-w-2xl mx-auto pb-20">
       <div className="bg-gray-50 w-full">
         <div className="max-w-2xl mx-auto px-4">
           <h1 className="text-2xl font-semibold -mt-5 py-3">Shopping Cart</h1>
@@ -228,6 +240,7 @@ export default function CartPage() {
                     <div className="flex-1">
                       <h3 className="text-base font-medium mb-0.5">{item.product.name}</h3>
                       <p className="text-gray-600 text-sm">{formatCurrency(item.product.price)}</p>
+                      <p className="text-gray-500 text-xs">Stock: {item.product.quantity}</p>
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="flex items-center">
@@ -243,8 +256,12 @@ export default function CartPage() {
                         </span>
                         <button
                           onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
-                          disabled={updatingItem === item.id}
-                          className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-gray-700 border rounded"
+                          disabled={updatingItem === item.id || item.quantity >= item.product.quantity}
+                          className={`w-7 h-7 flex items-center justify-center border rounded ${
+                            item.quantity >= item.product.quantity 
+                              ? 'text-gray-300 cursor-not-allowed' 
+                              : 'text-gray-500 hover:text-gray-700'
+                          }`}
                         >
                           +
                         </button>

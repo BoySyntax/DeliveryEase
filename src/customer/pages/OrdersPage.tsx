@@ -78,9 +78,9 @@ export default function OrdersPage() {
     return `${formatDate(minDeliveryDate)}-${formatDate(maxDeliveryDate)}`;
   }
 
-  // Helper function to check if order is assigned to driver or delivered (should show estimated delivery)
+  // Helper function to check if order is actively in delivery or delivered (controls estimated date display)
   function isOrderAssignedToDriver(order: Order): boolean {
-    return order.delivery_status === 'assigned' || order.delivery_status === 'delivering' || order.delivery_status === 'delivered';
+    return order.delivery_status === 'delivering' || order.delivery_status === 'delivered';
   }
 
   // Helper function to determine the display status based on approval and delivery status
@@ -106,12 +106,12 @@ export default function OrdersPage() {
     
     // If approved, check delivery status
     if (order.approval_status === 'approved') {
-      if (order.delivery_status === 'delivered' || order.delivery_status === 'assigned' || order.delivery_status === 'delivering') {
+      if (order.delivery_status === 'delivered' || order.delivery_status === 'delivering') {
         console.log(`   → Returning 'out_for_delivery' (delivery status: ${order.delivery_status})`);
         return 'out_for_delivery';
       } else {
-        console.log(`   → Returning 'verified' (pending delivery status)`);
-        return 'verified'; // For pending delivery status
+        console.log(`   → Returning 'verified' (pending delivery start)`);
+        return 'verified'; // Approved but not yet started by driver
       }
     }
     
@@ -238,7 +238,7 @@ export default function OrdersPage() {
     : orders; // Show all orders when no filter is active
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl mx-auto pb-20">
       <div className="bg-gray-50 w-full">
         <div className="max-w-2xl mx-auto px-4">
           <div className="flex items-center justify-between -mt-5 py-3">

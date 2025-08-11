@@ -259,9 +259,11 @@ serve(async (req) => {
               </tbody>
             </table>
 
+            ${status === 'verified' ? '' : `
             <div style="text-align: center; margin: 30px 0;">
               <a href="#" class="cta-button">Track Your Order</a>
             </div>
+            `}
 
             <p style="color: #64748b; font-size: 14px; margin: 20px 0 0 0;">
               Thank you for choosing DeliveryEase! We're committed to delivering your order safely and on time.

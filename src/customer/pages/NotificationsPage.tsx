@@ -10,6 +10,7 @@ import successTickGif from '../../assets/Success tick.gif';
 import failedStatusGif from '../../assets/Failed Status.gif';
 import truckkkGif from '../../assets/truckkk.gif';
 import receiveOrderGif from '../../assets/Receive order (1).gif';
+import orderCompletedGif from '../../assets/Order completed (1).gif';
 
 type FilterType = 'all' | 'unread' | 'read';
 
@@ -89,13 +90,13 @@ function SwipeableNotification({
     
     if (lowerTitle.includes('verified') || lowerTitle.includes('approved')) {
       return <div className="w-20 h-20 rounded-full flex items-center justify-center overflow-hidden">
-        <img src={successTickGif} alt="Verified" className="w-16 h-16 object-contain" />
+        <img src={successTickGif} alt="Verified" className="w-16 h-16 object-contain scale-[2]" />
       </div>;
     }
     
     if (lowerTitle.includes('delivered')) {
       return <div className="w-20 h-20 rounded-full flex items-center justify-center overflow-hidden">
-        <img src={receiveOrderGif} alt="Delivered" className="w-16 h-16 object-contain" />
+        <img src={orderCompletedGif} alt="Order Completed" className="w-16 h-16 object-contain" />
       </div>;
     }
     
@@ -323,7 +324,7 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto pb-20">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">

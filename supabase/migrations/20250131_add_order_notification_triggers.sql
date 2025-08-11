@@ -124,7 +124,7 @@ BEGIN
             PERFORM create_notification(
                 NEW.customer_id,
                 'Order Delivered',
-                'Your order has been successfully delivered. Thank you for choosing DeliveryEase!',
+                'Your order has been successfully delivered.',
                 'success',
                 json_build_object(
                     'orderId', NEW.id,
