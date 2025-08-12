@@ -16,27 +16,20 @@ type Category = {
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
 
   useEffect(() => {
     loadCategories();
-  }, [searchQuery]);
+  }, []);
 
   async function loadCategories() {
     setLoading(true);
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('categories')
         .select('*')
         .order('name');
-
-      if (searchQuery) {
-        query = query.ilike('name', `%${searchQuery}%`);
-      }
-
-      const { data, error } = await query;
 
       if (error) throw error;
       setCategories(data || []);
@@ -102,20 +95,12 @@ export default function CategoriesPage() {
         </Button>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4">
-        <Input
-          placeholder="Search categories..."
-          icon={<Search size={18} />}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="md:w-64"
-        />
-      </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
         {categories.map((category) => (
-          <Card key={category.id}>
-            <div className="relative w-full aspect-square min-h-[200px] bg-gray-100 rounded-t-lg overflow-hidden flex items-center justify-center">
+          <Card key={category.id} className="h-full flex flex-col">
+            <div className="relative w-full aspect-square bg-gray-100 rounded-t-lg overflow-hidden flex items-center justify-center">
               {category.image_url ? (
                 <img
                   src={category.image_url}
@@ -130,31 +115,37 @@ export default function CategoriesPage() {
                 />
               ) : (
                 <div className="w-full h-full bg-gray-300 flex items-center justify-center">
-                  <span className="text-4xl font-bold text-gray-600">
+                  <span className="text-2xl font-bold text-gray-600">
                     {category.name.charAt(0).toUpperCase()}
                   </span>
                 </div>
               )}
             </div>
-            <CardContent className="p-2 sm:p-4">
-              <h3 className="text-base sm:text-lg font-medium text-gray-900">{category.name}</h3>
-              <div className="mt-4 flex space-x-2">
-                <Button
-                  variant="outline"
-                  icon={<Pencil size={16} />}
-                  fullWidth
-                  onClick={() => handleEdit(category)}
-                >
-                  Edit
-                </Button>
-                <Button
-                  variant="danger"
-                  icon={<Trash2 size={16} />}
-                  fullWidth
-                  onClick={() => handleDelete(category.id)}
-                >
-                  Delete
-                </Button>
+            <CardContent className="p-3 flex flex-col flex-1">
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-gray-900 line-clamp-2 leading-tight">{category.name}</h3>
+              </div>
+              <div className="mt-3">
+                <div className="flex gap-1">
+                  <Button
+                    variant="outline"
+                    icon={<Pencil size={14} />}
+                    fullWidth
+                    onClick={() => handleEdit(category)}
+                    className="text-xs py-1.5"
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="danger"
+                    icon={<Trash2 size={14} />}
+                    fullWidth
+                    onClick={() => handleDelete(category.id)}
+                    className="text-xs py-1.5"
+                  >
+                    Delete
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

@@ -52,3 +52,5 @@ export default function NotificationBadge({ size = 20, className }: Notification
     </div>
   );
 }
+
+

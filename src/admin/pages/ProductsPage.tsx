@@ -168,10 +168,10 @@ export default function ProductsPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
         {products.map((product) => (
-          <Card key={product.id}>
-            <div className="relative w-full aspect-square min-h-[200px] bg-gray-100 rounded-t-lg overflow-hidden flex items-center justify-center">
+          <Card key={product.id} className="h-full flex flex-col">
+            <div className="relative w-full aspect-square bg-gray-100 rounded-t-lg overflow-hidden flex items-center justify-center">
               <img
                 src={product.image_url}
                 alt={product.name}
@@ -187,56 +187,61 @@ export default function ProductsPage() {
                 <span className="absolute top-2 left-2 bg-yellow-400 text-xs font-bold px-2 py-1 rounded">Featured</span>
               )}
             </div>
-            <CardContent className="p-2 sm:p-4">
-              <h3 className="text-base sm:text-lg font-medium text-gray-900">{product.name}</h3>
-              <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                Category: {product.category.name}
-              </p>
-              <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                Quantity: {product.quantity ?? 0} {product.unit || 'pieces'}
-              </p>
-              <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                Weight per {product.unit || 'piece'}: {product.weight} kg
-                {product.unit_quantity ? ` (${product.unit_quantity} pcs per ${product.unit})` : ''}
-              </p>
-              <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                Total Weight: {(product.weight * product.quantity).toFixed(2)} kg
-              </p>
-              <p className="text-primary-600 font-semibold mt-2">
-                {formatCurrency(product.price)}
-                {product.unit ? ` per ${product.unit}` : ''}
-                {product.unit && product.unit !== 'piece' && product.unit_quantity ? ` (${product.unit_quantity} pcs)` : ''}
-              </p>
-              <p className="text-xs sm:text-sm text-gray-600 mt-2 line-clamp-2">
-                {product.description}
-              </p>
-              <div className="flex items-center mt-2">
-                <input
-                  type="checkbox"
-                  checked={!!product.featured}
-                  onChange={() => handleToggleFeatured(product)}
-                  id={`featured-toggle-${product.id}`}
-                  className="mr-2"
-                />
-                <label htmlFor={`featured-toggle-${product.id}`} className="text-xs">Featured</label>
+            <CardContent className="p-3 flex flex-col flex-1">
+              <div className="flex-1 space-y-1">
+                <h3 className="text-sm font-medium text-gray-900 line-clamp-2 leading-tight">{product.name}</h3>
+                <p className="text-xs text-gray-500 truncate">
+                  Category: {product.category.name}
+                </p>
+                <p className="text-xs text-gray-500">
+                  Qty: {product.quantity ?? 0} {product.unit || 'pcs'}
+                </p>
+                <p className="text-xs text-gray-500">
+                  Weight: {product.weight} kg per {product.unit || 'pc'}
+                </p>
+                <p className="text-xs text-gray-500">
+                  Total: {(product.weight * product.quantity).toFixed(1)} kg
+                </p>
+                <p className="text-primary-600 font-semibold text-sm">
+                  {formatCurrency(product.price)}
+                  {product.unit ? ` per ${product.unit}` : ''}
+                </p>
+                <p className="text-xs text-gray-600 line-clamp-2 leading-tight">
+                  {product.description}
+                </p>
               </div>
-              <div className="mt-4 flex space-x-2">
-                <Button
-                  variant="outline"
-                  icon={<Pencil size={16} />}
-                  fullWidth
-                  onClick={() => handleEdit(product)}
-                >
-                  Edit
-                </Button>
-                <Button
-                  variant="danger"
-                  icon={<Trash2 size={16} />}
-                  fullWidth
-                  onClick={() => handleDelete(product.id)}
-                >
-                  Delete
-                </Button>
+              
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={!!product.featured}
+                    onChange={() => handleToggleFeatured(product)}
+                    id={`featured-toggle-${product.id}`}
+                    className="mr-2 h-3 w-3"
+                  />
+                  <label htmlFor={`featured-toggle-${product.id}`} className="text-xs">Featured</label>
+                </div>
+                <div className="flex gap-1">
+                  <Button
+                    variant="outline"
+                    icon={<Pencil size={14} />}
+                    fullWidth
+                    onClick={() => handleEdit(product)}
+                    className="text-xs py-1.5"
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="danger"
+                    icon={<Trash2 size={14} />}
+                    fullWidth
+                    onClick={() => handleDelete(product.id)}
+                    className="text-xs py-1.5"
+                  >
+                    Delete
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

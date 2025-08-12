@@ -89,37 +89,37 @@ function SwipeableNotification({
     const lowerTitle = title.toLowerCase();
     
     if (lowerTitle.includes('verified') || lowerTitle.includes('approved')) {
-      return <div className="w-20 h-20 rounded-full flex items-center justify-center overflow-hidden">
-        <img src={successTickGif} alt="Verified" className="w-16 h-16 object-contain scale-[2]" />
+      return <div className="w-16 h-16 rounded-full flex items-center justify-center overflow-hidden">
+        <img src={successTickGif} alt="Verified" className="w-14 h-14 object-contain scale-[1.8]" />
       </div>;
     }
     
     if (lowerTitle.includes('delivered')) {
-      return <div className="w-20 h-20 rounded-full flex items-center justify-center overflow-hidden">
-        <img src={orderCompletedGif} alt="Order Completed" className="w-16 h-16 object-contain" />
+      return <div className="w-16 h-16 rounded-full flex items-center justify-center overflow-hidden">
+        <img src={orderCompletedGif} alt="Order Completed" className="w-14 h-14 object-contain" />
       </div>;
     }
     
     if (lowerTitle.includes('rejected')) {
-      return <div className="w-20 h-20 rounded-full flex items-center justify-center overflow-hidden">
-        <img src={failedStatusGif} alt="Rejected" className="w-16 h-16 object-contain" />
+      return <div className="w-16 h-16 rounded-full flex items-center justify-center overflow-hidden">
+        <img src={failedStatusGif} alt="Rejected" className="w-14 h-14 object-contain" />
       </div>;
     }
     
     if (lowerTitle.includes('delivering') || lowerTitle.includes('out for delivery')) {
-      return <div className="w-20 h-20 rounded-full flex items-center justify-center overflow-hidden">
-        <img src={truckkkGif} alt="Delivering" className="w-16 h-16 object-contain" />
+      return <div className="w-16 h-16 rounded-full flex items-center justify-center overflow-hidden">
+        <img src={truckkkGif} alt="Delivering" className="w-14 h-14 object-contain" />
       </div>;
     }
     
     if (lowerTitle.includes('placed') || lowerTitle.includes('pending')) {
-      return <div className="w-20 h-20 rounded-full flex items-center justify-center overflow-hidden">
-        <img src={clockLoopGif} alt="Pending" className="w-16 h-16 object-contain" />
+      return <div className="w-16 h-16 rounded-full flex items-center justify-center overflow-hidden">
+        <img src={clockLoopGif} alt="Pending" className="w-14 h-14 object-contain" />
       </div>;
     }
     
     // Default icon for unknown types
-    return <div className="w-20 h-20 bg-gray-500 rounded-full flex items-center justify-center text-white text-4xl font-bold">
+    return <div className="w-16 h-16 bg-gray-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">
       ℹ
     </div>;
   };
@@ -155,7 +155,7 @@ function SwipeableNotification({
       <div
         ref={containerRef}
                  className={cn(
-           "bg-white rounded-lg shadow-sm border border-gray-200 p-6 transition-all hover:shadow-md cursor-pointer relative z-20",
+           "bg-white rounded-lg shadow-sm border border-gray-200 p-4 transition-all hover:shadow-md cursor-pointer relative z-20",
            !notification.read && "border-l-4 border-l-primary-500 bg-primary-50",
            isSwiped && "transform -translate-x-20"
          )}
@@ -168,22 +168,22 @@ function SwipeableNotification({
         onMouseLeave={handleMouseUp}
         onClick={onMarkAsRead}
       >
-        <div className="flex items-start gap-4">
+        <div className="flex items-start gap-3">
                            <div className="mt-1">
                    {getNotificationIcon(notification.title)}
                  </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between">
               <div className="flex-1">
-                                 <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                                 <h3 className="text-base font-semibold text-gray-900 mb-1">
                    {notification.title}
                  </h3>
-                 <p className="text-gray-600 mb-3 leading-relaxed">
+                 <p className="text-sm text-gray-600 mb-2 leading-snug">
                    {notification.message}
                  </p>
                 <div className="flex items-center justify-between">
                                      <div className="flex flex-col">
-                     <span className="text-sm text-gray-400">
+                     <span className="text-xs text-gray-400">
                        {formatTime(notification.created_at)}
                      </span>
                      <span className="text-xs text-gray-300">
@@ -201,19 +201,6 @@ function SwipeableNotification({
                    )}
                 </div>
               </div>
-                             {!notification.read && (
-                 <button
-                   onClick={(e) => {
-                     e.stopPropagation();
-                     onMarkAsRead();
-                   }}
-                   disabled={isMarkingAsRead}
-                   className="ml-4 p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors disabled:opacity-50"
-                   title="Mark as read"
-                 >
-                   <Check size={16} />
-                 </button>
-               )}
             </div>
           </div>
         </div>
@@ -324,60 +311,56 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto pb-20">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Bell className="w-6 h-6 text-primary-600" />
-          <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
-          {unreadCount > 0 && (
-            <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full">
-              {unreadCount} unread
-            </span>
-          )}
-        </div>
-        {unreadCount > 0 && (
-          <button
-            onClick={handleMarkAllAsRead}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-lg transition-colors"
-          >
-            <Check size={16} />
-            Mark all as read
-          </button>
-        )}
-      </div>
-
-      {/* Filters */}
-      <div className="flex items-center gap-4 mb-6 p-4 bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="flex items-center gap-2">
-          <Filter size={16} className="text-gray-500" />
-          <span className="text-sm font-medium text-gray-700">Filter:</span>
-        </div>
-        <div className="flex gap-2">
-          {(['all', 'unread', 'read'] as FilterType[]).map((filterType) => (
-            <button
-              key={filterType}
-              onClick={() => setFilter(filterType)}
-              className={cn(
-                "px-3 py-1 text-sm font-medium rounded-md transition-colors",
-                filter === filterType
-                  ? "bg-primary-100 text-primary-700"
-                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-              )}
-            >
-              {filterType.charAt(0).toUpperCase() + filterType.slice(1)}
-              {filterType === 'unread' && unreadCount > 0 && (
-                <span className="ml-1 text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-          ))}
+    <div className="max-w-2xl mx-auto pb-20">
+      <div className="bg-gray-50 w-full">
+        <div className="max-w-2xl mx-auto px-4">
+          <div className="flex items-center justify-between -mt-5 py-3">
+            <h1 className="text-2xl font-semibold">Notifications</h1>
+            {unreadCount > 0 && (
+              <button
+                onClick={handleMarkAllAsRead}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-lg transition-colors"
+              >
+                <Check size={16} />
+                Mark all as read
+              </button>
+            )}
+          </div>
         </div>
       </div>
+      
+      <div className="px-4">
+        {/* Filters */}
+        <div className="flex items-center gap-4 mb-6 p-4 bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="flex items-center gap-2">
+            <Filter size={16} className="text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">Filter:</span>
+          </div>
+          <div className="flex gap-2">
+            {(['all', 'unread', 'read'] as FilterType[]).map((filterType) => (
+              <button
+                key={filterType}
+                onClick={() => setFilter(filterType)}
+                className={cn(
+                  "px-3 py-1 text-sm font-medium rounded-md transition-colors",
+                  filter === filterType
+                    ? "bg-primary-100 text-primary-700"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                )}
+              >
+                {filterType.charAt(0).toUpperCase() + filterType.slice(1)}
+                {filterType === 'unread' && unreadCount > 0 && (
+                  <span className="ml-1 text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
 
-      {/* Notifications List */}
-      <div className="space-y-4">
+        {/* Notifications List */}
+        <div className="space-y-3">
         {filteredNotifications.length === 0 ? (
           <div className="text-center py-12">
             <Bell className="w-12 h-12 text-gray-400 mx-auto mb-4" />
@@ -405,6 +388,7 @@ export default function NotificationsPage() {
              />
                        ))
         )}
+        </div>
       </div>
     </div>
   );

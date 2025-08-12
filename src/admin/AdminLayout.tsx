@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Package, Tags, Users, ShoppingBag, LogOut, Truck } from 'lucide-react';
+import { LayoutDashboard, Package, Tags, Users, ShoppingBag, LogOut, Truck, Menu, X } from 'lucide-react';
 import { useProfile } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import Loader from '../ui/components/Loader';
@@ -10,6 +11,7 @@ import logo from '../assets/logo.png';
 export default function AdminLayout() {
   const { profile, loading } = useProfile();
   const navigate = useNavigate();
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   if (loading) {
     return <Loader fullScreen />;
@@ -24,6 +26,14 @@ export default function AdminLayout() {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     navigate('/');
+  };
+
+  const toggleDropdown = () => {
+    setIsDropdownOpen(!isDropdownOpen);
+  };
+
+  const closeDropdown = () => {
+    setIsDropdownOpen(false);
   };
 
   const navItems = [
@@ -51,6 +61,7 @@ export default function AdminLayout() {
                 <NavLink
                   key={item.path}
                   to={item.path}
+                  end={item.path === '/admin'}
                   className={({ isActive }) => cn(
                     'flex items-center px-4 py-2 text-sm font-medium rounded-md',
                     isActive
@@ -85,29 +96,62 @@ export default function AdminLayout() {
             <img src={logo} alt="DeliveryEase Logo" width={32} height={32} style={{objectFit: 'contain', marginRight: 8}} />
             <span className="ml-2 text-lg font-semibold">DeliveryEase</span>
           </div>
-          
-          <div className="flex space-x-4">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                className={({ isActive }) => cn(
-                  'p-2 rounded-full',
-                  isActive
-                    ? 'text-primary-600 bg-primary-50'
-                    : 'text-gray-600 hover:text-primary-600'
-                )}
-              >
-                {item.icon}
-              </NavLink>
-            ))}
-            
+
+          <div className="relative">
             <button
-              onClick={handleSignOut}
-              className="p-2 text-gray-600 hover:text-primary-600"
+              onClick={toggleDropdown}
+              className="p-2 text-gray-600 hover:text-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 rounded-md"
+              aria-label="Open menu"
             >
-              <LogOut size={20} />
+              {isDropdownOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
+
+            {/* Dropdown Menu */}
+            {isDropdownOpen && (
+              <>
+                {/* Backdrop */}
+                <div 
+                  className="fixed inset-0 bg-black bg-opacity-25 z-10"
+                  onClick={closeDropdown}
+                />
+                
+                {/* Menu */}
+                <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-20">
+                  <div className="py-2">
+                    {navItems.map((item) => (
+                      <NavLink
+                        key={item.path}
+                        to={item.path}
+                        end={item.path === '/admin'}
+                        onClick={closeDropdown}
+                        className={({ isActive }) => cn(
+                          'flex items-center px-4 py-3 text-sm font-medium transition-colors',
+                          isActive
+                            ? 'bg-primary-50 text-primary-600 border-r-4 border-primary-600'
+                            : 'text-gray-700 hover:bg-gray-50 hover:text-primary-600'
+                        )}
+                      >
+                        <span className="mr-3">{item.icon}</span>
+                        {item.label}
+                      </NavLink>
+                    ))}
+                    
+                    <div className="border-t border-gray-100 mt-2 pt-2">
+                      <button
+                        onClick={() => {
+                          handleSignOut();
+                          closeDropdown();
+                        }}
+                        className="flex items-center w-full px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-red-600 transition-colors"
+                      >
+                        <LogOut size={20} className="mr-3" />
+                        Sign Out
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
