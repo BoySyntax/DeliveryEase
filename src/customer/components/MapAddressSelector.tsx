@@ -103,7 +103,7 @@ export default function MapAddressSelector({
 }: MapAddressSelectorProps) {
   const [address, setAddress] = useState(initialAddress);
   const [isLoading, setIsLoading] = useState(false);
-  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const markerRef = useRef<google.maps.Marker | null>(null);
@@ -384,17 +384,7 @@ export default function MapAddressSelector({
           </div>
         </div>
         
-        {/* Map Legend - Responsive positioning */}
-        <div className="absolute top-2 sm:top-4 left-2 sm:left-4 bg-white/90 backdrop-blur-sm rounded-lg sm:rounded-xl p-2 sm:p-3 shadow-lg max-w-[150px] sm:max-w-none">
-          <h3 className="font-semibold text-gray-800 text-xs sm:text-sm mb-1 sm:mb-2">🗺️ Region 10</h3>
-          <div className="space-y-0.5 sm:space-y-1 text-xs">
-            <div className="flex items-center gap-1 sm:gap-2"><span>🏙️</span> <span className="truncate">Cagayan de Oro</span></div>
-            <div className="flex items-center gap-1 sm:gap-2"><span>⚡</span> <span className="truncate">Iligan</span></div>
-            <div className="flex items-center gap-1 sm:gap-2"><span>🌿</span> <span className="truncate">Malaybalay</span></div>
-            <div className="hidden sm:flex items-center gap-2"><span>🏔️</span> <span>Valencia</span></div>
-            <div className="hidden sm:flex items-center gap-2"><span>🌊</span> <span>Oroquieta</span></div>
-          </div>
-        </div>
+
       </div>
 
       {/* Enhanced Address Input Section */}

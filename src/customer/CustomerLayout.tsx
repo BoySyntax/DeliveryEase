@@ -38,8 +38,17 @@ export default function CustomerLayout() {
     '/customer/edit-address'
   ];
 
+  // Pages where bottom navigation should be hidden
+  const hideBottomNavOnPages = [
+    '/customer/add-address',
+    '/customer/edit-address'
+  ];
+
   // Check if search bar should be hidden on current page
   const shouldHideSearch = hideSearchOnPages.some(page => location.pathname.startsWith(page));
+
+  // Check if bottom navigation should be hidden on current page
+  const shouldHideBottomNav = hideBottomNavOnPages.some(page => location.pathname.startsWith(page));
 
   const [cartCount, setCartCount] = useState(0);
   useEffect(() => {
@@ -233,36 +242,38 @@ export default function CustomerLayout() {
       </main>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="sm:hidden bg-white shadow-lg fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200">
-        <div className="flex justify-between">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              end={item.path === '/customer'}
-              className={({ isActive }) => cn(
-                'flex flex-1 flex-col items-center py-3',
-                isActive
-                  ? 'text-primary-600'
-                  : 'text-gray-600'
-              )}
-            >
-              <span className="relative">
-                {item.icon}
-                {(item.label === 'Cart' && cartCount > 0) && (
-                  <span className="absolute -top-1 -right-2 min-w-[1.1rem] h-5 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold shadow z-10">
-                    {cartCount}
-                  </span>
+      {!shouldHideBottomNav && (
+        <nav className="sm:hidden bg-white shadow-lg fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200">
+          <div className="flex justify-between">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                end={item.path === '/customer'}
+                className={({ isActive }) => cn(
+                  'flex flex-1 flex-col items-center py-3',
+                  isActive
+                    ? 'text-primary-600'
+                    : 'text-gray-600'
                 )}
-              </span>
-              <span className="text-xs mt-1">{item.label}</span>
-            </NavLink>
-          ))}
-        </div>
-      </nav>
+              >
+                <span className="relative">
+                  {item.icon}
+                  {(item.label === 'Cart' && cartCount > 0) && (
+                    <span className="absolute -top-1 -right-2 min-w-[1.1rem] h-5 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold shadow z-10">
+                      {cartCount}
+                    </span>
+                  )}
+                </span>
+                <span className="text-xs mt-1">{item.label}</span>
+              </NavLink>
+            ))}
+          </div>
+        </nav>
+      )}
       
       {/* Padding for mobile bottom nav */}
-      <div className="sm:hidden h-16" />
+      {!shouldHideBottomNav && <div className="sm:hidden h-16" />}
     </div>
   );
 }
