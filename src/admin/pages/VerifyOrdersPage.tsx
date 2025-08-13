@@ -20,6 +20,18 @@ interface OrderData {
   total: number;
   delivery_status: OrderStatus;
   approval_status: 'pending' | 'approved' | 'rejected';
+  delivery_address: {
+    full_name: string;
+    phone: string;
+    street_address: string;
+    barangay: string;
+    city: string;
+    province: string;
+    region: string;
+    postal_code: string;
+    latitude: number | null;
+    longitude: number | null;
+  } | null;
   payment_proof: {
     file_url: string;
     uploaded_at: string;
@@ -100,48 +112,12 @@ function ProductImage({ imageUrl, productName }: { imageUrl: string | null | und
 }
 
 // Customer Address Display component
-function CustomerAddressDisplay({ customerId }: { customerId: string }) {
-  const [address, setAddress] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function fetchAddress() {
-      try {
-        const { data, error } = await supabase
-          .from('addresses')
-          .select('*')
-          .eq('customer_id', customerId)
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (error) throw error;
-        setAddress(data?.[0] || null);
-      } catch (error) {
-        console.error('Error fetching address:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    if (customerId) {
-      fetchAddress();
-    }
-  }, [customerId]);
-
-  if (loading) {
+function CustomerAddressDisplay({ deliveryAddress }: { deliveryAddress: any }) {
+  if (!deliveryAddress) {
     return (
       <div className="space-y-2">
         <h3 className="text-sm font-medium">Delivery Address</h3>
-        <div className="text-xs text-gray-500">Loading...</div>
-      </div>
-    );
-  }
-
-  if (!address) {
-    return (
-      <div className="space-y-2">
-        <h3 className="text-sm font-medium">Delivery Address</h3>
-        <div className="text-xs text-red-500">No address available</div>
+        <div className="text-xs text-red-500">No delivery address available</div>
       </div>
     );
   }
@@ -151,16 +127,14 @@ function CustomerAddressDisplay({ customerId }: { customerId: string }) {
       <h3 className="text-sm font-medium">Delivery Address</h3>
       <div className="text-xs text-gray-600 space-y-1">
         <div className="flex items-center gap-2">
-          <span className="font-medium">{address.full_name}</span>
+          <span className="font-medium">{deliveryAddress.full_name}</span>
           <span>•</span>
-          <span>{address.phone}</span>
+          <span>{deliveryAddress.phone}</span>
         </div>
-        <div>{address.street_address}</div>
-        {address.barangay && (
-          <div className="flex items-center gap-1">
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-              📍 {address.barangay}
-            </span>
+        <div>{deliveryAddress.street_address}</div>
+        {deliveryAddress.barangay && (
+          <div className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+            📍 {deliveryAddress.barangay}
           </div>
         )}
       </div>
@@ -190,6 +164,7 @@ export default function VerifyOrdersPage() {
           total,
           delivery_status,
           approval_status,
+          delivery_address,
           payment_proof:payment_proofs(
             file_url,
             uploaded_at
@@ -213,10 +188,17 @@ export default function VerifyOrdersPage() {
 
       if (ordersError) throw ordersError;
 
-      const ordersWithAddresses = (ordersData || []).map(order => ({
-        ...order,
-        payment_proof: order.payment_proof?.[0] || null,
-      })) as OrderData[];
+      const ordersWithAddresses = (ordersData || []).map(order => {
+        console.log('Order ID:', order.id);
+        console.log('Order delivery address:', order.delivery_address);
+        console.log('Order customer ID:', order.customer_id);
+        console.log('Order created at:', order.created_at);
+        console.log('---');
+        return {
+          ...order,
+          payment_proof: order.payment_proof?.[0] || null,
+        };
+      }) as OrderData[];
 
       setOrders(ordersWithAddresses);
     } catch (error) {
@@ -231,9 +213,6 @@ export default function VerifyOrdersPage() {
     console.log('=== HANDLE VERIFY ORDER CALLED ===');
     console.log('Order ID:', orderId);
     console.log('Approved:', approved);
-    
-    // Add a simple alert to confirm the function is called
-    alert(`Function called: ${approved ? 'APPROVE' : 'REJECT'} order ${orderId}`);
     
     try {
       // Get the order's current address through customer_id
@@ -265,42 +244,14 @@ export default function VerifyOrdersPage() {
         .eq('id', orderData.customer_id)
         .single();
 
-      // Get addresses directly (now allowed by admin policy)
-      const { data: addresses, error: addressError } = await supabase
-        .from('addresses')
-        .select('*')
-        .eq('customer_id', orderData.customer_id)
-        .order('created_at', { ascending: false });
-
-      console.log('Addresses:', addresses); // Debug log
-      console.log('Address error:', addressError); // Debug log
-
-      if (addressError) {
-        console.error('Error fetching addresses:', addressError);
-        throw new Error('Failed to fetch delivery addresses');
-      }
-
-      if (!addresses || addresses.length === 0) {
-        throw new Error('Customer has no delivery addresses set up');
-      }
-
-      // Use the latest address (already sorted by created_at)
-      const addressData = addresses[0];
-
-      // Update order status
+      // IMPORTANT: Do NOT overwrite delivery_address here.
+      // The order already stores the customer's selected delivery_address.
+      // We only update approval_status and delivery_status.
       const { error: updateError } = await supabase
         .from('orders')
         .update({ 
           approval_status: approved ? 'approved' : 'rejected',
-          delivery_status: approved ? 'pending' : undefined,
-          delivery_address: {
-            full_name: addressData.full_name,
-            phone: addressData.phone,
-            street_address: addressData.street_address,
-            barangay: addressData.barangay || 'Unknown Barangay', // Include barangay for batching
-            latitude: addressData.latitude || null,
-            longitude: addressData.longitude || null
-          }
+          delivery_status: approved ? 'pending' : undefined
         })
         .eq('id', orderId);
 
@@ -462,7 +413,7 @@ export default function VerifyOrdersPage() {
                 </div>
 
                 {/* Delivery Address Preview */}
-                <CustomerAddressDisplay customerId={order.customer_id} />
+                <CustomerAddressDisplay deliveryAddress={order.delivery_address} />
 
                 {/* Order Items */}
                 <div className="space-y-2">

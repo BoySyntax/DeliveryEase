@@ -1,9 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Card, CardContent } from '../../ui/components/Card';
 import Loader from '../../ui/components/Loader';
 import { formatCurrency } from '../../lib/utils';
 import { Package, ShoppingBag, Truck, Users } from 'lucide-react';
+import { salesAnalytics, DateRange, SalesAnalyticsData } from '../../lib/salesAnalytics';
+import { salesExport } from '../../lib/salesExport';
+import SalesMetricsCards from '../components/SalesMetricsCards';
+import SalesChart from '../components/SalesChart';
+import CategoryChart from '../components/CategoryChart';
+import OrderStatusChart from '../components/OrderStatusChart';
+import TopProductsTable from '../components/TopProductsTable';
+import SalesFilters from '../components/SalesFilters';
 
 type OrderStatus = 'pending' | 'assigned' | 'delivering' | 'delivered';
 
@@ -27,10 +35,55 @@ type OrderStatusResponse = {
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [salesData, setSalesData] = useState<SalesAnalyticsData | null>(null);
+  const [salesLoading, setSalesLoading] = useState(true);
+  const [currentRange, setCurrentRange] = useState<DateRange>('7d');
+  const [customStart, setCustomStart] = useState<Date>();
+  const [customEnd, setCustomEnd] = useState<Date>();
+
+  const loadSalesData = useCallback(async (range: DateRange, start?: Date, end?: Date) => {
+    setSalesLoading(true);
+    try {
+      const data = await salesAnalytics.getFullAnalytics(range, start, end);
+      setSalesData(data);
+    } catch (error) {
+      console.error('Error loading sales data:', error);
+    } finally {
+      setSalesLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     loadStats();
-  }, []);
+    loadSalesData(currentRange, customStart, customEnd);
+
+    // Subscribe to real-time updates
+    const unsubscribe = salesAnalytics.subscribeToOrderUpdates(() => {
+      loadStats();
+      loadSalesData(currentRange, customStart, customEnd);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [currentRange, customStart, customEnd, loadSalesData]);
+
+  const handleRangeChange = (range: DateRange, start?: Date, end?: Date) => {
+    setCurrentRange(range);
+    setCustomStart(start);
+    setCustomEnd(end);
+  };
+
+  const handleExport = () => {
+    if (salesData) {
+      salesExport.exportToCSV(salesData, currentRange, customStart, customEnd);
+    }
+  };
+
+  const handleRefresh = () => {
+    loadStats();
+    loadSalesData(currentRange, customStart, customEnd);
+  };
 
   async function loadStats() {
     try {
@@ -90,15 +143,13 @@ export default function DashboardPage() {
     }
   }
 
-  if (loading) {
+  if (loading || salesLoading) {
     return <Loader label="Loading dashboard..." />;
   }
 
-  if (!stats) {
-    return <div>Failed to load dashboard statistics.</div>;
+  if (!stats || !salesData) {
+    return <div>Failed to load dashboard data.</div>;
   }
-
-
 
   const statCards = [
     {
@@ -117,7 +168,7 @@ export default function DashboardPage() {
       icon: <Truck className="h-6 w-6 text-primary-500" />,
     },
     {
-      title: 'Total Revenue',
+      title: 'All-time Delivered Revenue',
       value: formatCurrency(stats.totalRevenue),
       icon: <Users className="h-6 w-6 text-primary-500" />,
     },
@@ -125,61 +176,103 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-gray-900">Sales Dashboard</h1>
+      </div>
 
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {statCards.map((stat, index) => (
-          <Card key={index}>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                  <p className="mt-2 text-3xl font-semibold text-gray-900">
-                    {stat.value}
-                  </p>
+      {/* Filters */}
+      <SalesFilters
+        currentRange={currentRange}
+        onRangeChange={handleRangeChange}
+        onExport={handleExport}
+        onRefresh={handleRefresh}
+        loading={salesLoading}
+      />
+
+      {/* Sales Metrics Cards */}
+      <SalesMetricsCards metrics={salesData.metrics} loading={salesLoading} />
+
+      {/* Legacy Stats Cards */}
+      <div>
+        <h2 className="text-lg font-medium text-gray-900 mb-4">System Overview (All-time)</h2>
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {statCards.map((stat, index) => (
+            <Card key={index}>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">{stat.title}</p>
+                    <p className="mt-2 text-3xl font-semibold text-gray-900">
+                      {stat.value}
+                    </p>
+                  </div>
+                  {stat.icon}
                 </div>
-                {stat.icon}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* Sales Charts */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <SalesChart
+          data={salesData.dailySales}
+          title="Sales Trend"
+          height={350}
+        />
+        <CategoryChart
+          data={salesData.categorySales}
+          title="Sales by Category"
+          height={350}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
-          <CardContent className="p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">
-              Orders by Status
-            </h2>
-            <div className="space-y-4">
-              {Object.entries(stats.ordersByStatus).map(([status, count]) => (
-                <div key={status} className="flex items-center">
-                  <div className="flex-1">
-                    <div className="flex items-center">
-                      <span className="capitalize text-sm font-medium text-gray-700">
-                        {status}
-                      </span>
-                      <span className="ml-auto text-sm text-gray-500">
-                        {count} orders
-                      </span>
-                    </div>
-                    <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-primary-500 h-2 rounded-full"
-                        style={{
-                          width: `${(count / stats.totalOrders) * 100}%`,
-                        }}
-                      />
-                    </div>
+        <OrderStatusChart
+          data={salesData.orderDistribution}
+          title="Order Status Distribution"
+          height={350}
+        />
+        <TopProductsTable
+          data={salesData.topProducts}
+          title="Top Selling Products"
+          limit={8}
+        />
+      </div>
+
+      {/* Legacy Order Status */}
+      <Card>
+        <CardContent className="p-6">
+          <h2 className="text-lg font-medium text-gray-900 mb-4">
+            Orders by Status (Legacy View)
+          </h2>
+          <div className="space-y-4">
+            {Object.entries(stats.ordersByStatus).map(([status, count]) => (
+              <div key={status} className="flex items-center">
+                <div className="flex-1">
+                  <div className="flex items-center">
+                    <span className="capitalize text-sm font-medium text-gray-700">
+                      {status}
+                    </span>
+                    <span className="ml-auto text-sm text-gray-500">
+                      {count} orders
+                    </span>
+                  </div>
+                  <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-primary-500 h-2 rounded-full"
+                      style={{
+                        width: `${(count / stats.totalOrders) * 100}%`,
+                      }}
+                    />
                   </div>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-
-      </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

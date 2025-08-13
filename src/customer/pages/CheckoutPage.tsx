@@ -53,7 +53,16 @@ export default function CheckoutPage() {
   const [userAddresses, setUserAddresses] = useState<Address[]>([]);
   const [loadingAddresses, setLoadingAddresses] = useState(true);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const { register, handleSubmit, formState: { errors }, setValue } = useForm<CheckoutForm>();
+  const [selectedAddressId, setSelectedAddressId] = useState<string>('');
+  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<CheckoutForm>();
+
+  // Build a clean, comma-separated location string without empty values
+  const formatLocation = (parts: Array<string | null | undefined>): string => {
+    return parts
+      .map(part => (typeof part === 'string' ? part.trim() : part))
+      .filter(part => !!part && part !== ',')
+      .join(', ');
+  };
 
   const params = new URLSearchParams(location.search);
   const isSingleProductCheckout = !!params.get('product');
@@ -133,10 +142,14 @@ export default function CheckoutPage() {
         if (addressesError) throw new Error('Error fetching addresses: ' + addressesError.message);
 
         if (addresses) {
+          console.log('All user addresses loaded:', addresses); // Debug log
           setUserAddresses(addresses as Address[]);
-          // Optionally set a default selected address if available
+          // Set default selected address if available
           if (addresses.length > 0) {
-            setValue('addressId', addresses[0].id);
+            const defaultAddressId = addresses[0].id;
+            setValue('addressId', defaultAddressId);
+            setSelectedAddressId(defaultAddressId);
+            console.log('Default address selected:', addresses[0]); // Debug log
           }
         }
 
@@ -157,6 +170,23 @@ export default function CheckoutPage() {
     0
   );
 
+  // Watch for address selection changes
+  const watchedAddressId = watch('addressId');
+  
+  // Update selected address when form value changes
+  useEffect(() => {
+    if (watchedAddressId && watchedAddressId !== selectedAddressId) {
+      setSelectedAddressId(watchedAddressId);
+    }
+  }, [watchedAddressId, selectedAddressId]);
+
+  const handleAddressChange = (addressId: string) => {
+    const selectedAddress = userAddresses.find(addr => addr.id === addressId);
+    console.log('Address selection changed to:', selectedAddress); // Debug log
+    setSelectedAddressId(addressId);
+    setValue('addressId', addressId);
+  };
+
   const onSubmit = async (data: CheckoutForm) => {
     // Check for payment proof before proceeding
     if (!selectedFile) {
@@ -174,11 +204,13 @@ export default function CheckoutPage() {
       }
 
       // Find the selected address
-      const selectedAddress = userAddresses.find(addr => addr.id === data.addressId);
+      const selectedAddress = userAddresses.find(addr => addr.id === selectedAddressId);
       if (!selectedAddress) {
           toast.error('Please select a valid address');
           return;
       }
+
+      console.log('Selected address for order:', selectedAddress); // Debug log
 
       // If single-product checkout, skip cart fetch and use cartItems
       const productId = params.get('product');
@@ -247,6 +279,16 @@ export default function CheckoutPage() {
          longitude: selectedAddress.longitude || null
        };
 
+       console.log('=== DELIVERY ADDRESS DEBUG ===');
+       console.log('Selected address ID:', selectedAddressId);
+       console.log('Selected address data:', selectedAddress);
+       console.log('All available addresses:', userAddresses);
+       console.log('Delivery address being sent to database:', deliveryAddress);
+       console.log('Barangay being sent:', deliveryAddress.barangay);
+       console.log('Full name being sent:', deliveryAddress.full_name);
+       console.log('Street address being sent:', deliveryAddress.street_address);
+       console.log('================================');
+
       // Start a transaction
       const { data: order, error: orderError } = await supabase
         .from('orders')
@@ -254,6 +296,8 @@ export default function CheckoutPage() {
           customer_id: user.id,
           total,
           order_status_code: 'pending',
+          // Permanently tie the order to the selected address id and let DB snapshot it
+          selected_address_id: selectedAddress.id,
           delivery_address: deliveryAddress,
           notes: data.notes,
           created_at: new Date().toISOString()
@@ -495,23 +539,49 @@ export default function CheckoutPage() {
               {userAddresses.map(address => (
                 <div 
                   key={address.id} 
-                  className="bg-gray-50 p-4 rounded-lg border border-gray-200 flex items-start space-x-3"
+                  className={`p-4 rounded-lg border flex items-start space-x-3 transition-all duration-200 ${
+                    selectedAddressId === address.id 
+                      ? 'bg-blue-50 border-blue-300 shadow-sm' 
+                      : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                  }`}
                 >
                   <input
                     type="radio"
                     id={`address-${address.id}`}
                     value={address.id}
-                    {...register('addressId', { required: 'Please select an address' })}
+                    checked={selectedAddressId === address.id}
+                    onChange={() => handleAddressChange(address.id)}
                     className="mt-1 h-4 w-4 text-primary-600 border-gray-300 focus:ring-primary-500"
                   />
                   <label htmlFor={`address-${address.id}`} className="flex-1 cursor-pointer">
-                    <p className="text-sm font-medium text-gray-900">
-                      {address.full_name} {address.phone ? `(+63) ${address.phone}` : ''}
-                    </p>
-                    <p className="text-sm text-gray-500 mt-1">
-                      {address.street_address}<br/>
-                      {address.barangay}, {address.city}, {address.province}, {address.region} {address.postal_code}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-gray-900">
+                        {address.full_name} {address.phone ? `(+63) ${address.phone}` : ''}
+                      </p>
+                      {selectedAddressId === address.id && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          Selected
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm text-gray-500 mt-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
+                            selectedAddressId === address.id
+                              ? 'bg-blue-100 text-blue-800 border-blue-200'
+                              : 'bg-amber-100 text-amber-800 border-amber-200'
+                          }`}
+                        >
+                          {address.barangay || 'Barangay not set'}
+                        </span>
+                        <span>
+                          {formatLocation([address.city, address.province, address.region])}
+                          {address.postal_code ? ` ${address.postal_code}` : ''}
+                        </span>
+                      </div>
+                      <div className="mt-1">{address.street_address}</div>
+                    </div>
                     {address.label && (
                       <span className="mt-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                         {address.label}
@@ -520,8 +590,8 @@ export default function CheckoutPage() {
                   </label>
                 </div>
               ))}
-              {errors.addressId && (
-                <p className="mt-1 text-sm text-red-600">{errors.addressId.message}</p>
+              {!selectedAddressId && (
+                <p className="mt-1 text-sm text-red-600">Please select a delivery address</p>
               )}
               <Button
                 variant="outline"
@@ -696,7 +766,7 @@ export default function CheckoutPage() {
           <Button
             type="submit"
             isLoading={loading}
-            disabled={userAddresses.length === 0 || loading}
+            disabled={userAddresses.length === 0 || !selectedAddressId || loading}
           >
             Place Order
           </Button>
