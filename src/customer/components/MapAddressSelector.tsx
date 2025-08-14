@@ -2,12 +2,15 @@ import { useState, useEffect, useRef } from 'react';
 import { MapPin, Navigation, X, ArrowLeft } from 'lucide-react';
 import Button from '../../ui/components/Button';
 import { toast } from 'react-hot-toast';
+import { detectBarangayFromCoordinates, type DetectedBarangay } from '../../lib/utils';
+import redPinGif from '../../assets/red pin map.gif';
 
 // Google Maps type declarations
 declare global {
   interface Window {
     google: typeof google;
     gm_authFailure: () => void;
+    [key: string]: any; // Allow dynamic properties for callbacks
   }
 }
 
@@ -27,6 +30,14 @@ declare namespace google {
     
     class LatLngBounds {
       constructor(sw?: LatLng | { lat: number; lng: number }, ne?: LatLng | { lat: number; lng: number });
+    }
+    
+    // Minimal types for marker icon sizing/anchor
+    class Size {
+      constructor(width: number, height: number);
+    }
+    class Point {
+      constructor(x: number, y: number);
     }
     
     class Marker {
@@ -89,7 +100,7 @@ declare namespace google {
 interface MapAddressSelectorProps {
   isOpen: boolean;
   onClose: () => void;
-  onAddressSelect: (address: string, coordinates?: { lat: number; lng: number }) => void;
+  onAddressSelect: (address: string, coordinates?: { lat: number; lng: number }, detectedBarangay?: DetectedBarangay) => void;
   initialAddress?: string;
   title?: string;
 }
@@ -103,6 +114,8 @@ export default function MapAddressSelector({
 }: MapAddressSelectorProps) {
   const [address, setAddress] = useState(initialAddress);
   const [isLoading, setIsLoading] = useState(false);
+  const [detectedBarangay, setDetectedBarangay] = useState<DetectedBarangay | null>(null);
+  const [isDetectingBarangay, setIsDetectingBarangay] = useState(false);
   const [, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
@@ -193,13 +206,10 @@ export default function MapAddressSelector({
       position: latLng,
       map: mapInstanceRef.current,
       icon: {
-        path: google.maps.SymbolPath.CIRCLE,
-        scale: 10,
-        fillColor: '#ef4444',
-        fillOpacity: 1,
-        strokeColor: '#ffffff',
-        strokeWeight: 2,
-      },
+        url: redPinGif as unknown as string,
+        scaledSize: new google.maps.Size(48, 48),
+        anchor: new google.maps.Point(24, 48),
+      } as any,
       draggable: true,
     });
 
@@ -213,9 +223,30 @@ export default function MapAddressSelector({
     mapInstanceRef.current.panTo(latLng);
   };
 
-  const reverseGeocode = (latLng: google.maps.LatLng) => {
+  const reverseGeocode = async (latLng: google.maps.LatLng) => {
     const geocoder = new google.maps.Geocoder();
     
+    // Start barangay detection
+    setIsDetectingBarangay(true);
+    
+    try {
+      // Detect barangay from coordinates
+      const barangayInfo = await detectBarangayFromCoordinates(latLng.lat(), latLng.lng());
+      if (barangayInfo) {
+        setDetectedBarangay(barangayInfo);
+        toast.success(`📍 Detected: ${barangayInfo.barangay}, ${barangayInfo.city}`);
+      } else {
+        setDetectedBarangay(null);
+        toast('📍 Location detected, but barangay could not be determined', { icon: 'ℹ️' });
+      }
+    } catch (error) {
+      console.error('Error detecting barangay:', error);
+      setDetectedBarangay(null);
+    } finally {
+      setIsDetectingBarangay(false);
+    }
+    
+    // Continue with regular reverse geocoding for address
     geocoder.geocode({ location: latLng }, (results, status) => {
       if (status === 'OK' && results && results[0]) {
         setAddress(results[0].formatted_address);
@@ -296,10 +327,6 @@ export default function MapAddressSelector({
     }
   };
 
-  const handleAddressInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setAddress(e.target.value);
-  };
-
   const handleAddressSearch = () => {
     if (!address.trim() || !mapInstanceRef.current) return;
 
@@ -309,13 +336,28 @@ export default function MapAddressSelector({
       if (status === 'OK' && results && results[0] && results[0].geometry) {
         const latLng = results[0].geometry.location;
         updateMarkerPosition(latLng);
+        reverseGeocode(latLng);
         setAddress(results[0].formatted_address);
       } else {
-        // Show error message if geocoding fails
-        toast.error(`Could not find address: "${address}". Please check the spelling or try clicking directly on the map. Error: ${status}`);
-        console.error('Geocoding failed:', status, results);
+        toast.error(`Could not find "${address}". Please try clicking on the map instead.`);
       }
     });
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleAddressSearch();
+    }
+  };
+
+  const handleClearSearch = () => {
+    setAddress('');
+    setDetectedBarangay(null);
+    // Remove marker from the map if present
+    if (markerRef.current) {
+      markerRef.current.setMap(null);
+      markerRef.current = null;
+    }
   };
 
   const handleConfirmAddress = () => {
@@ -325,14 +367,8 @@ export default function MapAddressSelector({
         lng: markerRef.current.getPosition()?.lng() || 0,
       } : undefined;
       
-      onAddressSelect(address, coordinates);
+      onAddressSelect(address, coordinates, detectedBarangay || undefined);
       onClose();
-    }
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleAddressSearch();
     }
   };
 
@@ -340,133 +376,110 @@ export default function MapAddressSelector({
 
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col">
-      {/* Enhanced Header */}
-      <div className="bg-white shadow-lg border-b border-gray-200 flex-shrink-0">
-        <div className="flex items-center justify-between p-3 sm:p-4 lg:p-6">
+      {/* Simplified Header */}
+      <div className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0">
+        <div className="flex items-center justify-between p-4">
           <button
             onClick={onClose}
-            className="p-2 sm:p-3 hover:bg-gray-50 rounded-lg transition-all duration-200 text-gray-600 hover:text-gray-800"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600 hover:text-gray-800"
           >
-            <ArrowLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+            <ArrowLeft className="w-5 h-5" />
           </button>
-          <div className="text-center flex-1 px-2">
-            <h1 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900">{title}</h1>
-            <p className="text-xs sm:text-sm text-gray-600">📍 Region 10 (Northern Mindanao)</p>
+          <div className="text-center flex-1">
+            <h1 className="text-lg font-semibold text-gray-900">{title}</h1>
+            <p className="text-sm text-blue-600 font-medium">📍 Tap on map to pin location</p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 sm:p-3 hover:bg-gray-50 rounded-lg transition-all duration-200 text-gray-600 hover:text-gray-800"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600 hover:text-gray-800"
           >
-            <X className="w-5 h-5 sm:w-6 sm:h-6" />
+            <X className="w-5 h-5" />
           </button>
-        </div>
-        
-        {/* Instructions Banner */}
-        <div className="bg-gray-800 text-white px-3 sm:px-4 lg:px-6 py-2 sm:py-3">
-          <p className="text-center text-xs sm:text-sm font-medium">
-            🗺️ <span className="hidden sm:inline">Click anywhere on the map to pin your location • Map restricted to Region 10 for precise delivery</span>
-            <span className="sm:hidden">Tap on map to pin location</span>
-          </p>
         </div>
       </div>
 
-      {/* Enhanced Map Container */}
-      <div className="relative flex-1 min-h-0">
+      {/* Larger Map Container */}
+      <div className="relative flex-1">
         <div ref={mapRef} className="w-full h-full" />
-        
-        {/* Enhanced Center Pin Overlay */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="relative">
-            <MapPin className="w-8 h-8 sm:w-10 sm:h-10 text-red-500 drop-shadow-lg mb-8 sm:mb-10" />
-            <div className="absolute top-10 sm:top-12 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-2 sm:px-3 py-1 rounded-full text-xs font-semibold">
-              Tap here
-            </div>
-          </div>
-        </div>
-        
-
       </div>
 
-      {/* Enhanced Address Input Section */}
-      <div className="bg-white border-t border-gray-200 shadow-lg flex-shrink-0">
-        <div className="p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4 lg:space-y-6 max-h-[50vh] overflow-y-auto">
-          {/* Address Input */}
-          <div>
-            <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2">
-              📍 Type or Select Address
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={address}
-                onChange={handleAddressInputChange}
-                onKeyPress={handleKeyPress}
-                placeholder="Type your address here or click on map... (Press Enter to search)"
-                className="w-full p-3 sm:p-4 border border-gray-200 rounded-lg text-sm sm:text-base focus:outline-none focus:ring-1 focus:ring-gray-400 focus:border-gray-400 transition-all duration-200"
-              />
-              <div className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
-                {address && (
-                  <button
-                    onClick={() => setAddress('')}
-                    className="p-1 sm:p-2 hover:bg-gray-100 rounded-full transition-colors"
-                  >
-                    <X className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
-                  </button>
-                )}
-                <button
-                  onClick={handleAddressSearch}
-                  className="p-1 sm:p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-600 hover:text-gray-800"
-                  title="Search address"
-                >
-                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </button>
-              </div>
-            </div>
+      {/* Simplified Bottom Panel */}
+      <div className="bg-white border-t border-gray-200 flex-shrink-0">
+        <div className="p-4 space-y-4">
+          {/* Search Address Input */}
+          <div className="relative">
+            <input
+              type="text"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Search address or tap on map..."
+              className="w-full p-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 pr-20"
+            />
+            {address && (
+              <button
+                onClick={handleClearSearch}
+                className="absolute right-9 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full text-gray-500 hover:text-gray-700"
+                title="Clear search"
+                aria-label="Clear search"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+            <button
+              onClick={handleAddressSearch}
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full transition-colors text-gray-500 hover:text-gray-700"
+              title="Search address"
+              aria-label="Search address"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </button>
           </div>
 
-          {/* Instructions */}
-          <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border border-gray-200">
-            <h3 className="text-sm sm:text-base font-semibold text-gray-800 mb-2">📋 How to select your location:</h3>
-            <div className="space-y-1 sm:space-y-2 text-xs sm:text-sm text-gray-700">
+          {/* Detected Barangay Display */}
+          {(detectedBarangay || isDetectingBarangay) && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
               <div className="flex items-center gap-2">
-                <span className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-600 text-white rounded-full flex items-center justify-center text-xs font-bold">1</span>
-                <span>Type your address and press Enter to search</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-600 text-white rounded-full flex items-center justify-center text-xs font-bold">2</span>
-                <span>Click anywhere on the map to pin your location</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-600 text-white rounded-full flex items-center justify-center text-xs font-bold">3</span>
-                <span>Or use GPS to find your current position</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-600 text-white rounded-full flex items-center justify-center text-xs font-bold">4</span>
-                <span>Confirm your address when ready</span>
+                {isDetectingBarangay ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
+                ) : (
+                  <MapPin className="w-4 h-4 text-green-600" />
+                )}
+                <div className="flex-1">
+                  {isDetectingBarangay ? (
+                    <p className="text-sm text-green-700 font-medium">🔍 Detecting Barangay...</p>
+                  ) : detectedBarangay ? (
+                    <div>
+                      <p className="text-sm text-green-800 font-medium">
+                        Barangay {detectedBarangay.barangay}, {detectedBarangay.city}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
-          </div>
+          )}
+
+
 
           {/* Action Buttons */}
-          <div className="space-y-2 sm:space-y-3">
+          <div className="flex gap-3">
             <Button
               onClick={getCurrentLocation}
               variant="outline"
-              fullWidth
-              className="flex items-center justify-center gap-2 sm:gap-3 py-3 sm:py-4 text-sm sm:text-base lg:text-lg border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg font-semibold transition-all duration-200"
               disabled={isLoading}
+              className="flex-1 py-3 text-sm border-blue-300 text-blue-700 hover:bg-blue-50"
             >
               {isLoading ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 sm:h-5 sm:w-5 border-b-2 border-gray-600"></div>
-                  <span className="break-words">Getting your location...</span>
-                </>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
               ) : (
                 <>
-                  <Navigation className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
-                  <span className="break-words">🎯 Use My Current Location</span>
+                  <Navigation className="w-4 h-4 mr-2" />
+                  Use GPS
                 </>
               )}
             </Button>
@@ -474,13 +487,10 @@ export default function MapAddressSelector({
             {address && (
               <Button
                 onClick={handleConfirmAddress}
-                fullWidth
-                className="py-3 sm:py-4 text-sm sm:text-base lg:text-lg bg-gray-900 hover:bg-gray-800 text-white rounded-lg font-semibold transition-all duration-200"
+                className="flex-1 py-3 text-sm bg-blue-600 hover:bg-blue-700 text-white"
               >
-                <div className="flex items-center justify-center gap-2 sm:gap-3">
-                  <MapPin className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
-                  <span className="break-words">✅ Confirm This Location</span>
-                </div>
+                <MapPin className="w-4 h-4 mr-2" />
+                Confirm Location
               </Button>
             )}
           </div>
@@ -498,13 +508,40 @@ export const loadGoogleMapsScript = (): Promise<void> => {
       return;
     }
 
+    // Check if script already exists
+    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
+    if (existingScript) {
+      // Wait for existing script to load
+      const checkLoaded = () => {
+        if (window.google && window.google.maps) {
+          resolve();
+        } else {
+          setTimeout(checkLoaded, 100);
+        }
+      };
+      checkLoaded();
+      return;
+    }
+
+    // Get API key from environment or fallback
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyCw7RgxVpjSfIVB-XQe2dJG5U-ehYHYxFw';
+    
+    // Log for debugging (remove in production)
+    console.log('Google Maps API Key loaded:', apiKey ? 'Yes' : 'No');
+    
+    if (!apiKey) {
+      reject(new Error('Google Maps API key not found. Please check your environment configuration.'));
+      return;
+    }
+
+    // Simple script loading approach
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&libraries=places`;
+    script.type = 'text/javascript';
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
     script.async = true;
     script.defer = true;
     
     script.onload = () => {
-      // Check if Google Maps loaded successfully
       if (window.google && window.google.maps) {
         resolve();
       } else {
@@ -521,6 +558,7 @@ export const loadGoogleMapsScript = (): Promise<void> => {
       reject(new Error('Google Maps API authentication failed. Please check your API key, billing, and enabled APIs in Google Cloud Console.'));
     };
     
+    // Append to head
     document.head.appendChild(script);
   });
 }; 

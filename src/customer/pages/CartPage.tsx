@@ -109,7 +109,10 @@ export default function CartPage() {
         }
 
         if (!ignore) {
-          setCartItems((items || []) as CartItem[]);
+          const normalized = (items || []) as CartItem[];
+          // Consolidate any duplicate rows for the same product (legacy carts)
+          const consolidated = await consolidateDuplicates(normalized);
+          setCartItems(consolidated);
           setIsLoaded(true);
         }
       } catch (error) {
@@ -130,6 +133,47 @@ export default function CartPage() {
     };
   }, [session]);
 
+  // Merge duplicate cart rows by product and fix server state
+  async function consolidateDuplicates(items: CartItem[]): Promise<CartItem[]> {
+    const productIdToItems = new Map<string, CartItem[]>();
+    for (const it of items) {
+      if (!it.product?.id) continue;
+      const key = it.product.id;
+      const list = productIdToItems.get(key) || [];
+      list.push(it);
+      productIdToItems.set(key, list);
+    }
+
+    const result: CartItem[] = [];
+    for (const [, group] of productIdToItems) {
+      if (group.length === 1) {
+        result.push(group[0]);
+        continue;
+      }
+      // Multiple rows for same product: merge them
+      const keeper = group[0];
+      const sum = group.reduce((s, g) => s + (g.quantity || 0), 0);
+      const maxAllowed = keeper.product.quantity;
+      const mergedQty = Math.min(sum, maxAllowed);
+
+      // Update server: set qty on keeper, delete others
+      try {
+        if (keeper.quantity !== mergedQty) {
+          await supabase.from('cart_items').update({ quantity: mergedQty }).eq('id', keeper.id);
+          keeper.quantity = mergedQty;
+        }
+        const toDelete = group.slice(1).map(g => g.id);
+        if (toDelete.length > 0) {
+          await supabase.from('cart_items').delete().in('id', toDelete);
+        }
+      } catch (e) {
+        console.warn('Failed consolidating duplicate cart rows', e);
+      }
+      result.push(keeper);
+    }
+    return result;
+  }
+
   const handleUpdateQuantity = async (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
     
@@ -146,23 +190,19 @@ export default function CartPage() {
     setUpdatingItem(itemId);
 
     try {
+      // Optimistic UI update
+      setCartItems(prev => prev.map(i => i.id === itemId ? { ...i, quantity: newQuantity } : i));
       const { error } = await supabase
         .from('cart_items')
         .update({ quantity: newQuantity })
         .eq('id', itemId);
 
       if (error) throw error;
-
-      setCartItems(prev =>
-        prev.map(item =>
-          item.id === itemId
-            ? { ...item, quantity: newQuantity }
-            : item
-        )
-      );
     } catch (error) {
       console.error('Error updating quantity:', error);
       toast.error('Failed to update quantity');
+      // Revert UI on error
+      setCartItems(prev => prev.map(i => i.id === itemId ? { ...i, quantity: cartItem.quantity } : i));
     } finally {
       setUpdatingItem(null);
     }

@@ -136,7 +136,8 @@ export default function CheckoutPage() {
         const { data: addresses, error: addressesError } = await supabase
           .from('addresses')
           .select('*')
-          .eq('customer_id', user.id);
+          .eq('customer_id', user.id)
+          .eq('active', true);
         console.log('Fetched addresses:', addresses);
 
         if (addressesError) throw new Error('Error fetching addresses: ' + addressesError.message);

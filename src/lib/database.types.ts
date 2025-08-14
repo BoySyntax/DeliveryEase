@@ -113,6 +113,7 @@ export interface Database {
           barangay: string | null
           latitude: number | null
           longitude: number | null
+          active: boolean
           created_at: string
         }
         Insert: {
@@ -124,6 +125,7 @@ export interface Database {
           barangay?: string | null
           latitude?: number | null
           longitude?: number | null
+          active?: boolean
           created_at?: string
         }
         Update: {
@@ -135,6 +137,7 @@ export interface Database {
           barangay?: string | null
           latitude?: number | null
           longitude?: number | null
+          active?: boolean
           created_at?: string
         }
         Relationships: [

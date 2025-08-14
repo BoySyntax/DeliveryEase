@@ -5,10 +5,10 @@ import { useNavigate } from 'react-router-dom';
 import Button from '../../ui/components/Button';
 import Loader from '../../ui/components/Loader';
 import { toast } from 'react-hot-toast';
-import Input from '../../ui/components/Input'; // Import Input
+
 import { useForm } from 'react-hook-form'; // Import useForm
 import { cleanImageUrl } from '../../lib/utils';
-import MapAddressSelector, { loadGoogleMapsScript } from '../components/MapAddressSelector';
+import MapAddressSelector from '../components/MapAddressSelector';
 import { MapPin } from 'lucide-react';
 
 // Address type matching the current database schema
@@ -30,9 +30,7 @@ type Address = {
 export default function ProfilePage() {
   const { profile, loading } = useProfile();
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    name: profile?.name || '',
-  });
+
   const [isSaving, setIsSaving] = useState(false);
   const navigate = useNavigate();
   const [userAddresses, setUserAddresses] = useState<Address[]>([]);
@@ -53,7 +51,7 @@ export default function ProfilePage() {
   const [isMapSelectorOpen, setIsMapSelectorOpen] = useState(false);
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
   const [selectedAddressText, setSelectedAddressText] = useState('');
-  const [mapsLoaded, setMapsLoaded] = useState(false);
+
 
   // Fetch user addresses on component mount
   useEffect(() => {
@@ -65,7 +63,8 @@ export default function ProfilePage() {
         const { data, error } = await supabase
           .from('addresses')
           .select('*')
-          .eq('customer_id', profile.id);
+          .eq('customer_id', profile.id)
+          .eq('active', true);
 
         if (error) {
            console.error('Error fetching addresses:', error);
@@ -147,31 +146,84 @@ export default function ProfilePage() {
   };
 
   const handleDeleteAddress = async (addressId: string) => {
-    // Optional: Add a confirmation dialog here before deleting
-    if (!window.confirm('Are you sure you want to delete this address?')) {
-      return;
-    }
-
     setDeletingAddressId(addressId);
+    
     try {
-      const { error } = await supabase
-        .from('addresses')
-        .delete()
-        .eq('id', addressId);
+      // First, check if this address is referenced by any orders
+      const { data: referencedOrders, error: checkError } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('selected_address_id', addressId)
+        .limit(1);
 
-      if (error) {
-         console.error('Error deleting address:', error);
-         toast.error('Failed to delete address');
-         return;
+      if (checkError) {
+        console.error('Error checking address references:', checkError);
+        toast.error('Failed to check address usage');
+        return;
       }
 
-      // Remove the deleted address from the state
-      setUserAddresses(prevAddresses => prevAddresses.filter(addr => addr.id !== addressId));
-      toast.success('Address deleted successfully!');
+      // If address is referenced by orders, show appropriate message
+      if (referencedOrders && referencedOrders.length > 0) {
+        const confirmed = window.confirm(
+          'This address has been used in previous orders and cannot be deleted to maintain order history. ' +
+          'Would you like to mark it as inactive instead? This will hide it from your address list while preserving order records.'
+        );
+        
+        if (!confirmed) {
+          return;
+        }
+
+        // Mark address as inactive instead of deleting
+        const { error: updateError } = await supabase
+          .from('addresses')
+          .update({ active: false })
+          .eq('id', addressId);
+
+        if (updateError) {
+          console.error('Error marking address as inactive:', updateError);
+          toast.error('Failed to hide address');
+          return;
+        }
+
+        // Remove from local state
+        setUserAddresses(prevAddresses => prevAddresses.filter(addr => addr.id !== addressId));
+        toast.success('Address hidden from your list (order history preserved)');
+        
+      } else {
+        // Safe to delete - no order references
+        const confirmed = window.confirm('Are you sure you want to delete this address?');
+        if (!confirmed) {
+          return;
+        }
+
+        const { error } = await supabase
+          .from('addresses')
+          .delete()
+          .eq('id', addressId);
+
+        if (error) {
+          console.error('Error deleting address:', error);
+          
+          // Handle foreign key constraint error specifically
+          if (error.code === '23503') {
+            toast.error(
+              'This address cannot be deleted because it has been used in orders. ' +
+              'This protects your order history. You can add a new address instead.'
+            );
+          } else {
+            toast.error('Failed to delete address');
+          }
+          return;
+        }
+
+        // Remove the deleted address from the state
+        setUserAddresses(prevAddresses => prevAddresses.filter(addr => addr.id !== addressId));
+        toast.success('Address deleted successfully!');
+      }
 
     } catch (error) {
       console.error('Error deleting address:', error);
-       toast.error('Failed to delete address');
+      toast.error('Failed to delete address');
     } finally {
       setDeletingAddressId(null);
     }
@@ -268,7 +320,6 @@ export default function ProfilePage() {
 
       // Create unique file path
       const timestamp = Date.now();
-      const randomId = Math.random().toString(36).substring(2, 8);
       
       // Determine content type based on file extension first, then fallback to file.type
       const mimeTypes: { [key: string]: string } = {
@@ -432,45 +483,9 @@ export default function ProfilePage() {
     setImageUrl(null);
   };
 
-  // Map address selector functions
-  const handleEditAddressWithMap = async (address: Address) => {
-    // Load Google Maps if not already loaded
-    if (!mapsLoaded) {
-      try {
-        await loadGoogleMapsScript();
-        setMapsLoaded(true);
-      } catch (error) {
-        console.error('Failed to load Google Maps:', error);
-        toast.error('Failed to load map. Please try again.');
-        return;
-      }
-    }
 
-    setSelectedAddressText(address.street_address);
-    setEditingAddressId(address.id);
-    setIsMapSelectorOpen(true);
-  };
 
-  const handleAddAddressWithMap = async () => {
-    // Load Google Maps if not already loaded
-    if (!mapsLoaded) {
-      try {
-        await loadGoogleMapsScript();
-        setMapsLoaded(true);
-      } catch (error) {
-        console.error('Failed to load Google Maps:', error);
-        toast.error('Failed to load map. Please try again.');
-        return;
-      }
-    }
-
-    // Clear any previous data and open in "add mode"
-    setSelectedAddressText('');
-    setEditingAddressId(null);
-    setIsMapSelectorOpen(true);
-  };
-
-  const handleAddressSelection = async (newAddress: string, coordinates?: { lat: number; lng: number }) => {
+  const handleAddressSelection = async (newAddress: string, _coordinates?: { lat: number; lng: number }) => {
     if (editingAddressId) {
       // Edit existing address
       setIsSaving(true);
@@ -538,7 +553,8 @@ export default function ProfilePage() {
       const { data: updatedAddresses, error: fetchError } = await supabase
         .from('addresses')
         .select('*')
-        .eq('customer_id', profile.id);
+        .eq('customer_id', profile.id)
+        .eq('active', true);
 
       if (fetchError) {
         console.error('Error re-fetching addresses:', fetchError);

@@ -348,7 +348,7 @@ export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: Deliv
 
   // Load Google Maps API
   const loadGoogleMaps = useCallback(() => {
-    const API_KEY = 'AIzaSyCw7RgxVpjSfIVB-XQe2dJG5U-ehYHYxFw';
+    const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyCw7RgxVpjSfIVB-XQe2dJG5U-ehYHYxFw';
 
     if (window.google && window.google.maps) {
       initializeMap();
