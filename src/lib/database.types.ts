@@ -239,6 +239,7 @@ export interface Database {
           price: number
           product_id: string
           quantity: number
+          reservation_status?: string | null
         }
         Insert: {
           id?: string
@@ -246,6 +247,7 @@ export interface Database {
           price: number
           product_id: string
           quantity: number
+          reservation_status?: string | null
         }
         Update: {
           id?: string
@@ -253,6 +255,7 @@ export interface Database {
           price?: number
           product_id?: string
           quantity?: number
+          reservation_status?: string | null
         }
         Relationships: [
           {

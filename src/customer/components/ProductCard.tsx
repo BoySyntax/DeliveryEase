@@ -42,7 +42,7 @@ export default function ProductCard({ id, name, price, imageUrl, quantity, unit,
               {unit !== 'piece' && unit_quantity ? ` (${unit_quantity} pcs)` : ''}
             </div>
           )}
-          <div className="mt-2 flex space-x-1">
+          <div className="mt-auto flex space-x-1">
             <Button 
               size="sm"
               icon={<ShoppingCart size={14} />}
@@ -53,7 +53,7 @@ export default function ProductCard({ id, name, price, imageUrl, quantity, unit,
                 e.stopPropagation();
                 onAddToCart();
               }}
-              className="transition-transform duration-100 active:scale-95 text-xs py-1 px-2"
+              className="transition-transform duration-100 active:scale-95 text-xs py-1 px-2 rounded-md"
             >
               {loading ? (
                 <>
@@ -61,7 +61,7 @@ export default function ProductCard({ id, name, price, imageUrl, quantity, unit,
                   Adding...
                 </>
               ) : (
-                'Add'
+                'Add to Cart'
               )}
             </Button>
           </div>

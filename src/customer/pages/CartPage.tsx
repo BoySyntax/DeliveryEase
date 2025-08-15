@@ -198,6 +198,14 @@ export default function CartPage() {
         .eq('id', itemId);
 
       if (error) throw error;
+      // Fire event if quantity change crosses 0/1 boundary (affects distinct product count)
+      const wasZero = cartItem.quantity === 0;
+      const nowZero = newQuantity === 0;
+      if (!wasZero && nowZero) {
+        window.dispatchEvent(new Event('cart:product-removed'));
+      } else if (wasZero && !nowZero) {
+        window.dispatchEvent(new Event('cart:product-added'));
+      }
     } catch (error) {
       console.error('Error updating quantity:', error);
       toast.error('Failed to update quantity');
@@ -220,6 +228,7 @@ export default function CartPage() {
       if (error) throw error;
 
       setCartItems(prev => prev.filter(item => item.id !== itemId));
+      window.dispatchEvent(new Event('cart:product-removed'));
       toast.success('Item removed from cart');
     } catch (error) {
       console.error('Error removing item:', error);

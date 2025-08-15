@@ -67,21 +67,19 @@ export default function ProductDetailsPage() {
         return;
       }
 
-      // Get or create cart in a single query
-      const { data: cart, error: cartError } = await supabase
+      // Get latest existing cart; create one only if none exists
+      const { data: carts } = await supabase
         .from('carts')
         .select('id')
         .eq('customer_id', user.id)
-        .maybeSingle();
-      
-      if (cartError) {
-        console.warn('Cart fetch error:', cartError);
-        // Continue to create a new cart
-      }
+        .order('created_at', { ascending: false })
+        .limit(1);
 
       let cartId: string;
       
-      if (!cart) {
+      if (carts && carts.length > 0) {
+        cartId = carts[0].id;
+      } else {
         const { data: newCart, error: createError } = await supabase
           .from('carts')
           .insert([{ customer_id: user.id }])
@@ -91,8 +89,6 @@ export default function ProductDetailsPage() {
         if (createError) throw createError;
         if (!newCart) throw new Error('Failed to create cart');
         cartId = newCart.id;
-      } else {
-        cartId = cart.id;
       }
 
       // First try to get existing item
@@ -129,6 +125,9 @@ export default function ProductDetailsPage() {
       if (upsertError) throw upsertError;
 
       toast.success('Added to cart');
+      if (!existingItem) {
+        window.dispatchEvent(new Event('cart:product-added'));
+      }
     } catch (error) {
       console.error('Error adding to cart:', error);
       toast.error('Failed to add item to cart');

@@ -266,7 +266,7 @@ export default function VerifyOrdersPage() {
       if (approved) {
         try {
           // Get customer email from profiles table
-          const { data: emailResult, error: emailError } = await supabase
+          const { data: emailResult } = await supabase
             .from('profiles')
             .select('id, email')
             .eq('id', orderData.customer_id)
@@ -307,6 +307,41 @@ export default function VerifyOrdersPage() {
         }
       }
       
+      // Update reservation_status and stock based on approval result
+      if (approved) {
+        // Commit reservations and decrement stock
+        const { data: orderItems } = await supabase
+          .from('order_items')
+          .select('product_id, quantity')
+          .eq('order_id', orderId);
+        if (orderItems && orderItems.length > 0) {
+          for (const item of orderItems) {
+            // Fetch current stock
+            const { data: productRow } = await supabase
+              .from('products')
+              .select('quantity')
+              .eq('id', item.product_id)
+              .single();
+            const currentQty = productRow?.quantity ?? 0;
+            const newQty = Math.max(0, currentQty - (item.quantity ?? 0));
+            await supabase
+              .from('products')
+              .update({ quantity: newQty })
+              .eq('id', item.product_id);
+          }
+        }
+        await supabase
+          .from('order_items')
+          .update({ reservation_status: 'committed' })
+          .eq('order_id', orderId);
+      } else {
+        // Release reservations (no stock change)
+        await supabase
+          .from('order_items')
+          .update({ reservation_status: 'released' })
+          .eq('order_id', orderId);
+      }
+
       // Notification will be automatically created by the database trigger
       console.log('Order status updated - notification will be created automatically by trigger');
       

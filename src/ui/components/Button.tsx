@@ -52,7 +52,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         className={cn(
-          'inline-flex items-center justify-center font-medium transition-colors rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none',
+          'inline-flex items-center justify-center gap-2 font-medium transition-colors rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none',
           variantClasses[variant],
           sizeClasses[size],
           fullWidth && 'w-full',
@@ -83,11 +83,9 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             ></path>
           </svg>
         )}
-        {icon && iconPosition === 'left' && !isLoading && (
-          <span className="mr-2">{icon}</span>
-        )}
+        {icon && iconPosition === 'left' && !isLoading && icon}
         {children}
-        {icon && iconPosition === 'right' && <span className="ml-2">{icon}</span>}
+        {icon && iconPosition === 'right' && icon}
       </button>
     );
   }

@@ -51,55 +51,112 @@ export default function CustomerLayout() {
   const shouldHideBottomNav = hideBottomNavOnPages.some(page => location.pathname.startsWith(page));
 
   const [cartCount, setCartCount] = useState(0);
+  const [cartId, setCartId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  async function refreshCartCount(currentCartId: string) {
+    try {
+      const { data: items, error: itemsError } = await supabase
+        .from('cart_items')
+        .select('product_id')
+        .eq('cart_id', currentCartId);
+      if (itemsError) {
+        console.warn('Cart items fetch error:', itemsError);
+        setCartCount(0);
+        return;
+      }
+      const uniqueProducts = new Set((items || []).map((it: any) => it.product_id));
+      setCartCount(uniqueProducts.size);
+    } catch (error) {
+      console.warn('Error fetching cart count:', error);
+      setCartCount(0);
+    }
+  }
+
   useEffect(() => {
-    async function fetchCartCount() {
+    let isMounted = true;
+    async function initCart() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
-        
-        // Get user's cart
-        const { data: cart, error: cartError } = await supabase
+        if (isMounted) setUserId(user.id);
+        const { data: carts } = await supabase
           .from('carts')
           .select('id')
           .eq('customer_id', user.id)
-          .maybeSingle();
-        
-        if (cartError) {
-          console.warn('Cart fetch error:', cartError);
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (carts && carts.length > 0) {
+          if (isMounted) setCartId(carts[0].id);
+          await refreshCartCount(carts[0].id);
+        } else {
+          if (isMounted) setCartId(null);
           setCartCount(0);
-          return;
         }
-        
-        if (!cart) {
-          setCartCount(0);
-          return;
-        }
-        
-        // Get cart items count
-        const { data: items, error: itemsError } = await supabase
-          .from('cart_items')
-          .select('id')
-          .eq('cart_id', cart.id);
-        
-        if (itemsError) {
-          console.warn('Cart items fetch error:', itemsError);
-          setCartCount(0);
-          return;
-        }
-        
-        setCartCount(items?.length || 0);
       } catch (error) {
-        console.warn('Error fetching cart count:', error);
+        console.warn('Error initializing cart', error);
         setCartCount(0);
       }
     }
-    
-    fetchCartCount();
-    const interval = setInterval(() => {
-      fetchCartCount();
-    }, 5000);
-    return () => clearInterval(interval);
+    initCart();
+    return () => { isMounted = false; };
   }, []);
+
+  useEffect(() => {
+    if (!cartId) return;
+    const channel = supabase
+      .channel(`cart-items-${cartId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'cart_items',
+        filter: `cart_id=eq.${cartId}`
+      }, () => {
+        refreshCartCount(cartId);
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [cartId]);
+
+  // Optimistic local updates from add/remove actions
+  useEffect(() => {
+    const handleAdded = () => setCartCount((c) => c + 1);
+    const handleRemoved = () => setCartCount((c) => Math.max(0, c - 1));
+    const handleCleared = () => setCartCount(0);
+    window.addEventListener('cart:product-added', handleAdded as EventListener);
+    window.addEventListener('cart:product-removed', handleRemoved as EventListener);
+    window.addEventListener('cart:clear', handleCleared as EventListener);
+    return () => {
+      window.removeEventListener('cart:product-added', handleAdded as EventListener);
+      window.removeEventListener('cart:product-removed', handleRemoved as EventListener);
+      window.removeEventListener('cart:clear', handleCleared as EventListener);
+    };
+  }, []);
+
+  // Subscribe to carts creation for this user, so badge appears right after first add-to-cart
+  useEffect(() => {
+    if (!userId) return;
+    const cartsChannel = supabase
+      .channel(`carts-for-${userId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'carts',
+        filter: `customer_id=eq.${userId}`
+      }, (payload) => {
+        const newCartId = (payload as any).new?.id as string | undefined;
+        if (newCartId) {
+          setCartId(newCartId);
+          refreshCartCount(newCartId);
+        }
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(cartsChannel);
+    };
+  }, [userId]);
 
   // Fetch categories only for /customer/products
   useEffect(() => {

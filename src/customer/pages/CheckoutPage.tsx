@@ -97,16 +97,17 @@ export default function CheckoutPage() {
           }
           setCartItems([{ product, quantity: qty }]);
         } else {
-          // Load Cart Items
-          const { data: cart, error: cartError } = await supabase
+          // Load Cart Items (pick latest cart if multiple exist)
+          const { data: carts, error: cartError } = await supabase
             .from('carts')
             .select('id')
             .eq('customer_id', user.id)
-            .maybeSingle();
+            .order('created_at', { ascending: false })
+            .limit(1);
 
           if (cartError) throw new Error('Error fetching cart: ' + cartError.message);
 
-          if (!cart) {
+          if (!carts || carts.length === 0) {
             navigate('/customer/cart');
             return;
           }
@@ -123,7 +124,7 @@ export default function CheckoutPage() {
                 quantity
               )
             `)
-            .eq('cart_id', cart.id);
+            .eq('cart_id', carts[0].id);
 
           if (itemsError) throw new Error('Error fetching cart items: ' + itemsError.message);
 
@@ -218,15 +219,16 @@ export default function CheckoutPage() {
       let itemsToOrder = cartItems;
       if (!productId) {
         // Get cart items with product details (re-fetch to ensure latest data)
-        const { data: cart, error: cartError } = await supabase
+        const { data: carts, error: cartError } = await supabase
           .from('carts')
           .select('id')
           .eq('customer_id', user.id)
-          .maybeSingle();
+          .order('created_at', { ascending: false })
+          .limit(1);
 
         if (cartError) throw new Error('Error fetching cart: ' + cartError.message);
         
-        if (!cart) {
+        if (!carts || carts.length === 0) {
           toast.error('No cart found. Please add items to your cart first.');
           navigate('/customer/cart');
           return;
@@ -244,7 +246,7 @@ export default function CheckoutPage() {
               quantity
             )
           `)
-          .eq('cart_id', cart.id);
+          .eq('cart_id', carts[0].id);
 
         if (itemsError) throw new Error('Error fetching cart items: ' + itemsError.message);
 
@@ -339,12 +341,13 @@ export default function CheckoutPage() {
         }
       }, 2000); // Wait 2 seconds for trigger to execute
 
-      // Create order items
+      // Create order items with reservation status (stock reserved, not yet deducted)
       const orderItems = itemsToOrder.map(item => ({
         order_id: order.id,
         product_id: item.product.id,
         quantity: item.quantity,
-        price: item.product.price
+        price: item.product.price,
+        reservation_status: 'reserved'
       }));
 
       // Insert order items
@@ -354,31 +357,24 @@ export default function CheckoutPage() {
 
       if (itemsInsertError) throw new Error('Error creating order items: ' + itemsInsertError.message);
 
-      // Update product quantities
-      for (const item of itemsToOrder) {
-        const { error: updateError } = await supabase
-          .from('products')
-          .update({ 
-            quantity: item.product.quantity - item.quantity
-          })
-          .eq('id', item.product.id);
+      // Do not update product quantities here; stock will be decremented upon order approval
 
-        if (updateError) throw new Error('Error updating product quantity: ' + updateError.message);
-      }
-
-      // If not single-product checkout, clear cart
+      // If not single-product checkout, clear cart and notify badge
       if (!productId) {
-        const { data: cart, error: cartError } = await supabase
+        const { data: carts, error: cartError } = await supabase
           .from('carts')
           .select('id')
           .eq('customer_id', user.id)
-          .maybeSingle();
-        if (cart && !cartError) {
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (carts && carts.length > 0 && !cartError) {
           const { error: clearCartError } = await supabase
             .from('cart_items')
             .delete()
-            .eq('cart_id', cart.id);
+            .eq('cart_id', carts[0].id);
           if (clearCartError) throw new Error('Error clearing cart: ' + clearCartError.message);
+          // Optimistic UI: tell header to clear badge immediately
+          window.dispatchEvent(new Event('cart:clear'));
         }
       }
 
