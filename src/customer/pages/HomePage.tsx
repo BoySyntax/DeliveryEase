@@ -132,7 +132,13 @@ export default function HomePage() {
   }, [categories.length]);
 
   const handleAddToCart = async (productId: string) => {
+    if (addingToCart === productId) return; // Prevent multiple rapid clicks
+    
     setAddingToCart(productId);
+    
+    // Add small delay to prevent rapid clicking issues
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -177,7 +183,7 @@ export default function HomePage() {
       // First try to get existing item
       const { data: existingItem } = await supabase
         .from('cart_items')
-        .select('quantity')
+        .select('id, quantity')
         .eq('cart_id', cartId)
         .eq('product_id', productId)
         .maybeSingle();
@@ -189,20 +195,23 @@ export default function HomePage() {
         return;
       }
 
-      // Add or update cart item
+      // Use either insert or update based on existence to ensure accuracy
       if (existingItem) {
-        // Update the quantity of the existing item
+        // Update existing item
         const { error: updateError } = await supabase
           .from('cart_items')
-          .update({ quantity: existingItem.quantity + 1 })
-          .eq('cart_id', cartId)
-          .eq('product_id', productId);
+          .update({ quantity: currentCartQuantity + 1 })
+          .eq('id', existingItem.id);
         if (updateError) throw updateError;
       } else {
-        // Insert new cart item
+        // Insert new item
         const { error: insertError } = await supabase
           .from('cart_items')
-          .insert({ cart_id: cartId, product_id: productId, quantity: 1 });
+          .insert({
+            cart_id: cartId,
+            product_id: productId,
+            quantity: 1
+          });
         if (insertError) throw insertError;
       }
 

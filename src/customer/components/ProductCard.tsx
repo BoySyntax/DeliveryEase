@@ -51,7 +51,9 @@ export default function ProductCard({ id, name, price, imageUrl, quantity, unit,
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                onAddToCart();
+                if (!loading) {
+                  onAddToCart();
+                }
               }}
               className="transition-transform duration-100 active:scale-95 text-xs py-1 px-2 rounded-md"
             >

@@ -57,9 +57,14 @@ export default function ProductDetailsPage() {
 
   const handleAddToCart = async () => {
     if (!product) return;
+    if (addingToCart) return; // Prevent multiple rapid clicks
 
+    setAddingToCart(true);
+    
+    // Add small delay to prevent rapid clicking issues
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     try {
-      setAddingToCart(true);
       // Get user's cart or create new one
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -91,10 +96,10 @@ export default function ProductDetailsPage() {
         cartId = newCart.id;
       }
 
-      // First try to get existing item
+      // Re-fetch existing item to get most current quantity (prevents race conditions)
       const { data: existingItem } = await supabase
         .from('cart_items')
-        .select('quantity')
+        .select('id, quantity')
         .eq('cart_id', cartId)
         .eq('product_id', product.id)
         .maybeSingle();
@@ -113,18 +118,28 @@ export default function ProductDetailsPage() {
         return;
       }
 
-      // Add or update cart item
-      const { error: upsertError } = await supabase
-        .from('cart_items')
-        .upsert({
-          cart_id: cartId,
-          product_id: product.id,
-          quantity: newTotalQuantity
-        });
-
-      if (upsertError) throw upsertError;
+      // Use either insert or update based on existence to ensure accuracy
+      if (existingItem) {
+        // Update existing item
+        const { error: updateError } = await supabase
+          .from('cart_items')
+          .update({ quantity: newTotalQuantity })
+          .eq('id', existingItem.id);
+        if (updateError) throw updateError;
+      } else {
+        // Insert new item
+        const { error: insertError } = await supabase
+          .from('cart_items')
+          .insert({
+            cart_id: cartId,
+            product_id: product.id,
+            quantity: quantity
+          });
+        if (insertError) throw insertError;
+      }
 
       toast.success('Added to cart');
+      setQuantity(1); // Reset quantity selector after successful add
       if (!existingItem) {
         window.dispatchEvent(new Event('cart:product-added'));
       }
