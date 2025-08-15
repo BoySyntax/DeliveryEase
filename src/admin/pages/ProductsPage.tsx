@@ -222,22 +222,22 @@ export default function ProductsPage() {
                   />
                   <label htmlFor={`featured-toggle-${product.id}`} className="text-xs">Featured</label>
                 </div>
-                <div className="flex gap-1">
+                <div className="flex gap-2">
                   <Button
                     variant="outline"
-                    icon={<Pencil size={14} />}
-                    fullWidth
+                    size="sm"
+                    icon={<Pencil size={12} />}
                     onClick={() => handleEdit(product)}
-                    className="text-xs py-1.5"
+                    className="text-xs"
                   >
                     Edit
                   </Button>
                   <Button
                     variant="danger"
-                    icon={<Trash2 size={14} />}
-                    fullWidth
+                    size="sm"
+                    icon={<Trash2 size={12} />}
                     onClick={() => handleDelete(product.id)}
-                    className="text-xs py-1.5"
+                    className="text-xs"
                   >
                     Delete
                   </Button>

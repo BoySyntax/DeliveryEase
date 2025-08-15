@@ -77,11 +77,16 @@ export default function ProductsPage() {
       }
 
       // Get or create cart in a single query
-      const { data: cart } = await supabase
+      const { data: cart, error: cartError } = await supabase
         .from('carts')
         .select('id')
         .eq('customer_id', user.id)
-        .single();
+        .maybeSingle();
+      
+      if (cartError) {
+        console.warn('Cart fetch error:', cartError);
+        // Continue to create a new cart
+      }
 
       let cartId: string;
       

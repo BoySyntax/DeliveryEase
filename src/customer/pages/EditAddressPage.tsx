@@ -215,8 +215,15 @@ export default function EditAddressPage() {
             <Input
               label="Phone Number"
               error={errors.phone?.message}
-              {...register('phone', { required: 'Phone number is required' })}
-              placeholder="e.g., 09123456789"
+              {...register('phone', { 
+                required: 'Phone number is required',
+                pattern: { value: /^\d{10}$/, message: 'Enter 10 digits after +63 (e.g., 9123456789)' }
+              })}
+              inputMode="tel"
+                              pattern="[0-9]{10}"
+              maxLength={10}
+              startAdornment={'+63'}
+              placeholder="e.g., 9123456789"
             />
           </div>
         </div>
@@ -322,7 +329,6 @@ export default function EditAddressPage() {
         isOpen={isMapOpen}
         onClose={() => setIsMapOpen(false)}
         onAddressSelect={handleAddressSelect}
-        title="Pin Location & Auto-Detect Barangay"
         initialAddress={selectedAddress}
       />
       </div>

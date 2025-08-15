@@ -102,15 +102,13 @@ interface MapAddressSelectorProps {
   onClose: () => void;
   onAddressSelect: (address: string, coordinates?: { lat: number; lng: number }, detectedBarangay?: DetectedBarangay) => void;
   initialAddress?: string;
-  title?: string;
 }
 
 export default function MapAddressSelector({ 
   isOpen, 
   onClose, 
   onAddressSelect, 
-  initialAddress = '',
-  title = 'Select Address'
+  initialAddress = ''
 }: MapAddressSelectorProps) {
   const [address, setAddress] = useState(initialAddress);
   const [isLoading, setIsLoading] = useState(false);
@@ -386,7 +384,6 @@ export default function MapAddressSelector({
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div className="text-center flex-1">
-            <h1 className="text-lg font-semibold text-gray-900">{title}</h1>
             <p className="text-sm text-blue-600 font-medium">📍 Tap on map to pin location</p>
           </div>
           <button

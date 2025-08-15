@@ -69,13 +69,12 @@ export default function HomePage() {
           setCategories(categoriesData);
         }
 
-        // Fetch featured products (most recent 4)
+        // Fetch all featured products (unlimited)
         const { data: productsData } = await supabase
           .from('products')
           .select('*')
           .eq('featured', true)
-          .order('created_at', { ascending: false })
-          .limit(4);
+          .order('created_at', { ascending: false });
         
         if (productsData) {
           setFeaturedProducts(productsData.map((p: any) => ({
@@ -143,11 +142,16 @@ export default function HomePage() {
       }
 
       // Get or create cart in a single query
-      const { data: cart } = await supabase
+      const { data: cart, error: cartError } = await supabase
         .from('carts')
         .select('id')
         .eq('customer_id', user.id)
-        .single();
+        .maybeSingle();
+      
+      if (cartError) {
+        console.warn('Cart fetch error:', cartError);
+        // Continue to create a new cart
+      }
 
       let cartId: string;
       

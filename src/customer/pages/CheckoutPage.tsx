@@ -102,7 +102,7 @@ export default function CheckoutPage() {
             .from('carts')
             .select('id')
             .eq('customer_id', user.id)
-            .single();
+            .maybeSingle();
 
           if (cartError) throw new Error('Error fetching cart: ' + cartError.message);
 
@@ -222,9 +222,15 @@ export default function CheckoutPage() {
           .from('carts')
           .select('id')
           .eq('customer_id', user.id)
-          .single();
+          .maybeSingle();
 
         if (cartError) throw new Error('Error fetching cart: ' + cartError.message);
+        
+        if (!cart) {
+          toast.error('No cart found. Please add items to your cart first.');
+          navigate('/customer/cart');
+          return;
+        }
 
         const { data: cartItemsData, error: itemsError } = await supabase
           .from('cart_items')
@@ -366,7 +372,7 @@ export default function CheckoutPage() {
           .from('carts')
           .select('id')
           .eq('customer_id', user.id)
-          .single();
+          .maybeSingle();
         if (cart && !cartError) {
           const { error: clearCartError } = await supabase
             .from('cart_items')

@@ -1,0 +1,5 @@
+[33m28e1d4c[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m feat: add privacy/terms pages and recent updates
+[33m084b5b3[m Add selected address and snapshot functionality with database migrations
+[33m600da96[m Update admin and customer UI layouts: improve notification spacing, match product grid layouts, remove search from categories
+[33m4a53a49[m Remove bottom navbar from add-address page and hide region dropdown in map selector
+[33meaa49cb[m Clean up project: remove test files and update notification system

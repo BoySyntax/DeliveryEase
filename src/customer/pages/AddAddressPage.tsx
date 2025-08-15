@@ -29,13 +29,23 @@ export default function AddAddressPage() {
   const [selectedCoordinates, setSelectedCoordinates] = useState<{ lat: number; lng: number } | null>(null);
   const [detectedBarangayInfo, setDetectedBarangayInfo] = useState<DetectedBarangay | null>(null);
   const [mapsLoaded, setMapsLoaded] = useState(false);
-  const { register, handleSubmit, formState: { errors }, setValue } = useForm<AddressForm>();
+  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<AddressForm>();
+
+  // Gate map access until contact info is provided
+  const fullNameValue = watch('full_name');
+  const phoneValue = watch('phone');
+  const isContactInfoValid = Boolean(fullNameValue?.trim() && /^\d{10}$/.test(phoneValue || ''));
+  const currentStep = isContactInfoValid ? 2 : 1;
 
   // Removed manual barangay selection - now auto-detected from map
 
   // Removed barangay loading - now auto-detected from map location
 
   const handleOpenMap = async () => {
+    if (!isContactInfoValid) {
+      toast.error('Please fill in your Contact Information (name and valid phone) before pinning your location.');
+      return;
+    }
     try {
       if (!mapsLoaded) {
         await loadGoogleMapsScript();
@@ -132,6 +142,18 @@ export default function AddAddressPage() {
           <div className="text-center">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Add New Address</h1>
             <p className="text-gray-600">Fill in your details and pin your location</p>
+            {/* Step Indicator */}
+            <div className="mt-4 flex items-center justify-center gap-4 select-none">
+              <div className="flex items-center gap-2">
+                <div className={`${currentStep === 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'} w-7 h-7 rounded-full flex items-center justify-center text-sm font-semibold`}>1</div>
+                <span className={`${currentStep === 1 ? 'text-blue-700 font-medium' : 'text-gray-600'}`}>Contact Info</span>
+              </div>
+              <div className={`${currentStep === 2 ? 'bg-blue-400' : 'bg-gray-300'} h-0.5 w-10 rounded-full`}></div>
+              <div className="flex items-center gap-2">
+                <div className={`${currentStep === 2 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'} w-7 h-7 rounded-full flex items-center justify-center text-sm font-semibold`}>2</div>
+                <span className={`${currentStep === 2 ? 'text-blue-700 font-medium' : 'text-gray-600'}`}>Pin Location</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -153,6 +175,7 @@ export default function AddAddressPage() {
                 error={errors.full_name?.message}
                 {...register('full_name', { required: 'Full name is required' })}
                 placeholder="Enter your full name"
+                className="border-2 border-gray-300 focus:border-blue-500"
               />
               <Input
                 label="Phone Number"
@@ -160,11 +183,16 @@ export default function AddAddressPage() {
                 {...register('phone', { 
                   required: 'Phone number is required',
                   pattern: {
-                    value: /^09\d{9}$/,
-                    message: 'Please enter a valid 11-digit phone number starting with 09'
+                    value: /^\d{10}$/,
+                    message: 'Enter 10 digits after +63 (e.g., 9123456789)'
                   }
                 })}
-                placeholder="e.g., 09123456789"
+                inputMode="tel"
+                pattern="[0-9]{10}"
+                maxLength={10}
+                startAdornment={'+63'}
+                placeholder="e.g., 9123456789"
+                className="border-2 border-gray-300 focus:border-blue-500"
               />
             </div>
           </div>
@@ -189,10 +217,13 @@ export default function AddAddressPage() {
                 type="button"
                 onClick={handleOpenMap}
                 fullWidth
+                disabled={!isContactInfoValid}
                 className={`py-4 rounded-xl font-medium transition-all duration-200 ${
                   selectedAddress
                     ? 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg'
+                    : isContactInfoValid
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg'
+                      : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                 }`}
               >
                 <div className="flex items-center justify-center gap-2">
@@ -221,15 +252,21 @@ export default function AddAddressPage() {
 
               {/* Postal Code */}
               <Input
-                label="Postal Code (Optional)"
+                label="Postal Code"
                 error={errors.postal_code?.message}
                 {...register('postal_code', {
+                  required: 'Postal code is required',
                   pattern: {
                     value: /^\d{4}$/,
                     message: 'Please enter a valid 4-digit postal code'
                   }
                 })}
-                placeholder="e.g., 9000 (Cagayan de Oro), 9200 (Iligan)"
+                disabled={!isContactInfoValid}
+                className={`border-2 focus:border-blue-500 ${
+                  isContactInfoValid 
+                    ? 'border-gray-300' 
+                    : 'border-gray-200 bg-gray-100 cursor-not-allowed'
+                }`}
               />
 
               {/* Hidden input for form validation */}
@@ -252,9 +289,9 @@ export default function AddAddressPage() {
               type="submit" 
               fullWidth 
               isLoading={isSaving}
-              disabled={!selectedAddress || !detectedBarangayInfo}
+              disabled={!selectedAddress || !detectedBarangayInfo || !watch('postal_code')?.trim()}
               className={`py-3 rounded-xl font-medium transition-all duration-200 ${
-                (!selectedAddress || !detectedBarangayInfo) 
+                (!selectedAddress || !detectedBarangayInfo || !watch('postal_code')?.trim())
                   ? 'opacity-50 cursor-not-allowed bg-gray-300' 
                   : 'bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg'
               }`}
@@ -271,6 +308,11 @@ export default function AddAddressPage() {
                   <>
                     <MapPin className="w-5 h-5" />
                     <span>Detecting Barangay...</span>
+                  </>
+                ) : !watch('postal_code')?.trim() ? (
+                  <>
+                    <MapPin className="w-5 h-5" />
+                    <span>Enter Postal Code</span>
                   </>
                 ) : (
                   <>
@@ -290,7 +332,6 @@ export default function AddAddressPage() {
           isOpen={isMapOpen}
           onClose={() => setIsMapOpen(false)}
           onAddressSelect={handleAddressSelect}
-          title="Pin Location & Auto-Detect Barangay"
           initialAddress={selectedAddress}
         />
       </div>

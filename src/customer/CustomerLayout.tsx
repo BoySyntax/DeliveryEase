@@ -53,27 +53,47 @@ export default function CustomerLayout() {
   const [cartCount, setCartCount] = useState(0);
   useEffect(() => {
     async function fetchCartCount() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      // Get user's cart
-      const { data: cart } = await supabase
-        .from('carts')
-        .select('id')
-        .eq('customer_id', user.id)
-        .single();
-      if (!cart) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        
+        // Get user's cart
+        const { data: cart, error: cartError } = await supabase
+          .from('carts')
+          .select('id')
+          .eq('customer_id', user.id)
+          .maybeSingle();
+        
+        if (cartError) {
+          console.warn('Cart fetch error:', cartError);
+          setCartCount(0);
+          return;
+        }
+        
+        if (!cart) {
+          setCartCount(0);
+          return;
+        }
+        
+        // Get cart items count
+        const { data: items, error: itemsError } = await supabase
+          .from('cart_items')
+          .select('id')
+          .eq('cart_id', cart.id);
+        
+        if (itemsError) {
+          console.warn('Cart items fetch error:', itemsError);
+          setCartCount(0);
+          return;
+        }
+        
+        setCartCount(items?.length || 0);
+      } catch (error) {
+        console.warn('Error fetching cart count:', error);
         setCartCount(0);
-        return;
-      }
-      // Get cart items count
-      const { data: items, error } = await supabase
-        .from('cart_items')
-        .select('id')
-        .eq('cart_id', cart.id);
-      if (!error && items) {
-        setCartCount(items.length);
       }
     }
+    
     fetchCartCount();
     const interval = setInterval(() => {
       fetchCartCount();
