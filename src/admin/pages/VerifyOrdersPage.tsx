@@ -307,39 +307,26 @@ export default function VerifyOrdersPage() {
         }
       }
       
-      // Update reservation_status and stock based on approval result
-      if (approved) {
-        // Commit reservations and decrement stock
-        const { data: orderItems } = await supabase
-          .from('order_items')
-          .select('product_id, quantity')
-          .eq('order_id', orderId);
-        if (orderItems && orderItems.length > 0) {
-          for (const item of orderItems) {
-            // Fetch current stock
-            const { data: productRow } = await supabase
-              .from('products')
-              .select('quantity')
-              .eq('id', item.product_id)
-              .single();
-            const currentQty = productRow?.quantity ?? 0;
-            const newQty = Math.max(0, currentQty - (item.quantity ?? 0));
-            await supabase
-              .from('products')
-              .update({ quantity: newQty })
-              .eq('id', item.product_id);
-          }
+      // Update reservation_status based on approval result (if column exists)
+      // NOTE: Stock should only be deducted when order is DELIVERED, not approved
+      try {
+        if (approved) {
+          // Mark items as committed but DO NOT deduct stock yet
+          // Stock will be deducted when order is marked as delivered
+          await supabase
+            .from('order_items')
+            .update({ reservation_status: 'committed' })
+            .eq('order_id', orderId);
+        } else {
+          // Release reservations (no stock change)
+          await supabase
+            .from('order_items')
+            .update({ reservation_status: 'released' })
+            .eq('order_id', orderId);
         }
-        await supabase
-          .from('order_items')
-          .update({ reservation_status: 'committed' })
-          .eq('order_id', orderId);
-      } else {
-        // Release reservations (no stock change)
-        await supabase
-          .from('order_items')
-          .update({ reservation_status: 'released' })
-          .eq('order_id', orderId);
+      } catch (reservationError) {
+        // Ignore reservation status errors if column doesn't exist yet
+        console.log('Reservation status update skipped (column may not exist yet):', reservationError);
       }
 
       // Notification will be automatically created by the database trigger

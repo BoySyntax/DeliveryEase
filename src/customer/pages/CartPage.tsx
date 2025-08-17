@@ -27,6 +27,72 @@ export default function CartPage() {
   const [removingItem, setRemovingItem] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  // Refresh cart data from server
+  const refreshCart = async () => {
+    if (!session?.user) return;
+
+    try {
+      // Get the latest cart for this user
+      const { data: existingCarts, error: cartError } = await supabase
+        .from('carts')
+        .select('id')
+        .eq('customer_id', session.user.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (cartError) {
+        console.error('Error checking cart:', cartError);
+        return;
+      }
+
+      let cartId;
+      if (!existingCarts || existingCarts.length === 0) {
+        // Create a new cart if none exists
+        const { data: newCart, error: createError } = await supabase
+          .from('carts')
+          .insert({ customer_id: session.user.id })
+          .select('id')
+          .single();
+
+        if (createError) {
+          console.error('Error creating cart:', createError);
+          return;
+        }
+        cartId = newCart.id;
+      } else {
+        cartId = existingCarts[0].id;
+      }
+
+      // Fetch cart items with fresh data
+      const { data: items, error: itemsError } = await supabase
+        .from('cart_items')
+        .select(`
+          id,
+          quantity,
+          product:products (
+            id,
+            name,
+            price,
+            image_url,
+            quantity
+          )
+        `)
+        .eq('cart_id', cartId);
+
+      if (itemsError) {
+        console.error('Error fetching cart items:', itemsError);
+        return;
+      }
+
+      const normalized = (items || []) as CartItem[];
+      // Consolidate any duplicate rows for the same product (legacy carts)
+      const consolidated = await consolidateDuplicates(normalized);
+      setCartItems(consolidated);
+    } catch (error) {
+      console.error('Cart refresh error:', error);
+    }
+  };
+
   useEffect(() => {
     let ignore = false;
 
@@ -42,77 +108,8 @@ export default function CartPage() {
       }
 
       try {
-        console.log('User found, checking cart...');
-        // Get the latest cart for this user
-        const { data: existingCarts, error: cartError } = await supabase
-          .from('carts')
-          .select('id')
-          .eq('customer_id', session.user.id)
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (cartError) {
-          console.error('Error checking cart:', cartError);
-          if (!ignore) {
-            toast.error('Failed to access cart');
-            setIsLoaded(true);
-          }
-          return;
-        }
-
-        let cartId;
-        if (!existingCarts || existingCarts.length === 0) {
-          // Create a new cart if none exists
-          const { data: newCart, error: createError } = await supabase
-            .from('carts')
-            .insert({ customer_id: session.user.id })
-            .select('id')
-            .single();
-
-          if (createError) {
-            console.error('Error creating cart:', createError);
-            if (!ignore) {
-              toast.error('Failed to create cart');
-              setIsLoaded(true);
-            }
-            return;
-          }
-          cartId = newCart.id;
-        } else {
-          cartId = existingCarts[0].id;
-        }
-
-        // Fetch cart items
-        const { data: items, error: itemsError } = await supabase
-          .from('cart_items')
-          .select(`
-            id,
-            quantity,
-            product:products (
-              id,
-              name,
-              price,
-              image_url,
-              quantity
-            )
-          `)
-          .eq('cart_id', cartId);
-
-        if (itemsError) {
-          console.error('Error fetching cart items:', itemsError);
-          if (!ignore) {
-            toast.error('Failed to load cart items');
-            setCartItems([]);
-            setIsLoaded(true);
-          }
-          return;
-        }
-
+        await refreshCart();
         if (!ignore) {
-          const normalized = (items || []) as CartItem[];
-          // Consolidate any duplicate rows for the same product (legacy carts)
-          const consolidated = await consolidateDuplicates(normalized);
-          setCartItems(consolidated);
           setIsLoaded(true);
         }
       } catch (error) {
@@ -130,6 +127,21 @@ export default function CartPage() {
 
     return () => {
       ignore = true;
+    };
+  }, [session]);
+
+  // Refresh cart when page becomes visible (e.g., user comes back from another tab/page)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && session?.user) {
+        refreshCart();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [session]);
 
@@ -190,14 +202,17 @@ export default function CartPage() {
     setUpdatingItem(itemId);
 
     try {
-      // Optimistic UI update
-      setCartItems(prev => prev.map(i => i.id === itemId ? { ...i, quantity: newQuantity } : i));
+      // Update database first, then refresh from server
       const { error } = await supabase
         .from('cart_items')
         .update({ quantity: newQuantity })
         .eq('id', itemId);
 
       if (error) throw error;
+      
+      // Refresh cart data from server to ensure accuracy
+      await refreshCart();
+      
       // Fire event if quantity change crosses 0/1 boundary (affects distinct product count)
       const wasZero = cartItem.quantity === 0;
       const nowZero = newQuantity === 0;
@@ -209,8 +224,8 @@ export default function CartPage() {
     } catch (error) {
       console.error('Error updating quantity:', error);
       toast.error('Failed to update quantity');
-      // Revert UI on error
-      setCartItems(prev => prev.map(i => i.id === itemId ? { ...i, quantity: cartItem.quantity } : i));
+      // Refresh cart to get accurate state
+      await refreshCart();
     } finally {
       setUpdatingItem(null);
     }
@@ -227,12 +242,15 @@ export default function CartPage() {
 
       if (error) throw error;
 
-      setCartItems(prev => prev.filter(item => item.id !== itemId));
+      // Refresh cart data from server to ensure accuracy
+      await refreshCart();
       window.dispatchEvent(new Event('cart:product-removed'));
       toast.success('Item removed from cart');
     } catch (error) {
       console.error('Error removing item:', error);
       toast.error('Failed to remove item');
+      // Refresh cart to get accurate state
+      await refreshCart();
     } finally {
       setRemovingItem(null);
     }

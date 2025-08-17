@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
-import logo from '../assets/logo.png';
+import fordaa from '../assets/fordaa.png';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -33,13 +33,10 @@ export default function LoginPage() {
       <div className="absolute inset-x-0 top-0 h-2/3 flex flex-col items-center justify-center">
         <div className="relative">
           <img 
-            src={logo} 
+            src={fordaa} 
             alt="DeliveryEase" 
-            className="w-48 h-48 object-contain brightness-0 invert"
+            className="w-96 h-96 object-contain brightness-0 invert"
           />
-          <h1 className="absolute bottom-0 left-1/2 transform -translate-x-1/2 text-white text-4xl font-bold tracking-tight">
-            DeliveryEase
-          </h1>
         </div>
       </div>
 

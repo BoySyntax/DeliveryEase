@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { Card, CardContent } from '../../ui/components/Card';
 import Loader from '../../ui/components/Loader';
 import { formatCurrency } from '../../lib/utils';
-import { orderNotificationService } from '../../lib/orderNotificationService';
+// Remove unused import
 import { 
   Package, 
   MapPin, 
@@ -113,6 +113,41 @@ export default function OrderDetailsPage() {
     try {
       setCompleting(true);
       
+      // First, deduct stock for each item in the order
+      console.log('Deducting stock for delivered order:', order.id);
+      for (const item of order.items) {
+        if (item.product?.id) {
+          // Get current stock
+          const { data: productData, error: productError } = await supabase
+            .from('products')
+            .select('quantity')
+            .eq('id', item.product.id)
+            .single();
+          
+          if (productError) {
+            console.error('Error fetching product stock:', productError);
+            continue; // Continue with other items even if one fails
+          }
+          
+          const currentStock = productData?.quantity ?? 0;
+          const newStock = Math.max(0, currentStock - item.quantity);
+          
+          console.log(`Product ${item.product.id}: ${currentStock} → ${newStock} (ordered: ${item.quantity})`);
+          
+          // Update product stock
+          const { error: updateError } = await supabase
+            .from('products')
+            .update({ quantity: newStock })
+            .eq('id', item.product.id);
+          
+          if (updateError) {
+            console.error('Error updating product stock:', updateError);
+            // Continue with other items even if one fails
+          }
+        }
+      }
+      
+      // Then update order status to delivered
       const { error } = await supabase
         .from('orders')
         .update({ delivery_status: 'delivered' })
@@ -124,10 +159,21 @@ export default function OrderDetailsPage() {
         return;
       }
 
+      // Update order items reservation status to fulfilled (if column exists)
+      try {
+        await supabase
+          .from('order_items')
+          .update({ reservation_status: 'fulfilled' })
+          .eq('order_id', order.id);
+      } catch (reservationError) {
+        // Ignore reservation status errors if column doesn't exist yet
+        console.log('Reservation status update skipped (column may not exist yet):', reservationError);
+      }
+
       // Notification will be automatically created by the database trigger
       console.log('Order delivered - notification will be created automatically by trigger');
 
-      toast.success('Order completed successfully!');
+      toast.success('Order completed and stock updated successfully!');
       navigate('/driver');
     } catch (error) {
       console.error('Error:', error);
@@ -243,7 +289,7 @@ export default function OrderDetailsPage() {
           
           <div className="space-y-4">
             {order.items && order.items.length > 0 ? (
-              order.items.map((item, index) => (
+              order.items.map((item) => (
                 <div key={item.id} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
                   {item.product?.image_url ? (
                     <img
