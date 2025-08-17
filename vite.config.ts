@@ -18,11 +18,26 @@ export default defineConfig({
         description: 'fordaGO - orders, deliveries and tracking',
         theme_color: '#ffffff',
         background_color: '#ffffff',
+        display: 'standalone',
+        start_url: '/',
+        scope: '/',
         icons: [
           {
-            src: '/icons/forda-icon-white.svg',
-            sizes: 'any',
-            type: 'image/svg+xml',
+            src: '/icons/appstore.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any maskable'
+          },
+          {
+            src: '/icons/appstore.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable'
+          },
+          {
+            src: '/icons/appstore.png',
+            sizes: '180x180',
+            type: 'image/png',
             purpose: 'any'
           }
         ]
