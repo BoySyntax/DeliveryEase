@@ -1,0 +1,29 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- White background -->
+  <rect width="512" height="512" fill="white" rx="100" ry="100"/>
+  
+  <!-- Green border -->
+  <rect x="20" y="20" width="472" height="472" fill="none" stroke="#16a34a" stroke-width="8" rx="90" ry="90"/>
+  
+  <!-- Main fordaa content area -->
+  <rect x="80" y="120" width="352" height="272" fill="#16a34a" rx="20" ry="20"/>
+  
+  <!-- fordaa text -->
+  <text x="256" y="200" font-family="Arial, sans-serif" font-size="48" font-weight="bold" text-anchor="middle" fill="white">forda</text>
+  
+  <!-- GO text -->
+  <text x="256" y="260" font-family="Arial, sans-serif" font-size="72" font-weight="bold" text-anchor="middle" fill="white">GO</text>
+  
+  <!-- Delivery truck icon -->
+  <g transform="translate(256, 350)">
+    <!-- Truck body -->
+    <rect x="-60" y="-20" width="120" height="40" fill="white" rx="8" ry="8"/>
+    <!-- Truck cab -->
+    <rect x="-40" y="-35" width="60" height="35" fill="white" rx="8" ry="8"/>
+    <!-- Wheels -->
+    <circle cx="-30" cy="15" r="12" fill="#16a34a"/>
+    <circle cx="30" cy="15" r="12" fill="#16a34a"/>
+    <!-- Windows -->
+    <rect x="-35" y="-30" width="25" height="20" fill="#16a34a" rx="4" ry="4"/>
+  </g>
+</svg>
