@@ -16,37 +16,66 @@ export default defineConfig({
         name: 'fordaGO',
         short_name: 'fordaGO',
         description: 'fordaGO - orders, deliveries and tracking',
-        theme_color: '#16a34a',
         display: 'standalone',
         start_url: '/',
         scope: '/',
         icons: [
-          // Browser favicons - Bigger sizes
+          // Browser favicons - Using browser.png with largest sizes first for maximum visibility
           {
-            src: '/icons/appstore1.png',
-            sizes: '32x32',
+            src: '/icons/browser.png',
+            sizes: '512x512',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: '/icons/appstore1.png',
-            sizes: '64x64',
+            src: '/icons/browser.png',
+            sizes: '384x384',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: '/icons/appstore1.png',
+            src: '/icons/browser.png',
+            sizes: '256x256',
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: '/icons/browser.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: '/icons/browser.png',
+            sizes: '128x128',
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: '/icons/browser.png',
             sizes: '96x96',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: '/icons/appstore1.png',
-            sizes: '128x128',
+            src: '/icons/browser.png',
+            sizes: '64x64',
             type: 'image/png',
             purpose: 'any'
           },
-          // Android icons
+          {
+            src: '/icons/browser.png',
+            sizes: '48x48',
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: '/icons/browser.png',
+            sizes: '32x32',
+            type: 'image/png',
+            purpose: 'any'
+          },
+          // Android icons - Using appstore1.png
           {
             src: '/icons/appstore1.png',
             sizes: '36x36',
@@ -83,7 +112,7 @@ export default defineConfig({
             type: 'image/png',
             purpose: 'any maskable'
           },
-          // iOS icons
+          // iOS icons - Using appstore1.png
           {
             src: '/icons/appstore1.png',
             sizes: '57x57',
