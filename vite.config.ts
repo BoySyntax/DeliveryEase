@@ -16,19 +16,12 @@ export default defineConfig({
         name: 'fordaGO',
         short_name: 'fordaGO',
         description: 'fordaGO - orders, deliveries and tracking',
-        theme_color: '#ffffff',
-        background_color: '#ffffff',
+        theme_color: '#16a34a',
         display: 'standalone',
         start_url: '/',
         scope: '/',
         icons: [
-          // Browser favicons
-          {
-            src: '/icons/appstore1.png',
-            sizes: '16x16',
-            type: 'image/png',
-            purpose: 'any'
-          },
+          // Browser favicons - Bigger sizes
           {
             src: '/icons/appstore1.png',
             sizes: '32x32',
@@ -37,13 +30,19 @@ export default defineConfig({
           },
           {
             src: '/icons/appstore1.png',
-            sizes: '48x48',
+            sizes: '64x64',
             type: 'image/png',
             purpose: 'any'
           },
           {
             src: '/icons/appstore1.png',
             sizes: '96x96',
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: '/icons/appstore1.png',
+            sizes: '128x128',
             type: 'image/png',
             purpose: 'any'
           },
