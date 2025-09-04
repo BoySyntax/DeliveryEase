@@ -245,10 +245,10 @@ const CustomerLayout = memo(function CustomerLayout() {
       {/* Header */}
       <header className="bg-white shadow-sm sticky top-0 z-[100] sm:z-[100] relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 sm:h-20">
+          <div className="flex items-center justify-between h-12 sm:h-14">
             {/* Logo */}
             <div className="flex items-center flex-shrink-0">
-              <img src={logo} alt="Logo" className="w-16 h-16 sm:w-20 sm:h-20 object-contain" />
+              <img src={logo} alt="Logo" className="w-12 h-12 sm:w-14 sm:h-14 object-contain brightness-110 contrast-125 saturate-110" />
             </div>
             
             {/* Spacer */}
@@ -263,7 +263,7 @@ const CustomerLayout = memo(function CustomerLayout() {
                   className="sm:hidden p-2 rounded-full hover:bg-gray-100 transition-colors"
                   aria-label="Search products"
                 >
-                  <Search size={20} className="text-gray-600" />
+                  <Search size={18} className="text-gray-600" />
                 </button>
               )}
 
@@ -289,7 +289,7 @@ const CustomerLayout = memo(function CustomerLayout() {
                   className="sm:hidden p-2 rounded-full hover:bg-gray-100 transition-colors"
                   aria-label="Search products"
                 >
-                  <Search size={20} className="text-gray-600" />
+                  <Search size={18} className="text-gray-600" />
                 </button>
               )}
 
@@ -341,15 +341,15 @@ const CustomerLayout = memo(function CustomerLayout() {
                 </div>
               )}
 
-              {/* Desktop Navigation */}
-              <nav className="hidden sm:flex items-center space-x-6">
+                          {/* Desktop Navigation */}
+            <nav className="hidden sm:flex items-center space-x-4">
                 {navItems.map((item) => (
                   <NavLink
                     key={item.path}
                     to={item.path}
                     end={item.path === '/customer'}
                     className={({ isActive }) => cn(
-                      'relative flex flex-col items-center px-2 py-1 text-gray-600 hover:text-primary-600 transition-colors',
+                      'relative flex flex-col items-center px-1.5 py-1 text-gray-600 hover:text-primary-600 transition-colors',
                       isActive ? 'text-primary-600 font-semibold' : ''
                     )}
                     style={{ textDecoration: 'none' }}
@@ -374,7 +374,7 @@ const CustomerLayout = memo(function CustomerLayout() {
       {/* Animated Search Panel - Mobile Only */}
       {(location.pathname === '/customer' || location.pathname.startsWith('/customer/products')) && (
         <div className={cn(
-          'sm:hidden bg-white shadow-lg transition-all duration-300 ease-in-out border-b sticky top-16 z-40',
+          'sm:hidden bg-white shadow-lg transition-all duration-300 ease-in-out border-b sticky top-12 z-40',
           isSearchOpen ? 'max-h-64 opacity-100 overflow-visible' : 'max-h-0 opacity-0 overflow-hidden'
         )}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -444,7 +444,7 @@ const CustomerLayout = memo(function CustomerLayout() {
 
       {/* Mobile Bottom Navigation */}
       {!shouldHideBottomNav && (
-        <nav className="sm:hidden bg-white shadow-lg fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200">
+        <nav className="sm:hidden bg-white shadow-lg fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200 h-14">
           <div className="flex justify-between">
             {navItems.map((item) => (
               <NavLink
@@ -452,7 +452,7 @@ const CustomerLayout = memo(function CustomerLayout() {
                 to={item.path}
                 end={item.path === '/customer'}
                 className={({ isActive }) => cn(
-                  'flex flex-1 flex-col items-center py-3',
+                  'flex flex-1 flex-col items-center py-2',
                   isActive
                     ? 'text-primary-600'
                     : 'text-gray-600'
@@ -474,7 +474,7 @@ const CustomerLayout = memo(function CustomerLayout() {
       )}
       
       {/* Padding for mobile bottom nav */}
-      {!shouldHideBottomNav && <div className="sm:hidden h-16" />}
+      {!shouldHideBottomNav && <div className="sm:hidden h-14" />}
     </div>
   );
 });

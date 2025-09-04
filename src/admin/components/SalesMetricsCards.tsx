@@ -35,7 +35,7 @@ export default function SalesMetricsCards({ metrics, loading }: SalesMetricsCard
       <TrendingDown className="h-4 w-4" />
     );
     
-    const colorClass = isPositive ? 'text-green-600' : 'text-red-600';
+    const colorClass = isPositive ? 'text-primary-600' : 'text-red-600';
     const bgClass = isPositive ? 'bg-green-100' : 'bg-red-100';
     
     return (
@@ -51,7 +51,7 @@ export default function SalesMetricsCards({ metrics, loading }: SalesMetricsCard
       title: 'Total Revenue',
       value: formatCurrency(metrics.totalRevenue),
       growth: metrics.revenueGrowth,
-      icon: <DollarSign className="h-6 w-6 text-green-600" />,
+      icon: <DollarSign className="h-6 w-6 text-primary-600" />,
       bgColor: 'bg-green-50',
     },
     {

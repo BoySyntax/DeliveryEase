@@ -316,6 +316,16 @@ export default function BatchOrdersPage() {
             customer:profiles!orders_customer_id_fkey(
               id,
               name
+            ),
+            items:order_items(
+              quantity,
+              price,
+              product:products(
+                id,
+                name,
+                image_url,
+                weight
+              )
             )
           `)
           .in('batch_id', batchIds)
@@ -344,7 +354,8 @@ export default function BatchOrdersPage() {
                 city: '',
                 barangay: batch.barangay || '',
                 street_address: ''
-              }
+              },
+              items: order.items || []
             }))
           } as BatchData;
         })
@@ -425,9 +436,9 @@ export default function BatchOrdersPage() {
   return (
     <div className="space-y-6 relative">
       {refreshing && (
-        <div className="absolute top-0 left-0 right-0 z-10 bg-blue-50 border border-blue-200 rounded-lg p-2 flex items-center justify-center gap-2">
-          <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
-          <span className="text-sm text-blue-700 font-medium">Updating batch data...</span>
+        <div className="absolute top-0 left-0 right-0 z-10 bg-primary-50 border border-primary-200 rounded-lg p-2 flex items-center justify-center gap-2">
+          <RefreshCw className="w-4 h-4 animate-spin text-primary-600" />
+          <span className="text-sm text-primary-700 font-medium">Updating batch data...</span>
         </div>
       )}
       
@@ -466,12 +477,12 @@ export default function BatchOrdersPage() {
           <Card key={batch.id} className="overflow-hidden shadow-lg">
             <CardContent className="p-0">
               {/* Batch Header */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 border-b border-gray-200">
+              <div className="bg-gradient-to-r from-primary-50 to-primary-100 p-6 border-b border-gray-200">
                 <div className="flex justify-between items-start">
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
-                      <div className="bg-blue-100 p-2 rounded-lg">
-                        <Truck className="w-5 h-5 text-blue-600" />
+                      <div className="bg-primary-100 p-2 rounded-lg">
+                        <Truck className="w-5 h-5 text-primary-600" />
                       </div>
                       <div>
                         <h2 className="text-xl font-semibold text-gray-900">
@@ -533,7 +544,7 @@ export default function BatchOrdersPage() {
                               ? 'text-red-600' 
                               : (calculateBatchWeight(batch) / (batch.max_weight || 3500)) > 0.7 
                                 ? 'text-yellow-600' 
-                                : 'text-green-600'
+                                : 'text-primary-600'
                         }`}>
                           {((calculateBatchWeight(batch) / (batch.max_weight || 3500)) * 100).toFixed(0)}%
                         </span>
@@ -567,9 +578,9 @@ export default function BatchOrdersPage() {
 
 
                   {batch.driver?.name && (
-                    <div className="flex items-center gap-2 bg-green-100 px-3 py-2 rounded-lg">
-                      <Users className="w-4 h-4 text-green-600" />
-                      <span className="text-sm font-medium text-green-800">
+                    <div className="flex items-center gap-2 bg-primary-100 px-3 py-2 rounded-lg">
+                      <Users className="w-4 h-4 text-primary-600" />
+                      <span className="text-sm font-medium text-primary-800">
                         Driver: {batch.driver.name}
                       </span>
                     </div>
@@ -610,7 +621,7 @@ export default function BatchOrdersPage() {
                           </div>
                         </div>
                                                   <div className="text-right">
-                            <p className="text-lg font-semibold text-green-600">
+                            <p className="text-lg font-semibold text-primary-600">
                               {formatCurrency(order.total)}
                             </p>
                             <div className="flex items-center gap-1 text-sm text-gray-500">
@@ -684,7 +695,7 @@ export default function BatchOrdersPage() {
                       </span>
                     </div>
                   </div>
-                  <p className="text-xl font-bold text-green-600">
+                  <p className="text-xl font-bold text-primary-600">
                     {formatCurrency((batch.orders || []).reduce((sum, order) => sum + order.total, 0))}
                   </p>
                 </div>

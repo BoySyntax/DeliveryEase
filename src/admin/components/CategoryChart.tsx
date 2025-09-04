@@ -11,13 +11,13 @@ interface CategoryChartProps {
 
 const COLORS = [
   '#0a2767', // brand blue
-  '#0a2767', // brand blue
-  '#0a2767', // brand blue
-  '#0a2767', // brand blue
-  '#0a2767', // brand blue
-  '#0a2767', // brand blue
-  '#0a2767', // brand blue
-  '#0a2767', // brand blue
+  '#059669', // emerald green
+  '#dc2626', // red
+  '#7c3aed', // violet
+  '#ea580c', // orange
+  '#0891b2', // cyan
+  '#be185d', // pink
+  '#65a30d', // lime
 ];
 
 export default function CategoryChart({ data, title, height = 300 }: CategoryChartProps) {
@@ -34,7 +34,7 @@ export default function CategoryChart({ data, title, height = 300 }: CategoryCha
       return (
         <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
           <p className="font-medium text-gray-900">{data.category}</p>
-          <p className="text-sm text-blue-600">
+          <p className="text-sm text-primary-600">
             Revenue: {formatCurrency(data.revenue)}
           </p>
           <p className="text-sm text-gray-600">
@@ -88,6 +88,7 @@ export default function CategoryChart({ data, title, height = 300 }: CategoryCha
                 outerRadius={100}
                 fill="#8884d8"
                 dataKey="percentage"
+                nameKey="category"
               >
                 {data.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -95,11 +96,14 @@ export default function CategoryChart({ data, title, height = 300 }: CategoryCha
               </Pie>
               <Tooltip content={<CustomTooltip />} />
               <Legend 
-                formatter={(value, entry) => (
-                  <span style={{ color: entry.color }}>
-                    {value} ({formatCurrency((entry.payload as CategorySalesData).revenue)})
-                  </span>
-                )}
+                formatter={(value, entry) => {
+                  const payload = entry.payload as CategorySalesData;
+                  return (
+                    <span style={{ color: entry.color }}>
+                      {payload.category} ({formatCurrency(payload.revenue)})
+                    </span>
+                  );
+                }}
               />
             </PieChart>
           </ResponsiveContainer>

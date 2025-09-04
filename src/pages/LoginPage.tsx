@@ -34,7 +34,7 @@ export default function LoginPage() {
         <div className="relative">
           <img 
             src={fordaa} 
-            alt="DeliveryEase" 
+            alt="fordaGO" 
             className="w-96 h-96 object-contain brightness-0 invert"
           />
         </div>

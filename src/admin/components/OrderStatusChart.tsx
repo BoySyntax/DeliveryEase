@@ -30,10 +30,10 @@ export default function OrderStatusChart({ data, title, height = 300 }: OrderSta
       return (
         <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
           <p className="font-medium text-gray-900 capitalize">{label}</p>
-          <p className="text-sm text-blue-600">
+          <p className="text-sm text-primary-600">
             Orders: {data.count}
           </p>
-          <p className="text-sm text-green-600">
+          <p className="text-sm text-primary-600">
             Revenue: {formatCurrency(data.revenue)}
           </p>
           <p className="text-sm text-gray-600">

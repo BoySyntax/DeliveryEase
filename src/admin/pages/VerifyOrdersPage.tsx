@@ -133,7 +133,7 @@ function CustomerAddressDisplay({ deliveryAddress }: { deliveryAddress: any }) {
         </div>
         <div>{deliveryAddress.street_address}</div>
         {deliveryAddress.barangay && (
-          <div className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+          <div className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary-100 text-primary-800">
             📍 {deliveryAddress.barangay}
           </div>
         )}
@@ -415,8 +415,8 @@ export default function VerifyOrdersPage() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <div className="text-xs text-blue-600">Payment Proof Uploaded</div>
-                    <div className="text-lg font-semibold text-green-600">
+                    <div className="text-xs text-primary-600">Payment Proof Uploaded</div>
+                    <div className="text-lg font-semibold text-primary-600">
                       {formatCurrency(order.total)}
                     </div>
                   </div>
@@ -497,7 +497,7 @@ export default function VerifyOrdersPage() {
                   </Button>
                   <Button 
                     onClick={() => handleVerifyOrder(order.id, true)}
-                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    className="flex-1 bg-primary-600 hover:bg-primary-700"
                   >
                     Verify Order
                   </Button>

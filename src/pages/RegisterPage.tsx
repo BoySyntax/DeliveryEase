@@ -71,7 +71,7 @@ export default function RegisterPage() {
         </div>
         
         <h1 className="text-center text-3xl font-bold mb-2 text-gray-900">
-          DeliveryEase
+          fordaGO
         </h1>
         <p className="text-center text-gray-600 mb-8">
           Create a new account
