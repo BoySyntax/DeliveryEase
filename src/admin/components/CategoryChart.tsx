@@ -10,14 +10,14 @@ interface CategoryChartProps {
 }
 
 const COLORS = [
-  '#3B82F6', // blue
-  '#10B981', // emerald
-  '#F59E0B', // amber
-  '#EF4444', // red
-  '#8B5CF6', // violet
-  '#06B6D4', // cyan
-  '#84CC16', // lime
-  '#F97316', // orange
+  '#0a2767', // brand blue
+  '#0a2767', // brand blue
+  '#0a2767', // brand blue
+  '#0a2767', // brand blue
+  '#0a2767', // brand blue
+  '#0a2767', // brand blue
+  '#0a2767', // brand blue
+  '#0a2767', // brand blue
 ];
 
 export default function CategoryChart({ data, title, height = 300 }: CategoryChartProps) {

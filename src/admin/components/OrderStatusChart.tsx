@@ -11,7 +11,7 @@ interface OrderStatusChartProps {
 
 const STATUS_COLORS = {
   pending: '#F59E0B',
-  assigned: '#3B82F6',
+  assigned: '#0a2767',
   delivering: '#8B5CF6',
   delivered: '#10B981'
 };
@@ -77,7 +77,7 @@ export default function OrderStatusChart({ data, title, height = 300 }: OrderSta
                 yAxisId="left"
                 dataKey="count" 
                 name="Orders"
-                fill="#3B82F6"
+                fill="#0a2767"
                 radius={[4, 4, 0, 0]}
               />
               <Bar 

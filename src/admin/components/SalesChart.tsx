@@ -67,10 +67,10 @@ export default function SalesChart({
                 yAxisId="left"
                 type="monotone"
                 dataKey="revenue"
-                stroke="#3B82F6"
+                stroke="#0a2767"
                 strokeWidth={2}
-                dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
-                activeDot={{ r: 6, stroke: '#3B82F6', strokeWidth: 2 }}
+                dot={{ fill: '#0a2767', strokeWidth: 2, r: 4 }}
+                activeDot={{ r: 6, stroke: '#0a2767', strokeWidth: 2 }}
                 name="Revenue"
               />
             )}

@@ -452,7 +452,7 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
           value={formData.description}
           onChange={handleChange}
           placeholder="Product description"
-          className="w-full p-2 border rounded"
+          className="w-full p-2 border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500 shadow-sm"
           required
         />
 
@@ -559,7 +559,7 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
             name="featured"
             checked={formData.featured}
             onChange={(e) => setFormData({ ...formData, featured: e.target.checked })}
-            className="rounded border-gray-300"
+            className="rounded border-gray-300 focus:border-primary-500 focus:ring-primary-500"
           />
           <label htmlFor="featured">Featured Product</label>
         </div>
@@ -568,7 +568,7 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
           type="file"
           accept="image/*"
           onChange={handleFileChange}
-          className="w-full"
+          className="w-full p-2 border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
         />
 
         {formData.image_url && (

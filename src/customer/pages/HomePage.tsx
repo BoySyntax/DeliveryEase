@@ -262,14 +262,14 @@ export default function HomePage() {
                   className="absolute left-0 top-1/2 -translate-y-1/2 z-20 rounded-lg p-1.5 shadow-lg border transition-all duration-200 bg-white border-gray-200 hover:bg-gray-50 hover:shadow-xl cursor-pointer"
                   style={{ transform: 'translateY(-50%)' }}
                 >
-                  <ChevronLeft size={16} className="text-green-500" />
+                  <ChevronLeft size={16} className="text-primary-600" />
                 </button>
                 <button
                   onClick={() => scrollToCategoryPage(currentCategoryPage + 1)}
                   className="absolute right-0 top-1/2 -translate-y-1/2 z-20 rounded-lg p-1.5 shadow-lg border transition-all duration-200 bg-white border-gray-200 hover:bg-gray-50 hover:shadow-xl cursor-pointer"
                   style={{ transform: 'translateY(-50%)' }}
                 >
-                  <ChevronRight size={16} className="text-green-500" />
+                  <ChevronRight size={16} className="text-primary-600" />
                 </button>
               </>
             )}
@@ -337,7 +337,7 @@ export default function HomePage() {
                       onClick={() => scrollToCategoryPage(index)}
                       className={`h-2 rounded-full transition-all duration-200 ${
                         currentCategoryPage === index 
-                          ? 'bg-green-500 w-6' 
+                          ? 'bg-primary-600 w-6' 
                           : 'bg-gray-800 hover:bg-gray-600 w-2'
                       }`}
                     />
@@ -426,7 +426,7 @@ export default function HomePage() {
               </CardContent>
               {/* New badge for recently added products */}
               {product.created_at && (Date.now() - new Date(product.created_at).getTime() < 1000 * 60 * 60 * 24 * 7) && (
-                <span className="absolute top-3 left-3 bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow">New</span>
+                <span className="absolute top-3 left-3 bg-primary-600 text-white text-xs font-bold px-2 py-1 rounded-full shadow">New</span>
               )}
             </Card>
           ))}

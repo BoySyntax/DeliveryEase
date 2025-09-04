@@ -346,11 +346,16 @@ function CategoryForm({ onClose, onSaved, category }: CategoryFormProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 overflow-y-auto max-h-screen p-2 sm:p-4">
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white p-3 sm:p-6 rounded-lg shadow-lg w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl space-y-4 mx-auto overflow-y-auto max-h-[90vh]"
-      >
+    <>
+      {/* Full screen backdrop */}
+      <div className="fixed inset-0 bg-black bg-opacity-50 z-[9998]" />
+      
+      {/* Modal container */}
+      <div className="fixed inset-0 flex items-center justify-center z-[9999] overflow-y-auto p-2 sm:p-4">
+        <form
+          onSubmit={handleSubmit}
+          className="bg-white p-3 sm:p-6 rounded-lg shadow-lg w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl space-y-4 mx-auto overflow-y-auto max-h-[90vh]"
+        >
         <h2 className="text-xl font-semibold mb-2">{category ? 'Edit' : 'Add'} Category</h2>
         
         <Input
@@ -438,6 +443,7 @@ function CategoryForm({ onClose, onSaved, category }: CategoryFormProps) {
           </Button>
         </div>
       </form>
-    </div>
+      </div>
+    </>
   );
 }

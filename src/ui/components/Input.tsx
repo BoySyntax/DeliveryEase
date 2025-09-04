@@ -47,7 +47,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               'block w-full',
               icon ? 'pr-10' : '', // Add right padding if icon exists
               startAdornment ? 'pl-12' : '', // Add left padding if adornment exists
-              'rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm',
+              'rounded-md border-2 border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm',
               error && 'border-error-300 focus:border-error-500 focus:ring-error-500',
               className
             )}

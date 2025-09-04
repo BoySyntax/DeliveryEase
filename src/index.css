@@ -10,3 +10,16 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;  /* Safari and Chrome */
 }
+
+/* Custom dropdown mobile fixes - for overlay behavior */
+@media (max-width: 640px) {
+  /* Ensure custom dropdowns appear above all mobile content */
+  .dropdown-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9998;
+  }
+}

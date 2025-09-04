@@ -252,7 +252,7 @@ export default function EditAddressPage() {
             >
               <div className="flex items-center justify-center gap-2">
                 <MapPin className="w-5 h-5" />
-                <span>{selectedAddress ? 'Change Location on Map' : 'Open Map & Auto-Detect Barangay'}</span>
+                <span>{selectedAddress ? 'Change Location on Map' : 'Open Map'}</span>
               </div>
             </Button>
 

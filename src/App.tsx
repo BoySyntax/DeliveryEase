@@ -7,7 +7,6 @@ import Loader from './ui/components/Loader';
 // Lazy-loaded components
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
-const LandingPage = lazy(() => import('./pages/LandingPage'));
 const AuthCallback = lazy(() => import('./pages/auth/callback'));
 
 // Admin routes
@@ -77,7 +76,7 @@ function App() {
     <Suspense fallback={<Loader fullScreen />}>
       <Routes>
         {/* Public Routes */}
-        <Route path="/" element={<LandingPage />} />
+        <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/auth/callback" element={<AuthCallback />} />

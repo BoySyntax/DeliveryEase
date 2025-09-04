@@ -81,3 +81,14 @@ LEFT JOIN orders o ON o.id = oi.order_id
 GROUP BY p.id, p.name, p.quantity
 ORDER BY p.name;
 
+
+
+
+
+
+
+
+
+
+
+

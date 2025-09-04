@@ -5,9 +5,9 @@ import Loader from '../ui/components/Loader';
 import { cn } from '../lib/utils';
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import logo from '../assets/logo.png';
+import logo from '../assets/go1.png';
 import Input from '../ui/components/Input';
-import Select from '../ui/components/Select';
+import CustomSelect from '../ui/components/CustomSelect';
 import { useSearchParams } from 'react-router-dom';
 import NotificationBadge from '../ui/components/NotificationBadge';
 
@@ -25,27 +25,14 @@ export default function CustomerLayout() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const categoryId = searchParams.get('category') || '';
-
-  // Pages where search bar should be hidden
-  const hideSearchOnPages = [
-    '/customer/cart',
-    '/customer/checkout',
-    '/customer/orders',
-    '/customer/notifications',
-    '/customer/profile',
-    '/customer/add-address',
-    '/customer/edit-address'
-  ];
 
   // Pages where bottom navigation should be hidden
   const hideBottomNavOnPages = [
     '/customer/add-address',
     '/customer/edit-address'
   ];
-
-  // Check if search bar should be hidden on current page
-  const shouldHideSearch = hideSearchOnPages.some(page => location.pathname.startsWith(page));
 
   // Check if bottom navigation should be hidden on current page
   const shouldHideBottomNav = hideBottomNavOnPages.some(page => location.pathname.startsWith(page));
@@ -164,16 +151,28 @@ export default function CustomerLayout() {
       if (location.pathname.startsWith('/customer/products')) {
         setLoadingCategories(true);
         try {
-          const { data } = await supabase
+          const { data, error } = await supabase
             .from('categories')
             .select('*')
             .order('name');
-          setCategories((data as Category[]) || []);
-        } catch {
+          
+          if (error) {
+            console.error('Error fetching categories:', error);
+            setCategories([]);
+          } else {
+            console.log('Categories loaded:', data?.length || 0, 'categories');
+            setCategories((data as Category[]) || []);
+          }
+        } catch (error) {
+          console.error('Exception fetching categories:', error);
           setCategories([]);
         } finally {
           setLoadingCategories(false);
         }
+      } else {
+        // Clear categories when not on products page
+        setCategories([]);
+        setLoadingCategories(false);
       }
     }
     fetchCategories();
@@ -189,15 +188,12 @@ export default function CustomerLayout() {
     setSearchParams(params);
   };
 
-  if (loading) {
-    return <Loader fullScreen />;
-  }
-
-  // If not a customer, redirect to appropriate dashboard
-  if (profile && profile.role !== 'customer') {
-    navigate(`/${profile.role}`);
-    return null;
-  }
+  // Close search panel when navigating away from products page
+  useEffect(() => {
+    if (!location.pathname.startsWith('/customer/products')) {
+      setIsSearchOpen(false);
+    }
+  }, [location.pathname]);
 
   const navItems = [
     { icon: <Home size={20} />, label: 'Home', path: '/customer' },
@@ -211,54 +207,149 @@ export default function CustomerLayout() {
     e.preventDefault();
     if (searchQuery.trim()) {
       navigate(`/customer/products?search=${encodeURIComponent(searchQuery.trim())}`);
+      setIsSearchOpen(false); // Close search panel after search
     }
   };
+
+  // Sync search query with URL parameters
+  useEffect(() => {
+    const urlSearchQuery = searchParams.get('search') || '';
+    setSearchQuery(urlSearchQuery);
+  }, [searchParams]);
+
+  // Handle search input changes - clear URL when search is empty
+  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    
+    // If search is cleared, update URL to remove search parameter
+    if (value === '') {
+      const params = new URLSearchParams(searchParams);
+      params.delete('search');
+      setSearchParams(params);
+    }
+  };
+
+  if (loading) {
+    return <Loader fullScreen />;
+  }
+
+  // If not a customer, redirect to appropriate dashboard
+  if (profile && profile.role !== 'customer') {
+    navigate(`/${profile.role}`);
+    return null;
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm sticky top-0 z-50">
+      <header className="bg-white shadow-sm sticky top-0 z-[100] sm:z-[100] relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center" style={{ paddingTop: location.pathname.startsWith('/customer/products') ? 4 : undefined, paddingBottom: location.pathname.startsWith('/customer/products') ? 2 : undefined }}>
-              <img src={logo} alt="DeliveryEase Logo" width={56} height={56} style={{objectFit: 'contain', marginRight: 8}} />
-              <span className="text-lg font-semibold text-gray-900">DeliveryEase</span>
+          <div className="flex items-center justify-between h-16 sm:h-20">
+            {/* Logo */}
+            <div className="flex items-center flex-shrink-0">
+              <img src={logo} alt="Logo" className="w-16 h-16 sm:w-20 sm:h-20 object-contain" />
             </div>
-            {/* Desktop Nav & Search (sm and up) */}
-            <div className="hidden sm:flex sm:items-center sm:gap-6">
-              {/* Show search bar on all pages except those in hideSearchOnPages */}
-              {!shouldHideSearch && !loadingCategories && (
-                <form onSubmit={handleSearch} className="flex items-center gap-2">
-                  <Input
-                    placeholder="Search for products..."
-                    icon={<Search size={18} className="text-gray-400" />}
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    className="w-96 rounded-full px-4 py-2 text-sm text-gray-900 border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 shadow-sm placeholder-gray-400 pr-10"
-                  />
-                  {/* Show category selector only on /customer/products */}
-                  {location.pathname === '/customer/products' && (
-                    <Select
-                      options={[
-                        { value: '', label: 'All Categories' },
-                        ...categories.map(cat => ({ value: cat.id, label: cat.name }))
-                      ]}
-                      value={categoryId}
-                      onChange={e => handleCategoryChange(e.target.value)}
-                      className="w-[180px] h-10 px-3 py-2 text-sm rounded-md border-gray-300 focus:border-primary-500 focus:ring-primary-500 shadow-sm bg-white"
-                    />
-                  )}
-                </form>
+            
+            {/* Spacer */}
+            <div className="flex-1"></div>
+
+            {/* Right Side - Search Icon + Desktop Navigation */}
+            <div className="flex items-center space-x-4">
+              {/* Homepage Search - Mobile Icon */}
+              {location.pathname === '/customer' && (
+                <button
+                  onClick={() => setIsSearchOpen(!isSearchOpen)}
+                  className="sm:hidden p-2 rounded-full hover:bg-gray-100 transition-colors"
+                  aria-label="Search products"
+                >
+                  <Search size={20} className="text-gray-600" />
+                </button>
               )}
-              {/* Desktop Nav Items */}
-              <nav className="flex items-center gap-8 ml-6">
+
+              {/* Homepage Search Bar - Desktop only */}
+              {location.pathname === '/customer' && (
+                <div className="hidden sm:flex items-center">
+                  <form onSubmit={handleSearch} className="flex items-center">
+                                          <Input
+                        placeholder="Search for products..."
+                        icon={<Search size={18} className="text-gray-400" />}
+                        value={searchQuery}
+                        onChange={handleSearchInputChange}
+                        className="w-80 lg:w-96 xl:w-[28rem] rounded-full px-4 py-2 text-sm text-gray-900 border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 shadow-sm placeholder-gray-400"
+                      />
+                  </form>
+                </div>
+              )}
+
+              {/* Products Page - Mobile Search Icon */}
+              {location.pathname.startsWith('/customer/products') && (
+                <button
+                  onClick={() => setIsSearchOpen(!isSearchOpen)}
+                  className="sm:hidden p-2 rounded-full hover:bg-gray-100 transition-colors"
+                  aria-label="Search products"
+                >
+                  <Search size={20} className="text-gray-600" />
+                </button>
+              )}
+
+              {/* Products Page - Desktop Search Bar */}
+              {location.pathname.startsWith('/customer/products') && (
+                <div className="hidden sm:flex items-center gap-3 flex-1 max-w-6xl">
+                  <form onSubmit={handleSearch} className="flex items-center gap-3 w-full">
+                    <div className="flex-[4] min-w-0">
+                      <Input
+                        placeholder="Search for products..."
+                        icon={<Search size={18} className="text-gray-400" />}
+                        value={searchQuery}
+                        onChange={handleSearchInputChange}
+                        className="w-full rounded-full px-4 py-2.5 text-sm text-gray-900 border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 shadow-sm placeholder-gray-400"
+                      />
+                    </div>
+                    
+                    {/* Categories Dropdown */}
+                    <div className="flex-shrink-0 relative min-w-[200px]">
+                      {loadingCategories ? (
+                        <div className="w-full h-10 px-3 py-2 text-sm rounded-md border border-gray-300 bg-gray-100 flex items-center justify-center">
+                          <span className="text-gray-500">Loading...</span>
+                        </div>
+                      ) : categories.length > 0 ? (
+                        <CustomSelect
+                          options={[
+                            { value: '', label: 'All Categories' },
+                            ...categories.map(cat => ({ value: cat.id, label: cat.name }))
+                          ]}
+                          value={categoryId}
+                          onChange={handleCategoryChange}
+                          placeholder="All Categories"
+                          className="w-full h-10 px-3 py-2 text-sm rounded-md border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 shadow-sm bg-white"
+                        />
+                      ) : (
+                        <div className="w-full h-10 px-3 py-2 text-sm rounded-md border border-gray-300 bg-gray-100 flex items-center justify-center">
+                          <span className="text-gray-500 text-xs">No categories</span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <button
+                      type="submit"
+                      className="px-6 py-2.5 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium whitespace-nowrap"
+                    >
+                      Search
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* Desktop Navigation */}
+              <nav className="hidden sm:flex items-center space-x-6">
                 {navItems.map((item) => (
                   <NavLink
                     key={item.path}
                     to={item.path}
                     end={item.path === '/customer'}
                     className={({ isActive }) => cn(
-                      'relative flex flex-col items-center text-gray-600 hover:text-primary-600 transition',
+                      'relative flex flex-col items-center px-2 py-1 text-gray-600 hover:text-primary-600 transition-colors',
                       isActive ? 'text-primary-600 font-semibold' : ''
                     )}
                     style={{ textDecoration: 'none' }}
@@ -271,48 +362,81 @@ export default function CustomerLayout() {
                         </span>
                       )}
                     </span>
-                    <span className="text-xs mt-1">{item.label}</span>
+                    <span className="text-xs mt-1 whitespace-nowrap">{item.label}</span>
                   </NavLink>
                 ))}
               </nav>
             </div>
-            {/* Mobile search bar (below logo/title) */}
-            {!shouldHideSearch && (
-              <div className="sm:hidden py-3">
-                <form onSubmit={handleSearch} className="flex flex-row gap-2">
-                  <div className="relative flex-1">
-                    <input
-                      type="text"
-                      className="w-full rounded-full px-4 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-400 border border-gray-300"
-                      placeholder="Search for products..."
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                    />
-                    <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary-600">
-                      <Search size={18} />
-                    </button>
-                  </div>
-                  {/* Show category selector only on /customer/products */}
-                  {location.pathname === '/customer/products' && !loadingCategories && (
-                    <Select
-                      options={[
-                        { value: '', label: 'All Categories' },
-                        ...categories.map(cat => ({ value: cat.id, label: cat.name }))
-                      ]}
-                      value={categoryId}
-                      onChange={e => handleCategoryChange(e.target.value)}
-                      className="w-[150px] h-10 px-3 py-2 text-sm rounded-md border-gray-300 focus:border-primary-500 focus:ring-primary-500 shadow-sm bg-white"
-                    />
-                  )}
-                </form>
-              </div>
-            )}
           </div>
         </div>
       </header>
 
+      {/* Animated Search Panel - Mobile Only */}
+      {(location.pathname === '/customer' || location.pathname.startsWith('/customer/products')) && (
+        <div className={cn(
+          'sm:hidden bg-white shadow-lg transition-all duration-300 ease-in-out border-b sticky top-16 z-40',
+          isSearchOpen ? 'max-h-64 opacity-100 overflow-visible' : 'max-h-0 opacity-0 overflow-hidden'
+        )}>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <form onSubmit={handleSearch} className="space-y-4">
+              {/* Search Bar Row */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <Input
+                    placeholder="Search for products..."
+                    icon={<Search size={18} className="text-gray-400" />}
+                    value={searchQuery}
+                    onChange={handleSearchInputChange}
+                    className="w-full rounded-md px-4 py-2.5 text-sm text-gray-900 border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 shadow-sm placeholder-gray-400"
+                    autoFocus={isSearchOpen}
+                  />
+                </div>
+                
+                {/* Search Button */}
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
+                >
+                  Search
+                </button>
+              </div>
+
+              {/* Categories Row - Only on products page */}
+              {location.pathname.startsWith('/customer/products') && (
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    {loadingCategories ? (
+                      <div className="w-full rounded-md px-4 py-2.5 text-sm text-gray-900 border border-gray-300 bg-gray-100 flex items-center justify-center shadow-sm">
+                        <span className="text-gray-500">Loading categories...</span>
+                      </div>
+                    ) : categories.length > 0 ? (
+                      <div className="relative">
+                        <CustomSelect
+                          options={[
+                            { value: '', label: 'All Categories' },
+                            ...categories.map(cat => ({ value: cat.id, label: cat.name }))
+                          ]}
+                          value={categoryId}
+                          onChange={handleCategoryChange}
+                          placeholder="All Categories"
+                          className="w-full rounded-md px-4 py-2.5 text-sm text-gray-900 border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 shadow-sm bg-white"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-full rounded-md px-4 py-2.5 text-sm text-gray-900 border border-gray-300 bg-gray-100 flex items-center justify-center shadow-sm">
+                        <span className="text-gray-500 text-xs">No categories available</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
-      <main className="flex-1">
+      <main className="flex-1 relative z-[1]">
         <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
           <Outlet />
         </div>
