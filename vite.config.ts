@@ -9,7 +9,21 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}']
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        // Optimize caching strategy
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
+              }
+            }
+          }
+        ]
       },
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
@@ -167,6 +181,39 @@ export default defineConfig({
   ],
   optimizeDeps: {
     exclude: ['lucide-react'],
+    include: ['react', 'react-dom', '@supabase/supabase-js']
+  },
+  build: {
+    // Optimize build performance
+    target: 'esnext',
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true, // Remove console.log in production
+        drop_debugger: true,
+        pure_funcs: ['console.log', 'console.info', 'console.debug'],
+        passes: 2 // Multiple passes for better compression
+      },
+      mangle: {
+        safari10: true
+      }
+    },
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Split vendor chunks for better caching
+          vendor: ['react', 'react-dom'],
+          supabase: ['@supabase/supabase-js'],
+          ui: ['lucide-react', 'framer-motion'],
+          charts: ['recharts'],
+          router: ['react-router-dom']
+        }
+      }
+    },
+    // Optimize chunk size
+    chunkSizeWarningLimit: 1000,
+    // Enable source maps only in development
+    sourcemap: false
   },
   server: {
     port: 3008,

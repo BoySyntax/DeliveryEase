@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { GeneticRouteOptimizer, DeliveryLocation, OptimizedRoute, DepotLocation } from '../../lib/genetic-route-optimizer';
@@ -68,7 +68,7 @@ interface GoogleMapsWindow extends Window {
 
 declare const window: GoogleMapsWindow;
 
-export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: DeliveryMapProps) {
+const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRouteOptimized }: DeliveryMapProps) {
   const navigate = useNavigate();
   const [deliveryLocations, setDeliveryLocations] = useState<ExtendedDeliveryLocation[]>([]);
   const [optimizedOrder, setOptimizedOrder] = useState<string[]>([]);
@@ -1160,19 +1160,18 @@ export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: Deliv
   useEffect(() => {
     // Don't update map if we're in the middle of completing a stop
     if (isCompletingStopRef.current) {
-      console.log('⏸️  Skipping map update during stop completion');
       return;
     }
     
     if (!mapLoading && deliveryLocations.length > 0 && driverLocation) {
       updateMapMarkers();
       drawRouteOnMap();
-      // Auto-optimize route when locations are loaded
-      if (optimizedOrder.length === 0) {
+      // Auto-optimize route when locations are loaded - only once
+      if (optimizedOrder.length === 0 && deliveryLocations.length > 1) {
         optimizeRoute();
       }
     }
-  }, [deliveryLocations, mapLoading, driverLocation, updateMapMarkers, drawRouteOnMap, optimizedOrder.length]);
+  }, [deliveryLocations.length, mapLoading, driverLocation?.lat, driverLocation?.lng, optimizedOrder.length]);
 
   // Auto-redirect when all orders are completed
   useEffect(() => {
@@ -1562,4 +1561,6 @@ export default function RealTimeDeliveryMap({ batchId, onRouteOptimized }: Deliv
       )}
     </div>
   );
-} 
+});
+
+export default RealTimeDeliveryMap; 

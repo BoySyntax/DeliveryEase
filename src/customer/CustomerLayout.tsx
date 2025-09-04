@@ -3,7 +3,7 @@ import { Home, Package, User, ShoppingCart, Search } from 'lucide-react';
 import { useProfile } from '../lib/auth';
 import Loader from '../ui/components/Loader';
 import { cn } from '../lib/utils';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, memo, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import logo from '../assets/go1.png';
 import Input from '../ui/components/Input';
@@ -17,7 +17,7 @@ type Category = {
   image_url?: string | null;
 };
 
-export default function CustomerLayout() {
+const CustomerLayout = memo(function CustomerLayout() {
   const { profile, loading } = useProfile();
   const navigate = useNavigate();
   const location = useLocation();
@@ -178,7 +178,7 @@ export default function CustomerLayout() {
     fetchCategories();
   }, [location.pathname]);
 
-  const handleCategoryChange = (value: string) => {
+  const handleCategoryChange = useCallback((value: string) => {
     const params = new URLSearchParams(searchParams);
     if (value) {
       params.set('category', value);
@@ -186,7 +186,7 @@ export default function CustomerLayout() {
       params.delete('category');
     }
     setSearchParams(params);
-  };
+  }, [searchParams, setSearchParams]);
 
   // Close search panel when navigating away from products page
   useEffect(() => {
@@ -203,13 +203,13 @@ export default function CustomerLayout() {
     { icon: <User size={20} />, label: 'Profile', path: '/customer/profile' },
   ];
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
       navigate(`/customer/products?search=${encodeURIComponent(searchQuery.trim())}`);
       setIsSearchOpen(false); // Close search panel after search
     }
-  };
+  }, [searchQuery, navigate]);
 
   // Sync search query with URL parameters
   useEffect(() => {
@@ -218,7 +218,7 @@ export default function CustomerLayout() {
   }, [searchParams]);
 
   // Handle search input changes - clear URL when search is empty
-  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSearchInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchQuery(value);
     
@@ -228,7 +228,7 @@ export default function CustomerLayout() {
       params.delete('search');
       setSearchParams(params);
     }
-  };
+  }, [searchParams, setSearchParams]);
 
   if (loading) {
     return <Loader fullScreen />;
@@ -477,4 +477,6 @@ export default function CustomerLayout() {
       {!shouldHideBottomNav && <div className="sm:hidden h-16" />}
     </div>
   );
-}
+});
+
+export default CustomerLayout;

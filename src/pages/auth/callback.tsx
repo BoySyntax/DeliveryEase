@@ -64,6 +64,8 @@ export default function AuthCallback() {
         }
       } catch (error) {
         console.error('Error in auth callback:', error);
+        console.error('Current URL:', window.location.href);
+        console.error('Session data:', await supabase.auth.getSession());
         toast.error(error instanceof Error ? error.message : 'Authentication failed');
         navigate('/login');
       }

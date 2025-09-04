@@ -6,8 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:analyze": "tsc && vite build --mode analyze",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "lint:fix": "eslint . --fix",
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist node_modules/.vite"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.52.0",

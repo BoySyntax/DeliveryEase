@@ -85,44 +85,37 @@ export default function OrdersPage() {
 
   // Helper function to determine the display status based on approval and delivery status
   function getDisplayStatus(order: Order): string {
-    // Debug: Log the status calculation for this order
-    console.log(`🔍 Status calculation for Order ${order.id.slice(0, 8)}:`, {
-      approval_status: order.approval_status,
-      delivery_status: order.delivery_status,
-      order_status_code: order.order_status_code
-    });
-    
     // If rejected, show rejected
     if (order.approval_status === 'rejected') {
-      console.log(`   → Returning 'rejected'`);
       return 'rejected';
     }
     
     // If still pending approval, show pending
     if (order.approval_status === 'pending') {
-      console.log(`   → Returning 'pending'`);
       return 'pending';
     }
     
     // If approved, check delivery status
     if (order.approval_status === 'approved') {
       if (order.delivery_status === 'delivered' || order.delivery_status === 'delivering') {
-        console.log(`   → Returning 'out_for_delivery' (delivery status: ${order.delivery_status})`);
         return 'out_for_delivery';
       } else {
-        console.log(`   → Returning 'verified' (pending delivery start)`);
         return 'verified'; // Approved but not yet started by driver
       }
     }
     
     // Fallback to original status code
-    console.log(`   → Returning fallback: '${order.order_status_code || 'pending'}'`);
     return order.order_status_code || 'pending';
   }
 
   useEffect(() => {
     loadOrders();
-    const interval = setInterval(loadOrders, 5000); // refresh every 5 seconds
+    // Much less frequent polling - only when user is active
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadOrders();
+      }
+    }, 30000); // refresh every 30 seconds, only when tab is visible
     return () => clearInterval(interval);
   }, []);
 
@@ -156,8 +149,6 @@ export default function OrdersPage() {
         return;
       }
 
-      console.log('🛒 Loading orders for user:', user.id);
-      
       const { data, error } = await supabase
         .from('orders')
         .select(`
@@ -184,9 +175,6 @@ export default function OrdersPage() {
         throw error;
       }
       
-      // Debug: Log the raw data to see what's in the database
-      console.log('🛒 Customer Orders - Raw data from database:', data);
-      
       // Map to correct type
       const mapped = (data as any[] || []).map(order => ({
         id: order.id,
@@ -198,15 +186,6 @@ export default function OrdersPage() {
         status: null, // Removed order_status join
         items: order.items,
       })) as Order[];
-      
-      // Debug: Log the mapped orders and their display status
-      mapped.forEach(order => {
-        console.log(`📦 Order ${order.id.slice(0, 8)}:`, {
-          approval_status: order.approval_status,
-          delivery_status: order.delivery_status,
-          display_status: getDisplayStatus(order)
-        });
-      });
       // Sort: rejected first, then pending, then by created_at descending
       mapped.sort((a, b) => {
         const statusA = getDisplayStatus(a);

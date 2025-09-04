@@ -111,13 +111,15 @@ export default function DashboardPage() {
     if (profile?.id) {
       loadDashboardData();
       
-      // Set up real-time polling for dashboard updates
+      // Smart polling - only when needed
       const interval = setInterval(() => {
         checkForNewAssignments();
         checkForBatchCompletion();
-        // Automatically refresh dashboard data every 5 seconds
-        loadDashboardData();
-      }, 5000); // Check every 5 seconds for faster updates
+        // Only refresh if there's an active batch
+        if (activeBatch) {
+          loadDashboardData();
+        }
+      }, 60000); // Check every 60 seconds - much less frequent
 
       return () => clearInterval(interval);
     }

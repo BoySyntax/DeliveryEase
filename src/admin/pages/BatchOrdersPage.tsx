@@ -297,7 +297,7 @@ export default function BatchOrdersPage() {
 
       if (batchError) throw batchError;
 
-      // Load orders with detailed product information
+      // Load orders with minimal data first - much faster
       const batchIds = (batchData || []).map(batch => batch.id);
       
       let ordersData: any[] = [];
@@ -315,18 +315,7 @@ export default function BatchOrdersPage() {
             batch_id,
             customer:profiles!orders_customer_id_fkey(
               id,
-              name,
-              avatar_url
-            ),
-            items:order_items(
-              quantity,
-              price,
-              product:products(
-                id,
-                name,
-                image_url,
-                weight
-              )
+              name
             )
           `)
           .in('batch_id', batchIds)

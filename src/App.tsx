@@ -1,15 +1,29 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { supabase } from './lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import Loader from './ui/components/Loader';
 
-// Lazy-loaded components
+// Create a client for React Query
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes (renamed from cacheTime)
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
+
+// Lazy-loaded components with loading fallbacks
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const AuthCallback = lazy(() => import('./pages/auth/callback'));
 
-// Admin routes
+// Admin routes - grouped for better chunking
 const AdminLayout = lazy(() => import('./admin/AdminLayout'));
 const AdminDashboard = lazy(() => import('./admin/pages/DashboardPage'));
 const AdminProducts = lazy(() => import('./admin/pages/ProductsPage'));
@@ -18,8 +32,7 @@ const AdminVerifyOrders = lazy(() => import('./admin/pages/VerifyOrdersPage'));
 const AdminBatchOrders = lazy(() => import('./admin/pages/BatchOrdersPage'));
 const AdminDrivers = lazy(() => import('./admin/pages/DriversPage'));
 
-
-// Customer routes
+// Customer routes - grouped for better chunking
 const CustomerLayout = lazy(() => import('./customer/CustomerLayout'));
 const CustomerHome = lazy(() => import('./customer/pages/HomePage'));
 const CustomerProducts = lazy(() => import('./customer/pages/ProductsPage'));
@@ -28,13 +41,12 @@ const CustomerCart = lazy(() => import('./customer/pages/CartPage'));
 const CustomerCheckout = lazy(() => import('./customer/pages/CheckoutPage'));
 const CustomerOrders = lazy(() => import('./customer/pages/OrdersPage'));
 const CustomerProfile = lazy(() => import('./customer/pages/ProfilePage'));
-
 const CustomerOrderDetails = lazy(() => import('./customer/pages/OrderDetailsPage'));
 const CustomerAddAddress = lazy(() => import('./customer/pages/AddAddressPage'));
 const CustomerEditAddress = lazy(() => import('./customer/pages/EditAddressPage'));
 const CustomerNotifications = lazy(() => import('./customer/pages/NotificationsPage'));
 
-// Driver routes
+// Driver routes - grouped for better chunking
 const DriverLayout = lazy(() => import('./driver/DriverLayout'));
 const DriverDashboard = lazy(() => import('./driver/pages/DashboardPage'));
 const DriverProfile = lazy(() => import('./driver/pages/ProfilePage'));
@@ -73,8 +85,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function App() {
   return (
-    <Suspense fallback={<Loader fullScreen />}>
-      <Routes>
+    <QueryClientProvider client={queryClient}>
+      <Suspense fallback={<Loader fullScreen />}>
+        <Routes>
         {/* Public Routes */}
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<LoginPage />} />
@@ -139,8 +152,10 @@ function App() {
 
         {/* Catch all route - redirect to login */}
         <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </Suspense>
+        </Routes>
+      </Suspense>
+      {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
+    </QueryClientProvider>
   );
 }
 
