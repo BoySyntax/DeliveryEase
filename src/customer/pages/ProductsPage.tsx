@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 
 import { supabase } from '../../lib/supabase';
 import ProductCard from '../components/ProductCard';
@@ -19,6 +19,7 @@ type Product = {
 
 export default function ProductsPage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [addingToCart, setAddingToCart] = useState<string | null>(null);
@@ -79,6 +80,7 @@ export default function ProductsPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast.error('Please sign in to add items to cart');
+        navigate('/login');
         return;
       }
 

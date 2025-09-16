@@ -1,5 +1,5 @@
 import { useState, useEffect, ChangeEvent, useRef } from 'react';
-import { Plus, Pencil, Trash2, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '../../lib/utils';
 import Button from '../../ui/components/Button';
@@ -36,14 +36,13 @@ export default function ProductsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   useEffect(() => {
     loadData();
     // eslint-disable-next-line
-  }, [selectedCategory, searchQuery]);
+  }, [selectedCategory]);
 
   async function loadData() {
     setLoading(true);
@@ -71,9 +70,6 @@ export default function ProductsPage() {
         query = query.eq('category_id', selectedCategory);
       }
 
-      if (searchQuery) {
-        query = query.ilike('name', `%${searchQuery}%`);
-      }
 
       const { data: productsData } = await query;
 
@@ -146,14 +142,6 @@ export default function ProductsPage() {
       </div>
 
       <div className="flex flex-col md:flex-row gap-4">
-        <Input
-          placeholder="Search products..."
-          icon={<Search size={18} />}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="md:w-64"
-        />
-        
         <Select
           options={[
             { value: '', label: 'All Categories' },
@@ -452,7 +440,7 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
           value={formData.description}
           onChange={handleChange}
           placeholder="Product description"
-          className="w-full p-2 border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500 shadow-sm"
+          className="w-full p-2 border rounded"
           required
         />
 
@@ -559,7 +547,7 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
             name="featured"
             checked={formData.featured}
             onChange={(e) => setFormData({ ...formData, featured: e.target.checked })}
-            className="rounded border-gray-300 focus:border-primary-500 focus:ring-primary-500"
+            className="rounded border-gray-300"
           />
           <label htmlFor="featured">Featured Product</label>
         </div>
@@ -568,7 +556,7 @@ function ProductForm({ categories, onClose, onSaved, product }: ProductFormProps
           type="file"
           accept="image/*"
           onChange={handleFileChange}
-          className="w-full p-2 border-2 border-gray-300 rounded-md focus:border-primary-500 focus:ring-primary-500"
+          className="w-full"
         />
 
         {formData.image_url && (

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Minus, Plus, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '../../lib/utils';
@@ -25,6 +25,7 @@ type Product = {
 
 export default function ProductDetailsPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
@@ -69,6 +70,7 @@ export default function ProductDetailsPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast.error('Please sign in to add items to cart');
+        navigate('/login');
         return;
       }
 

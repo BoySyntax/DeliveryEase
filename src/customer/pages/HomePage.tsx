@@ -143,7 +143,7 @@ export default function HomePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast.error('Please sign in to add items to cart');
-        navigate('/customer/login');
+        navigate('/login');
         return;
       }
 

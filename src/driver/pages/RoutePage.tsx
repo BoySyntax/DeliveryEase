@@ -141,8 +141,7 @@ export default function RoutePage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">🗺️ Delivery Routes</h1>
-        <p className="text-gray-600 mt-1">Routes are optimized to start from the nearest delivery location to the depot for maximum efficiency</p>
+        <h1 className="text-2xl font-bold text-gray-900">Delivery Routes</h1>
       </div>
 
       {/* Batch Selection */}

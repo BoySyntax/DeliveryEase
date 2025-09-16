@@ -17,6 +17,7 @@ const AdminCategories = lazy(() => import('./admin/pages/CategoriesPage'));
 const AdminVerifyOrders = lazy(() => import('./admin/pages/VerifyOrdersPage'));
 const AdminBatchOrders = lazy(() => import('./admin/pages/BatchOrdersPage'));
 const AdminDrivers = lazy(() => import('./admin/pages/DriversPage'));
+const AdminDriverDetail = lazy(() => import('./admin/pages/DriverDetailPage'));
 
 // Customer routes - grouped for better chunking
 const CustomerLayout = lazy(() => import('./customer/CustomerLayout'));
@@ -69,12 +70,36 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Public Customer Route Component - allows unauthenticated access
+function PublicCustomerRoute({ children }: { children: React.ReactNode }) {
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(() => {
+      setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      // No need to do anything with session for public routes
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  if (loading) {
+    return <Loader fullScreen />;
+  }
+
+  // Allow access regardless of authentication status
+  return <>{children}</>;
+}
+
 function App() {
   return (
     <Suspense fallback={<Loader fullScreen />}>
       <Routes>
         {/* Public Routes */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={<Navigate to="/customer" replace />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
@@ -95,28 +120,61 @@ function App() {
           <Route path="verify-orders" element={<AdminVerifyOrders />} />
           <Route path="batch-orders" element={<AdminBatchOrders />} />
           <Route path="drivers" element={<AdminDrivers />} />
+          <Route path="drivers/:driverId" element={<AdminDriverDetail />} />
         </Route>
 
         {/* Customer Routes */}
         <Route
           path="/customer"
           element={
-            <ProtectedRoute>
+            <PublicCustomerRoute>
               <CustomerLayout />
-            </ProtectedRoute>
+            </PublicCustomerRoute>
           }
         >
           <Route index element={<CustomerHome />} />
           <Route path="products" element={<CustomerProducts />} />
           <Route path="products/:id" element={<CustomerProductDetails />} />
-          <Route path="cart" element={<CustomerCart />} />
-          <Route path="checkout" element={<CustomerCheckout />} />
-          <Route path="orders" element={<CustomerOrders />} />
-          <Route path="orders/:id" element={<CustomerOrderDetails />} />
-          <Route path="notifications" element={<CustomerNotifications />} />
-          <Route path="profile" element={<CustomerProfile />} />
-          <Route path="add-address" element={<CustomerAddAddress />} />
-          <Route path="edit-address/:id" element={<CustomerEditAddress />} />
+          <Route path="cart" element={
+            <ProtectedRoute>
+              <CustomerCart />
+            </ProtectedRoute>
+          } />
+          <Route path="checkout" element={
+            <ProtectedRoute>
+              <CustomerCheckout />
+            </ProtectedRoute>
+          } />
+          <Route path="orders" element={
+            <ProtectedRoute>
+              <CustomerOrders />
+            </ProtectedRoute>
+          } />
+          <Route path="orders/:id" element={
+            <ProtectedRoute>
+              <CustomerOrderDetails />
+            </ProtectedRoute>
+          } />
+          <Route path="notifications" element={
+            <ProtectedRoute>
+              <CustomerNotifications />
+            </ProtectedRoute>
+          } />
+          <Route path="profile" element={
+            <ProtectedRoute>
+              <CustomerProfile />
+            </ProtectedRoute>
+          } />
+          <Route path="add-address" element={
+            <ProtectedRoute>
+              <CustomerAddAddress />
+            </ProtectedRoute>
+          } />
+          <Route path="edit-address/:id" element={
+            <ProtectedRoute>
+              <CustomerEditAddress />
+            </ProtectedRoute>
+          } />
           
         </Route>
 

@@ -65,7 +65,15 @@ const CustomerLayout = memo(function CustomerLayout() {
     async function initCart() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!user) {
+          // User not authenticated, reset cart state
+          if (isMounted) {
+            setUserId(null);
+            setCartId(null);
+            setCartCount(0);
+          }
+          return;
+        }
         if (isMounted) setUserId(user.id);
         const { data: carts } = await supabase
           .from('carts')
@@ -197,10 +205,10 @@ const CustomerLayout = memo(function CustomerLayout() {
 
   const navItems = [
     { icon: <Home size={20} />, label: 'Home', path: '/customer' },
-    { icon: <ShoppingCart size={20} />, label: 'Cart', path: '/customer/cart' },
-    { icon: <Package size={20} />, label: 'Orders', path: '/customer/orders' },
-    { icon: <NotificationBadge size={20} />, label: 'Notifications', path: '/customer/notifications' },
-    { icon: <User size={20} />, label: 'Profile', path: '/customer/profile' },
+    { icon: <ShoppingCart size={20} />, label: 'Cart', path: '/customer/cart', requiresAuth: true },
+    { icon: <Package size={20} />, label: 'Orders', path: '/customer/orders', requiresAuth: true },
+    { icon: <NotificationBadge size={20} />, label: 'Notifications', path: '/customer/notifications', requiresAuth: true },
+    { icon: <User size={20} />, label: 'Profile', path: '/customer/profile', requiresAuth: true },
   ];
 
   const handleSearch = useCallback((e: React.FormEvent) => {
@@ -217,24 +225,25 @@ const CustomerLayout = memo(function CustomerLayout() {
     setSearchQuery(urlSearchQuery);
   }, [searchParams]);
 
-  // Handle search input changes - clear URL when search is empty
+  // Handle search input changes - update URL on every keystroke for real-time search
   const handleSearchInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchQuery(value);
     
-    // If search is cleared, update URL to remove search parameter
-    if (value === '') {
-      const params = new URLSearchParams(searchParams);
+    const params = new URLSearchParams(searchParams);
+    if (value.trim()) {
+      params.set('search', value.trim());
+    } else {
       params.delete('search');
-      setSearchParams(params);
     }
+    setSearchParams(params);
   }, [searchParams, setSearchParams]);
 
   if (loading) {
     return <Loader fullScreen />;
   }
 
-  // If not a customer, redirect to appropriate dashboard
+  // If user is authenticated but not a customer, redirect to appropriate dashboard
   if (profile && profile.role !== 'customer') {
     navigate(`/${profile.role}`);
     return null;
@@ -330,13 +339,6 @@ const CustomerLayout = memo(function CustomerLayout() {
                         </div>
                       )}
                     </div>
-                    
-                    <button
-                      type="submit"
-                      className="px-6 py-2.5 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium whitespace-nowrap"
-                    >
-                      Search
-                    </button>
                   </form>
                 </div>
               )}
@@ -348,6 +350,12 @@ const CustomerLayout = memo(function CustomerLayout() {
                     key={item.path}
                     to={item.path}
                     end={item.path === '/customer'}
+                    onClick={(e) => {
+                      if (item.requiresAuth && !profile) {
+                        e.preventDefault();
+                        navigate('/login');
+                      }
+                    }}
                     className={({ isActive }) => cn(
                       'relative flex flex-col items-center px-1.5 py-1 text-gray-600 hover:text-primary-600 transition-colors',
                       isActive ? 'text-primary-600 font-semibold' : ''
@@ -391,14 +399,6 @@ const CustomerLayout = memo(function CustomerLayout() {
                     autoFocus={isSearchOpen}
                   />
                 </div>
-                
-                {/* Search Button */}
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors text-sm font-medium"
-                >
-                  Search
-                </button>
               </div>
 
               {/* Categories Row - Only on products page */}
@@ -451,6 +451,12 @@ const CustomerLayout = memo(function CustomerLayout() {
                 key={item.path}
                 to={item.path}
                 end={item.path === '/customer'}
+                onClick={(e) => {
+                  if (item.requiresAuth && !profile) {
+                    e.preventDefault();
+                    navigate('/login');
+                  }
+                }}
                 className={({ isActive }) => cn(
                   'flex flex-1 flex-col items-center py-2',
                   isActive

@@ -1233,66 +1233,13 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
 
   return (
     <div className="space-y-4">
-      {/* Driver Location Status */}
-      {driverLocation && (
-        <Card className="border-blue-200 bg-blue-50">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
-                  <MapPin className="h-5 w-5 text-white" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-blue-800">🚚 {driverLocation.name}</h3>
-                  <p className="text-sm text-blue-600">{driverLocation.address}</p>
-                  <p className={`text-xs ${isTrackingLocation ? 'text-green-500' : 'text-blue-500'}`}>
-                    {isTrackingLocation ? '📍 Live Tracking Active' : '📍 Route Starting Point'}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Coords: {driverLocation.lat.toFixed(4)}, {driverLocation.lng.toFixed(4)}
-                  </p>
-                  {isGpsLoading && (
-                    <p className="text-xs text-blue-600 font-medium animate-pulse">
-                      🔄 Acquiring GPS location...
-                    </p>
-                  )}
-                  {isTrackingLocation && !isGpsLoading && (
-                    <p className="text-xs text-green-600 font-medium animate-pulse">
-                      🟢 Real-time GPS tracking enabled
-                    </p>
-                  )}
-                  {locationError && (
-                    <p className="text-xs text-orange-600 font-medium">
-                      ⚠️ {locationError}
-                    </p>
-                  )}
-                  <button
-                    onClick={isTrackingLocation ? stopLocationTracking : startLocationTracking}
-                    disabled={isGpsLoading}
-                    className={`mt-2 px-3 py-1 rounded text-xs font-medium ${
-                      isGpsLoading 
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : isTrackingLocation 
-                        ? 'bg-red-100 text-red-700 hover:bg-red-200' 
-                        : 'bg-green-100 text-green-700 hover:bg-green-200'
-                    }`}
-                  >
-                    {isGpsLoading ? '⏳ Loading GPS...' : isTrackingLocation ? '⏹️ Stop Tracking' : '▶️ Start Tracking'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Interactive Map */}
       <Card className="overflow-hidden">
         <CardContent className="p-0">
           <div className="relative">
             {locationError ? (
               // Show other map errors
-              <div className="w-full h-[50vh] bg-yellow-50 border-2 border-yellow-200 flex items-center justify-center">
+              <div className="w-full h-[70vh] bg-yellow-50 border-2 border-yellow-200 flex items-center justify-center">
                 <div className="text-center p-8 max-w-md">
                   <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <MapPin className="h-8 w-8 text-yellow-600" />
@@ -1317,7 +1264,7 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
               <>
                 <div
                   ref={mapRef}
-                  className="w-full h-[50vh]"
+                  className="w-full h-[70vh]"
                 />
                 {mapLoading && (
                   <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center">

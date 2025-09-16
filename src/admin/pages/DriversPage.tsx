@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { Card, CardContent } from '../../ui/components/Card';
 import Loader from '../../ui/components/Loader';
@@ -14,6 +15,7 @@ type Driver = {
 };
 
 export default function DriversPage() {
+  const navigate = useNavigate();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -90,8 +92,13 @@ export default function DriversPage() {
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {drivers.map((driver) => (
-          <Card key={driver.id}>
-            <CardContent className="p-6">
+          <div 
+            key={driver.id}
+            className="cursor-pointer hover:shadow-lg transition-shadow duration-200"
+            onClick={() => navigate(`/admin/drivers/${driver.id}`)}
+          >
+            <Card>
+              <CardContent className="p-6">
               <div className="flex items-center space-x-4">
                 {driver.avatar_url ? (
                   <img
@@ -128,8 +135,9 @@ export default function DriversPage() {
                   </p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         ))}
       </div>
 
