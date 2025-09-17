@@ -450,32 +450,32 @@ export default function DriverDetailPage() {
                   {orderBatches.map((batch) => (
                     <div key={batch.id} className="border rounded-lg p-4">
                       {/* Batch Header */}
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <h3 className="font-medium text-gray-900">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4 gap-3">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-medium text-gray-900 truncate">
                             {formatBatchName(batch)}
                           </h3>
                           <p className="text-xs text-gray-400">
                             ID: {batch.id.slice(0, 8)}
                           </p>
-                          <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+                          <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-gray-500 mt-1">
                             <span className="flex items-center gap-1">
-                              <MapPin className="h-3 w-3" />
-                              {batch.barangay}
+                              <MapPin className="h-3 w-3 flex-shrink-0" />
+                              <span className="truncate">{batch.barangay}</span>
                             </span>
-                            <span className="flex items-center gap-1">
-                              <Weight className="h-3 w-3" />
+                            <span className="flex items-center gap-1 whitespace-nowrap">
+                              <Weight className="h-3 w-3 flex-shrink-0" />
                               {batch.total_weight}kg / {batch.max_weight}kg
                             </span>
-                            <span className="flex items-center gap-1">
-                              <Package className="h-3 w-3" />
+                            <span className="flex items-center gap-1 whitespace-nowrap">
+                              <Package className="h-3 w-3 flex-shrink-0" />
                               {batch.orders.length} orders
                             </span>
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div className="flex sm:flex-col items-start sm:items-end sm:text-right gap-2 sm:gap-1">
                           {getStatusBadge(batch.status)}
-                          <p className="text-xs text-gray-500 mt-1">
+                          <p className="text-xs text-gray-500 whitespace-nowrap">
                             {batch.assigned_at ? formatDate(batch.assigned_at) : formatDate(batch.created_at)}
                           </p>
                         </div>
@@ -485,21 +485,20 @@ export default function DriverDetailPage() {
                       <div className="space-y-3">
                         {batch.orders.map((order) => (
                           <div key={order.id} className="bg-gray-50 rounded-lg p-3">
-                            <div className="flex items-start justify-between mb-3">
-                              <div>
-                                <p className="font-medium text-sm">
+                            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3 gap-2">
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">
                                   Order #{order.id.slice(0, 8)}
                                 </p>
-                                <p className="text-xs text-gray-500">
+                                <p className="text-xs text-gray-500 truncate">
                                   Customer: {order.customer?.name || 'Unknown'}
                                 </p>
                                 <p className="text-xs text-gray-500">
                                   {formatDate(order.created_at)}
                                 </p>
                               </div>
-                              <div className="text-right">
-                                {getStatusBadge(order.delivery_status)}
-                                <p className="text-sm font-medium text-gray-900 mt-1">
+                              <div className="flex sm:flex-col sm:text-right items-center sm:items-end gap-2 sm:gap-1">
+                                <p className="text-sm font-medium text-gray-900">
                                   ₱{order.total.toFixed(2)}
                                 </p>
                                 <p className="text-xs text-gray-500">
@@ -512,14 +511,14 @@ export default function DriverDetailPage() {
                             {order.delivery_address && (
                               <div className="bg-white rounded p-2 mb-3">
                                 <div className="flex items-start gap-2">
-                                  <Navigation className="h-3 w-3 text-gray-400 mt-0.5" />
-                                  <div className="text-xs">
-                                    <p className="font-medium">{order.delivery_address.full_name}</p>
-                                    <p className="text-gray-600">{order.delivery_address.street_address}</p>
-                                    <p className="text-gray-600">{order.delivery_address.barangay}</p>
+                                  <Navigation className="h-3 w-3 text-gray-400 mt-0.5 flex-shrink-0" />
+                                  <div className="text-xs flex-1 min-w-0">
+                                    <p className="font-medium truncate">{order.delivery_address.full_name}</p>
+                                    <p className="text-gray-600 break-words">{order.delivery_address.street_address}</p>
+                                    <p className="text-gray-600 truncate">{order.delivery_address.barangay}</p>
                                     <p className="text-gray-600 flex items-center gap-1">
-                                      <Phone className="h-3 w-3" />
-                                      {order.delivery_address.phone}
+                                      <Phone className="h-3 w-3 flex-shrink-0" />
+                                      <span className="truncate">{order.delivery_address.phone}</span>
                                     </p>
                                   </div>
                                 </div>
@@ -532,17 +531,17 @@ export default function DriverDetailPage() {
                                 <p className="text-xs font-medium text-gray-700 mb-2">
                                   Items ({order.items.length}):
                                 </p>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div className="grid grid-cols-1 gap-2">
                                   {order.items.map((item) => (
                                     <div key={item.id} className="flex items-center gap-2 bg-white rounded p-2">
                                       {item.product?.image_url ? (
                                         <img
                                           src={item.product.image_url}
                                           alt={item.product.name || 'Product'}
-                                          className="w-8 h-8 rounded object-cover"
+                                          className="w-8 h-8 rounded object-cover flex-shrink-0"
                                         />
                                       ) : (
-                                        <div className="w-8 h-8 bg-gray-200 rounded flex items-center justify-center">
+                                        <div className="w-8 h-8 bg-gray-200 rounded flex items-center justify-center flex-shrink-0">
                                           <Package className="w-4 h-4 text-gray-400" />
                                         </div>
                                       )}
@@ -550,11 +549,11 @@ export default function DriverDetailPage() {
                                         <p className="text-xs font-medium truncate">
                                           {item.product?.name || 'Unknown Product'}
                                         </p>
-                                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                                          <span>Qty: {item.quantity}</span>
-                                          <span>₱{item.price.toFixed(2)}</span>
+                                        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                                          <span className="whitespace-nowrap">Qty: {item.quantity}</span>
+                                          <span className="whitespace-nowrap">₱{item.price.toFixed(2)}</span>
                                           {item.product?.weight && (
-                                            <span>{item.product.weight}kg</span>
+                                            <span className="whitespace-nowrap">{item.product.weight}kg</span>
                                           )}
                                         </div>
                                       </div>

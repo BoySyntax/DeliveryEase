@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, ChangeEvent } from 'react';
-import { Plus, Pencil, Trash2, Search, Upload, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Upload, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../../ui/components/Button';
 import Input from '../../ui/components/Input';
@@ -95,8 +95,6 @@ export default function CategoriesPage() {
         </Button>
       </div>
 
-
-
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
         {categories.map((category) => (
           <Card key={category.id} className="h-full flex flex-col">
@@ -126,22 +124,22 @@ export default function CategoriesPage() {
                 <h3 className="text-sm font-medium text-gray-900 line-clamp-2 leading-tight">{category.name}</h3>
               </div>
               <div className="mt-3">
-                <div className="flex gap-1">
+                <div className="flex gap-2">
                   <Button
                     variant="outline"
-                    icon={<Pencil size={14} />}
-                    fullWidth
+                    size="sm"
+                    icon={<Pencil size={12} />}
                     onClick={() => handleEdit(category)}
-                    className="text-xs py-1.5"
+                    className="text-xs flex-1"
                   >
                     Edit
                   </Button>
                   <Button
                     variant="danger"
-                    icon={<Trash2 size={14} />}
-                    fullWidth
+                    size="sm"
+                    icon={<Trash2 size={12} />}
                     onClick={() => handleDelete(category.id)}
-                    className="text-xs py-1.5"
+                    className="text-xs flex-1"
                   >
                     Delete
                   </Button>

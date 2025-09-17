@@ -7,7 +7,6 @@ import { Package, ShoppingBag, Truck, Users } from 'lucide-react';
 import { salesAnalytics, DateRange, SalesAnalyticsData } from '../../lib/salesAnalytics';
 import { salesExport } from '../../lib/salesExport';
 import SalesMetricsCards from '../components/SalesMetricsCards';
-import SalesChart from '../components/SalesChart';
 import CategoryChart from '../components/CategoryChart';
 import OrderStatusChart from '../components/OrderStatusChart';
 import TopProductsTable from '../components/TopProductsTable';
@@ -216,24 +215,19 @@ export default function DashboardPage() {
 
       {/* Sales Charts */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <SalesChart
-          data={salesData.dailySales}
-          title="Sales Trend"
-          height={350}
-        />
         <CategoryChart
           data={salesData.categorySales}
           title="Sales by Category"
           height={350}
         />
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <OrderStatusChart
           data={salesData.orderDistribution}
           title="Order Status Distribution"
           height={350}
         />
+      </div>
+
+      <div className="grid grid-cols-1 gap-6">
         <TopProductsTable
           data={salesData.topProducts}
           title="Top Selling Products"

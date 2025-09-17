@@ -50,8 +50,8 @@ export default function AdminLayout() {
       {/* Sidebar */}
       <div className="hidden md:flex md:flex-shrink-0">
         <div className="flex flex-col w-64 bg-white shadow-lg">
-          <div className="flex items-center justify-center h-16 px-4 bg-primary-500 text-white font-semibold">
-            <img src={logo} alt="fordaGO Logo" className="w-12 h-12 object-contain brightness-110 contrast-125 saturate-110" />
+          <div className="flex items-center justify-center h-24 px-4 bg-white border-b border-gray-200 font-semibold">
+            <img src={logo} alt="fordaGO Logo" className="w-20 h-20 object-contain" />
           </div>
           
           <div className="flex flex-col flex-1 overflow-y-auto">
@@ -92,7 +92,7 @@ export default function AdminLayout() {
       <div className="md:hidden bg-white shadow-sm fixed top-0 left-0 right-0 z-10">
         <div className="flex items-center justify-between h-16 px-4">
           <div className="flex items-center">
-            <img src={logo} alt="fordaGO Logo" className="w-12 h-12 object-contain brightness-110 contrast-125 saturate-110" />
+            <img src={logo} alt="fordaGO Logo" className="w-16 h-16 object-contain" />
           </div>
 
           <div className="relative">
@@ -156,10 +156,8 @@ export default function AdminLayout() {
 
       {/* Main Content */}
       <div className="flex flex-col flex-1 overflow-y-auto">
-        <main className="flex-1 p-4 md:p-6">
-          <div className="mt-16 md:mt-0">
-            <Outlet />
-          </div>
+        <main className="flex-1 p-4 md:p-6 pt-20 md:pt-4">
+          <Outlet />
         </main>
       </div>
     </div>
