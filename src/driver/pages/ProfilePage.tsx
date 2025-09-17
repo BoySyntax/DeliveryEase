@@ -325,30 +325,30 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <h1 className="text-2xl font-semibold text-gray-900">Profile & Vehicle</h1>
+    <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6">
+      <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Profile & Vehicle</h1>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
         {/* Personal Information */}
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Personal Information</CardTitle>
+              <CardTitle className="text-lg sm:text-xl">Personal Information</CardTitle>
             </CardHeader>
             <CardContent>
               {/* Profile Image Section */}
-              <div className="flex items-center mb-6 gap-6">
-                <div className="relative">
+              <div className="flex flex-col sm:flex-row items-center sm:items-start mb-6 gap-4 sm:gap-6">
+                <div className="relative flex-shrink-0">
                   {imageUrl ? (
                     <img
                       src={imageUrl}
                       alt="Profile"
-                      className="w-24 h-24 rounded-full object-cover shadow border-2 border-gray-200"
+                      className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover shadow border-2 border-gray-200"
                       onError={handleImageError}
                     />
                   ) : (
-                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center shadow border-2 border-gray-200">
-                      <User className="w-10 h-10 text-blue-500" />
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center shadow border-2 border-gray-200">
+                      <User className="w-8 h-8 sm:w-10 sm:h-10 text-blue-500" />
                     </div>
                   )}
                   <input
@@ -362,23 +362,23 @@ export default function ProfilePage() {
                   />
                   <button
                     type="button"
-                    className="absolute bottom-0 right-0 bg-blue-500 text-white rounded-full p-2 shadow-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+                    className="absolute bottom-0 right-0 bg-blue-500 text-white rounded-full p-1.5 sm:p-2 shadow-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploadingImage}
                     title="Upload profile image"
                   >
                     {uploadingImage ? (
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <div className="w-3 h-3 sm:w-4 sm:h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     ) : (
-                      <Upload className="w-4 h-4" />
+                      <Upload className="w-3 h-3 sm:w-4 sm:h-4" />
                     )}
                   </button>
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">
+                <div className="text-center sm:text-left min-w-0">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
                     {profile?.name || 'Driver Profile'}
                   </h3>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-xs sm:text-sm text-gray-500 mt-1">
                     Click the camera icon to upload a profile picture
                   </p>
                   <p className="text-xs text-gray-400 mt-1">
@@ -404,17 +404,6 @@ export default function ProfilePage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-4">
-              <Button
-                variant="outline"
-                fullWidth
-                onClick={handleSignOut}
-              >
-                Sign Out
-              </Button>
-            </CardContent>
-          </Card>
         </div>
 
         {/* Vehicle Information */}

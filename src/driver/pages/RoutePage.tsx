@@ -138,41 +138,43 @@ export default function RoutePage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Delivery Routes</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Delivery Routes</h1>
       </div>
 
       {/* Batch Selection */}
       {activeBatches.length > 1 && (
         <Card>
-          <CardContent className="p-4">
-            <h3 className="text-lg font-semibold mb-4">Select Active Batch</h3>
-            <div className="grid gap-3">
+          <CardContent className="p-3 sm:p-4">
+            <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Select Active Batch</h3>
+            <div className="grid gap-2 sm:gap-3">
               {activeBatches.map((batch) => (
                 <div
                   key={batch.id}
                   onClick={() => setSelectedBatch(batch.id)}
-                  className={`p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
+                  className={`p-3 sm:p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
                     selectedBatch === batch.id
                       ? 'border-blue-500 bg-blue-50 shadow-md'
                       : 'border-gray-200 hover:border-blue-300'
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      {getStatusIcon(batch.status)}
-                      <div>
-                        <h4 className="font-semibold">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                      <div className="flex-shrink-0">
+                        {getStatusIcon(batch.status)}
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="font-semibold text-sm sm:text-base truncate">
                           Batch #{batch.id.slice(0, 8)}
                         </h4>
-                        <p className="text-sm text-gray-600">
+                        <p className="text-xs sm:text-sm text-gray-600">
                           {batch.order_count} orders • {batch.total_weight.toFixed(1)}kg
                         </p>
                       </div>
                     </div>
-                    <div className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(batch.status)}`}>
+                    <div className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium self-start sm:self-center ${getStatusColor(batch.status)}`}>
                       {batch.status === 'assigned' ? '📋 Ready' : '🚚 Active'}
                     </div>
                   </div>

@@ -40,19 +40,19 @@ export default function DriverLayout() {
     <div className="flex flex-col min-h-screen bg-gray-100">
       {/* Header */}
       <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16 items-center">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
+          <div className="flex justify-between h-14 sm:h-16 items-center">
             <div className="flex items-center">
-              <img src={logo} alt="fordaGO Logo" className="w-12 h-12 object-contain brightness-110 contrast-125 saturate-110" />
+              <img src={logo} alt="fordaGO Logo" className="w-10 h-10 sm:w-12 sm:h-12 object-contain" />
             </div>
             
-            <div className="hidden md:flex space-x-4">
+            <div className="hidden md:flex space-x-2 lg:space-x-4">
               {navItems.map((item) => (
                 <NavLink
                   key={item.path}
                   to={item.path}
                   className={({ isActive }) => cn(
-                    'px-3 py-2 rounded-md text-sm font-medium',
+                    'px-2 lg:px-3 py-2 rounded-md text-sm font-medium transition-colors',
                     isActive
                       ? 'text-primary-600 bg-primary-50'
                       : 'text-gray-600 hover:text-primary-600 hover:bg-gray-50'
@@ -64,7 +64,7 @@ export default function DriverLayout() {
               
               <button
                 onClick={handleSignOut}
-                className="px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-primary-600 hover:bg-gray-50"
+                className="px-2 lg:px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-primary-600 hover:bg-gray-50 transition-colors"
               >
                 Sign Out
               </button>
@@ -74,37 +74,41 @@ export default function DriverLayout() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1">
-        <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+      <main className="flex-1 overflow-x-hidden">
+        <div className="max-w-7xl mx-auto py-3 sm:py-4 md:py-6 px-3 sm:px-4 md:px-6 lg:px-8">
           <Outlet />
         </div>
       </main>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden bg-white shadow-lg fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200">
-        <div className="flex justify-between">
+      <nav className="md:hidden bg-white shadow-lg fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200 safe-area-pb">
+        <div className="flex justify-between px-2">
           {navItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
               className={({ isActive }) => cn(
-                'flex flex-1 flex-col items-center py-3',
+                'flex flex-1 flex-col items-center py-2 px-1 min-w-0',
                 isActive
                   ? 'text-primary-600'
                   : 'text-gray-600'
               )}
             >
-              {item.icon}
-              <span className="text-xs mt-1">{item.label}</span>
+              <div className="mb-1">
+                {item.icon}
+              </div>
+              <span className="text-xs leading-tight text-center truncate w-full">{item.label}</span>
             </NavLink>
           ))}
           
           <button
             onClick={handleSignOut}
-            className="flex flex-1 flex-col items-center py-3 text-gray-600"
+            className="flex flex-1 flex-col items-center py-2 px-1 text-gray-600 min-w-0"
           >
-            <LogOut size={24} />
-            <span className="text-xs mt-1">Sign Out</span>
+            <div className="mb-1">
+              <LogOut size={24} />
+            </div>
+            <span className="text-xs leading-tight text-center truncate w-full">Sign Out</span>
           </button>
         </div>
       </nav>

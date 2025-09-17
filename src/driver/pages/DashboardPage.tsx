@@ -742,16 +742,16 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6 pb-20 md:pb-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-700 -mx-6 -mt-6 px-6 pt-6 pb-8 text-white">
-        <div className="flex items-center justify-between">
+      <div className="bg-gradient-to-r from-blue-600 to-blue-700 -mx-3 sm:-mx-4 md:-mx-6 lg:-mx-8 -mt-3 sm:-mt-4 md:-mt-6 px-3 sm:px-4 md:px-6 lg:px-8 pt-3 sm:pt-4 md:pt-6 pb-6 sm:pb-8 text-white">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold mb-2">Driver Dashboard</h1>
-            <p className="text-blue-100">Welcome back, {profile?.name}!</p>
+            <h1 className="text-xl sm:text-2xl font-bold mb-1 sm:mb-2">Driver Dashboard</h1>
+            <p className="text-blue-100 text-sm sm:text-base">Welcome back, {profile?.name}!</p>
           </div>
           <button
             onClick={handleRefreshDashboard}
             disabled={loading}
-            className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
+            className="bg-white/20 hover:bg-white/30 text-white px-3 sm:px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50 text-sm sm:text-base w-full sm:w-auto"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -760,18 +760,20 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {statCards.map((stat, index) => (
           <Card key={index} className={`border-2 ${stat.color}`}>
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 mb-1">{stat.title}</p>
-                  <p className="text-2xl font-bold text-gray-900">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs sm:text-sm font-medium text-gray-600 mb-1 truncate">{stat.title}</p>
+                  <p className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 break-words">
                     {stat.value}
                   </p>
                 </div>
-                {stat.icon}
+                <div className="flex-shrink-0 ml-2">
+                  {stat.icon}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -797,36 +799,36 @@ export default function DashboardPage() {
             </div>
 
             {/* Batch Details */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-gray-500" />
-                <div>
-                  <p className="text-sm text-gray-600">Orders</p>
-                  <p className="font-semibold">{activeBatch.orders.length}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+              <div className="flex items-center gap-2 p-3 bg-white rounded-lg">
+                <Users className="h-4 w-4 sm:h-5 sm:w-5 text-gray-500 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm text-gray-600">Orders</p>
+                  <p className="font-semibold text-sm sm:text-base">{activeBatch.orders.length}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Weight className="h-5 w-5 text-gray-500" />
-                <div>
-                  <p className="text-sm text-gray-600">Weight</p>
-                  <p className="font-semibold">{activeBatch.total_weight.toFixed(1)}kg</p>
+              <div className="flex items-center gap-2 p-3 bg-white rounded-lg">
+                <Weight className="h-4 w-4 sm:h-5 sm:w-5 text-gray-500 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm text-gray-600">Weight</p>
+                  <p className="font-semibold text-sm sm:text-base">{activeBatch.total_weight.toFixed(1)}kg</p>
                   <p className="text-xs text-gray-500">
                     {((activeBatch.total_weight / (activeBatch.max_weight || 3500)) * 100).toFixed(1)}% capacity
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-gray-500" />
-                <div>
-                  <p className="text-sm text-gray-600">Est. Time</p>
-                  <p className="font-semibold">{activeBatch.estimated_duration}</p>
+              <div className="flex items-center gap-2 p-3 bg-white rounded-lg">
+                <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-gray-500 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm text-gray-600">Est. Time</p>
+                  <p className="font-semibold text-sm sm:text-base">{activeBatch.estimated_duration}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Package className="h-5 w-5 text-gray-500" />
-                <div>
-                  <p className="text-sm text-gray-600">Revenue</p>
-                  <p className="font-semibold">
+              <div className="flex items-center gap-2 p-3 bg-white rounded-lg">
+                <Package className="h-4 w-4 sm:h-5 sm:w-5 text-gray-500 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm text-gray-600">Revenue</p>
+                  <p className="font-semibold text-sm sm:text-base break-words">
                     {formatCurrency(activeBatch.orders.reduce((sum, order) => sum + order.total, 0))}
                   </p>
                 </div>
@@ -855,21 +857,21 @@ export default function DashboardPage() {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
               {activeBatch.status === 'assigned' && (
                 <button
                   onClick={handleStartDelivery}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm sm:text-base"
                 >
-                  <Truck className="h-5 w-5" />
+                  <Truck className="h-4 w-4 sm:h-5 sm:w-5" />
                   Start Delivery
                 </button>
               )}
               <button 
                 onClick={handleViewRoute}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm sm:text-base"
               >
-                <Route className="h-5 w-5" />
+                <Route className="h-4 w-4 sm:h-5 sm:w-5" />
                 View Route
               </button>
             </div>
