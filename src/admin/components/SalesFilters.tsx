@@ -89,30 +89,6 @@ export default function SalesFilters({
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 ml-auto">
-            {onRefresh && (
-              <Button
-                variant="outline"
-                size="sm"
-                icon={<RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />}
-                onClick={onRefresh}
-                disabled={loading}
-              >
-                Refresh
-              </Button>
-            )}
-            {onExport && (
-              <Button
-                variant="outline"
-                size="sm"
-                icon={<Download className="h-4 w-4" />}
-                onClick={onExport}
-              >
-                Export
-              </Button>
-            )}
-          </div>
         </div>
 
         {/* Custom Date Range Inputs */}

@@ -90,12 +90,6 @@ export default function SalesMetricsCards({ metrics, loading }: SalesMetricsCard
                 <p className="text-2xl font-bold text-gray-900 mb-2">
                   {metric.value}
                 </p>
-                {index < 3 && (
-                  <div className="flex items-center gap-2">
-                    {formatGrowth(metric.growth)}
-                    <span className="text-xs text-gray-500">vs previous period</span>
-                  </div>
-                )}
               </div>
               <div className={`p-3 rounded-lg ${metric.bgColor}`}>
                 {metric.icon}

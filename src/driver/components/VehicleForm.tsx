@@ -44,7 +44,8 @@ export default function VehicleForm({ driverId, onVehicleSaved }: VehicleFormPro
   const [saving, setSaving] = useState(false);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   
-  const { register, handleSubmit, setValue, formState: { errors } } = useForm<VehicleFormData>();
+  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<VehicleFormData>();
+  const isActive = watch('is_active');
 
   useEffect(() => {
     loadVehicle();
@@ -138,6 +139,11 @@ export default function VehicleForm({ driverId, onVehicleSaved }: VehicleFormPro
         <CardTitle className="flex items-center gap-2">
           <Truck className="h-5 w-5 text-blue-600" />
           Vehicle Information
+          <span
+            className={`ml-2 px-2 py-0.5 text-xs font-medium rounded-full ${isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}
+          >
+            {isActive ? 'Active' : 'Inactive'}
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -263,9 +269,15 @@ export default function VehicleForm({ driverId, onVehicleSaved }: VehicleFormPro
         </form>
 
         {vehicle && (
-          <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
-            <p className="text-sm text-green-800">
-              ✓ Vehicle information is saved and active
+          <div
+            className={`mt-4 p-3 rounded-md border ${
+              isActive ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'
+            }`}
+          >
+            <p className={`text-sm ${isActive ? 'text-green-800' : 'text-yellow-800'}`}>
+              {isActive
+                ? '✓ Vehicle is active for deliveries'
+                : '⏸ Vehicle is inactive. Toggle "Vehicle is active for deliveries" to accept assignments.'}
             </p>
           </div>
         )}

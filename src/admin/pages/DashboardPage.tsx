@@ -152,7 +152,7 @@ export default function DashboardPage() {
 
   const statCards = [
     {
-      title: 'Total Orders',
+      title: 'All-time Orders',
       value: stats.totalOrders,
       icon: <Package className="h-6 w-6 text-primary-500" />,
     },
@@ -193,7 +193,7 @@ export default function DashboardPage() {
 
       {/* Legacy Stats Cards */}
       <div>
-        <h2 className="text-lg font-medium text-gray-900 mb-4">System Overview (All-time)</h2>
+        <h2 className="text-lg font-medium text-gray-900 mb-4">Delivery Overview</h2>
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {statCards.map((stat, index) => (
             <Card key={index}>
