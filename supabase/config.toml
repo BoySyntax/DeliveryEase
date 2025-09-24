@@ -100,9 +100,9 @@ enabled = true
 
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://127.0.0.1:3008"
+site_url = "https://fordago.site"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["http://127.0.0.1:3008", "http://localhost:3008", "http://localhost:5173", "http://127.0.0.1:5173"]
+additional_redirect_urls = ["https://fordago.site", "https://fordago.site/auth/callback", "http://127.0.0.1:3008", "http://localhost:3008", "http://localhost:5173", "http://127.0.0.1:5173"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # If disabled, the refresh token will never expire.
@@ -269,8 +269,8 @@ s3_access_key = "env(S3_ACCESS_KEY)"
 # Configures AWS_SECRET_ACCESS_KEY for S3 bucket
 s3_secret_key = "env(S3_SECRET_KEY)"
 
-# [auth.external.google]
-# enabled = true
-# client_id = "env(SUPABASE_AUTH_GOOGLE_CLIENT_ID)"
-# secret = "env(SUPABASE_AUTH_GOOGLE_CLIENT_SECRET)"
-# redirect_uri = "http://127.0.0.1:3008/auth/callback"
+[auth.external.google]
+enabled = true
+client_id = "env(SUPABASE_AUTH_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_GOOGLE_CLIENT_SECRET)"
+redirect_uri = "https://fordago.site/auth/callback"
