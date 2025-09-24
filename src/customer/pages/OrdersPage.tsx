@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { Package, Clock, CheckCircle, Truck, XCircle, Calendar } from 'lucide-react';
+import { Package, Clock, CheckCircle, Truck, XCircle, Calendar, RotateCcw } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency, cleanImageUrl } from '../../lib/utils';
 import { toast } from 'react-hot-toast';
+import { useNavigate, useLocation } from 'react-router-dom';
+import Button from '../../ui/components/Button';
 import React from 'react';
 
 type OrderStatusRow = {
@@ -20,11 +22,15 @@ type Order = {
   delivery_status: string | null;
   total: number;
   status: OrderStatusRow | null;
+  reordered?: boolean;
+  reorder_order_id?: string;
+  original_order_id?: string;
   items: {
     product: {
       name: string;
       image_url?: string;
     };
+    product_id: string;
     quantity: number;
     price: number;
   }[];
@@ -34,6 +40,9 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('pending');
   const prevOrderStatuses = useRef<{ [id: string]: string } | null>(null);
+  const [reorderingOrderId, setReorderingOrderId] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Helper function to calculate estimated delivery date range or show delivered status
   function getEstimatedDeliveryDate(orderCreatedAt: string, deliveryStatus?: string): string {
@@ -97,8 +106,10 @@ export default function OrdersPage() {
     
     // If approved, check delivery status
     if (order.approval_status === 'approved') {
-      if (order.delivery_status === 'delivered' || order.delivery_status === 'delivering') {
-        return 'out_for_delivery';
+      if (order.delivery_status === 'delivered') {
+        return 'delivered'; // Order has been delivered
+      } else if (order.delivery_status === 'delivering') {
+        return 'out_for_delivery'; // Order is in transit
       } else {
         return 'verified'; // Approved but not yet started by driver
       }
@@ -119,6 +130,16 @@ export default function OrdersPage() {
     return () => clearInterval(interval);
   }, []);
 
+  // Refresh orders when returning to this page (e.g., after reorder from checkout)
+  useEffect(() => {
+    // Small delay to ensure database updates are completed
+    const timeoutId = setTimeout(() => {
+      loadOrders();
+    }, 500);
+    
+    return () => clearTimeout(timeoutId);
+  }, [location.pathname]);
+
   useEffect(() => {
     if (orders.length > 0) {
       if (prevOrderStatuses.current) {
@@ -130,7 +151,8 @@ export default function OrdersPage() {
               'pending': 'Pending Verification',
               'rejected': 'Rejected',
               'verified': 'Verified',
-              'out_for_delivery': 'Out for Delivery'
+              'out_for_delivery': 'In Transit',
+              'delivered': 'Delivered'
             };
             toast.success(`Order #${order.id.slice(0, 8)} status updated: ${statusLabels[currentDisplayStatus] || currentDisplayStatus}`);
           }
@@ -140,6 +162,60 @@ export default function OrdersPage() {
       prevOrderStatuses.current = Object.fromEntries(orders.map(o => [o.id, getDisplayStatus(o)]));
     }
   }, [orders]);
+
+  const handleReorder = async (orderId: string) => {
+    console.log('🔄 Reorder clicked for order:', orderId);
+    console.log('📊 Current orders state:', orders.length);
+    console.log('🔍 Order to reorder:', orders.find(order => order.id === orderId));
+    
+    setReorderingOrderId(orderId);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('Please sign in to reorder');
+        navigate('/login');
+        return;
+      }
+
+      // Get the order details
+      const orderToReorder = orders.find(order => order.id === orderId);
+      if (!orderToReorder) {
+        toast.error('Order not found');
+        return;
+      }
+
+      console.log('📋 Order details for reorder:', {
+        id: orderToReorder.id,
+        status: orderToReorder.approval_status,
+        items: orderToReorder.items
+      });
+
+      // Store minimal reorder items in session storage (IDs + quantities)
+      const reorderItems = orderToReorder.items.map(item => ({
+        product_id: item.product_id,
+        quantity: item.quantity
+      }));
+
+      console.log('💾 Storing reorder items:', reorderItems);
+      sessionStorage.setItem('reorderItems', JSON.stringify(reorderItems));
+      sessionStorage.setItem('isReorder', 'true');
+      sessionStorage.setItem('originalOrderId', orderId); // Store original order ID for tracking
+
+      console.log('🚀 Navigating to checkout...');
+      console.log('📦 Session storage check:', {
+        reorderItems: sessionStorage.getItem('reorderItems'),
+        isReorder: sessionStorage.getItem('isReorder'),
+        originalOrderId: sessionStorage.getItem('originalOrderId')
+      });
+      
+      navigate('/customer/checkout');
+    } catch (error) {
+      console.error('Error reordering:', error);
+      toast.error('Failed to reorder. Please try again.');
+    } finally {
+      setReorderingOrderId(null);
+    }
+  };
 
   async function loadOrders() {
     try {
@@ -158,9 +234,14 @@ export default function OrdersPage() {
           approval_status,
           delivery_status,
           total,
+          notes,
+          reordered,
+          reorder_order_id,
+          original_order_id,
           items:order_items (
             quantity,
             price,
+            product_id,
             product:products (
               name,
               image_url
@@ -175,7 +256,7 @@ export default function OrdersPage() {
         throw error;
       }
       
-      // Map to correct type
+      // Map to correct type (no filtering needed since we update orders instead of hiding them)
       const mapped = (data as any[] || []).map(order => ({
         id: order.id,
         created_at: order.created_at,
@@ -208,7 +289,8 @@ export default function OrdersPage() {
     { code: 'rejected', icon: <XCircle size={18} />, label: 'Rejected', color: 'bg-red-500 border-red-500 text-white', labelColor: 'text-red-500' },
     { code: 'pending', icon: <Clock size={18} />, label: 'Pending', color: 'bg-yellow-400 border-yellow-400 text-white', labelColor: 'text-yellow-500' },
     { code: 'verified', icon: <CheckCircle size={18} />, label: 'Verified', color: 'bg-blue-500 border-blue-500 text-white', labelColor: 'text-blue-500' },
-    { code: 'out_for_delivery', icon: <Truck size={18} />, label: 'Delivery', color: 'bg-green-500 border-green-500 text-white', labelColor: 'text-green-500' },
+    { code: 'out_for_delivery', icon: <Truck size={18} />, label: 'Transit', color: 'bg-orange-500 border-orange-500 text-white', labelColor: 'text-orange-500' },
+    { code: 'delivered', icon: <Package size={18} />, label: 'Delivered', color: 'bg-green-500 border-green-500 text-white', labelColor: 'text-green-500' },
   ];
 
   // Filter orders based on statusFilter
@@ -266,6 +348,7 @@ export default function OrdersPage() {
           </div>
         </div>
 
+
         {/* Orders list or No orders message */}
         {orders.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
@@ -303,7 +386,7 @@ export default function OrdersPage() {
                           </div>
                         )}
                       </div>
-                      {!['out_for_delivery'].includes(getDisplayStatus(order)) && (
+                      {!['out_for_delivery', 'delivered'].includes(getDisplayStatus(order)) && (
                         <span
                           className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
                           style={{ 
@@ -313,7 +396,8 @@ export default function OrdersPage() {
                                 'pending': '#FEF3C7',
                                 'rejected': '#FEE2E2', 
                                 'verified': '#DBEAFE',
-                                'out_for_delivery': '#D1FAE5'
+                                'out_for_delivery': '#FED7AA',
+                                'delivered': '#D1FAE5'
                               };
                               return statusColors[displayStatus] || '#eee';
                             })(), 
@@ -323,7 +407,8 @@ export default function OrdersPage() {
                                 'pending': '#D97706',
                                 'rejected': '#DC2626',
                                 'verified': '#2563EB', 
-                                'out_for_delivery': '#059669'
+                                'out_for_delivery': '#EA580C',
+                                'delivered': '#059669'
                               };
                               return textColors[displayStatus] || '#222';
                             })()
@@ -335,13 +420,14 @@ export default function OrdersPage() {
                               'pending': 'Pending',
                               'rejected': 'Rejected',
                               'verified': 'Verified',
-                              'out_for_delivery': ''
+                              'out_for_delivery': 'In Transit',
+                              'delivered': 'Delivered'
                             };
                             return statusLabels[displayStatus] || displayStatus;
                           })()}
                         </span>
                       )}
-                      {order.delivery_status === 'delivered' && getDisplayStatus(order) === 'out_for_delivery' && (
+                      {getDisplayStatus(order) === 'delivered' && (
                         <span
                           className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
                           style={{ 
@@ -365,6 +451,7 @@ export default function OrdersPage() {
                                     src={cleanedUrl}
                                     alt={item.product.name}
                                     className="w-16 h-16 rounded object-cover border"
+                                    draggable={false}
                                     onError={(e) => {
                                       e.currentTarget.style.display = 'none';
                                     }}
@@ -389,6 +476,21 @@ export default function OrdersPage() {
                         {formatCurrency(order.total)}
                       </span>
                     </div>
+
+                    {/* Reorder button - Only show for rejected orders */}
+                    {getDisplayStatus(order) === 'rejected' && (
+                      <div className="border-t mt-3 pt-3 flex justify-end">
+                        <Button
+                          onClick={() => handleReorder(order.id)}
+                          disabled={reorderingOrderId === order.id}
+                          icon={<RotateCcw size={14} />}
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 text-sm"
+                          size="sm"
+                        >
+                          {reorderingOrderId === order.id ? 'Reordering...' : 'Reorder'}
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -400,14 +502,16 @@ export default function OrdersPage() {
                 {statusFilter === 'rejected' && "No Rejected Orders"}
                 {statusFilter === 'pending' && "No Pending Orders"}
                 {statusFilter === 'verified' && "No Verified Orders"}
-                {statusFilter === 'out_for_delivery' && "No Orders Out for Delivery"}
+                {statusFilter === 'out_for_delivery' && "No Orders in Transit"}
+                {statusFilter === 'delivered' && "No Delivered Orders"}
                 {!statusFilter && "No Orders"}
               </h3>
               <p className="text-sm text-gray-500">
                 {statusFilter === 'rejected' && "Orders that were rejected will appear here"}
                 {statusFilter === 'pending' && "Orders waiting for verification will appear here"}
                 {statusFilter === 'verified' && "Orders that have been verified will appear here"}
-                {statusFilter === 'out_for_delivery' && "Orders that are being delivered will appear here"}
+                {statusFilter === 'out_for_delivery' && "Orders that are in transit will appear here"}
+                {statusFilter === 'delivered' && "Orders that have been delivered will appear here"}
                 {!statusFilter && "When you place orders, they will appear here"}
               </p>
             </div>

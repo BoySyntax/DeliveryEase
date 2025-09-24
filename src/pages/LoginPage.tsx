@@ -4,19 +4,28 @@ import { supabase } from '../lib/supabase';
 import fordaa from '../assets/fordaa.png';
 
 export default function LoginPage() {
-  const navigate = useNavigate();
 
   const handleGoogleSignIn = async () => {
     try {
+      const redirectUri = window.location.hostname === 'localhost' 
+        ? `${window.location.origin}/auth/callback`
+        : 'https://fordago.site/auth/callback';
+        
+      console.log('🔍 DEBUG: Redirect URI being used:', redirectUri);
+      console.log('🔍 DEBUG: Current origin:', window.location.origin);
+      console.log('🔍 DEBUG: Is production?', import.meta.env.PROD);
+      console.log('🔍 DEBUG: Environment mode:', import.meta.env.MODE);
+      
       const { error } = await supabase.auth.signInWithOAuth({ 
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: redirectUri,
           skipBrowserRedirect: false,
           queryParams: {
             access_type: 'offline',
-            prompt: 'consent'
-          }
+            prompt: 'consent',
+          },
+          scopes: 'openid email profile'
         }
       });
 

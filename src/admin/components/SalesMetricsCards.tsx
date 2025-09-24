@@ -1,7 +1,14 @@
 import { Card, CardContent } from '../../ui/components/Card';
 import { SalesMetrics } from '../../lib/salesAnalytics';
 import { formatCurrency } from '../../lib/utils';
-import { TrendingUp, TrendingDown, DollarSign, ShoppingBag, BarChart3, MapPin } from 'lucide-react';
+import { TrendingUp, TrendingDown, ShoppingBag, BarChart3, MapPin } from 'lucide-react';
+
+// Custom Peso Sign Icon Component  
+const PesoSign = ({ className }: { className?: string }) => (
+  <div className={`${className} flex items-center justify-center font-bold text-primary-600`}>
+    ₱
+  </div>
+);
 
 interface SalesMetricsCardsProps {
   metrics: SalesMetrics;
@@ -51,7 +58,7 @@ export default function SalesMetricsCards({ metrics, loading }: SalesMetricsCard
       title: 'Total Revenue',
       value: formatCurrency(metrics.totalRevenue),
       growth: metrics.revenueGrowth,
-      icon: <DollarSign className="h-6 w-6 text-primary-600" />,
+      icon: <PesoSign className="h-6 w-6 text-primary-600" />,
       bgColor: 'bg-green-50',
     },
     {

@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../ui/components/Ca
 import Loader from '../../ui/components/Loader';
 import { getInitials } from '../../lib/utils';
 import { toast } from 'react-hot-toast';
+import VehicleForm from '../../driver/components/VehicleForm';
+import Button from '../../ui/components/Button';
 import { 
   ArrowLeft, 
   User, 
@@ -16,7 +18,8 @@ import {
   Weight,
   Hash,
   DollarSign,
-  Navigation
+  Navigation,
+  Edit
 } from 'lucide-react';
 
 interface DriverInfo {
@@ -89,6 +92,7 @@ export default function DriverDetailPage() {
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [orderBatches, setOrderBatches] = useState<OrderBatch[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isEditingVehicle, setIsEditingVehicle] = useState(false);
 
   useEffect(() => {
     if (driverId) {
@@ -261,6 +265,34 @@ export default function DriverDetailPage() {
     );
   };
 
+  // Helper function to format vehicle type display
+  const formatVehicleType = (vehicleType: string): string => {
+    switch (vehicleType) {
+      case 'motorcycle':
+        return 'Motorcycle';
+      case 'tricycle':
+        return 'Tricycle';
+      case 'pickup':
+        return 'Pickup Truck';
+      case 'van':
+        return 'Van';
+      case 'truck_4w':
+        return '4-Wheeler Truck';
+      case 'truck_6w':
+        return '6-Wheeler Truck';
+      case 'truck_8w':
+        return '8-Wheeler Truck';
+      case 'truck_10w':
+        return '10-Wheeler Truck';
+      case 'jeepney':
+        return 'Jeepney';
+      case 'l300':
+        return 'L300 Van';
+      default:
+        return vehicleType.charAt(0).toUpperCase() + vehicleType.slice(1);
+    }
+  };
+
   if (loading) {
     return <Loader label="Loading driver information..." />;
   }
@@ -360,74 +392,113 @@ export default function DriverDetailPage() {
           </Card>
 
           {/* Vehicle Information */}
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Truck className="h-5 w-5 text-blue-600" />
-                Vehicle Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {vehicle ? (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Hash className="h-4 w-4 text-gray-400" />
-                    <span className="font-medium">{vehicle.plate_number}</span>
-                    {vehicle.is_active && (
-                      <span className="ml-auto px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        Active
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Type:</span>
-                      <span className="capitalize">{vehicle.vehicle_type}</span>
+          <div className="mt-6">
+            {!isEditingVehicle ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Truck className="h-5 w-5 text-blue-600" />
+                      Vehicle Information
                     </div>
-                    {vehicle.brand && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Brand:</span>
-                        <span>{vehicle.brand}</span>
-                      </div>
-                    )}
-                    {vehicle.model && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Model:</span>
-                        <span>{vehicle.model}</span>
-                      </div>
-                    )}
-                    {vehicle.year && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Year:</span>
-                        <span>{vehicle.year}</span>
-                      </div>
-                    )}
-                    {vehicle.capacity_kg && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Capacity:</span>
-                        <span className="flex items-center gap-1">
-                          <Weight className="h-3 w-3" />
-                          {vehicle.capacity_kg} kg
+                    <Button
+                      onClick={() => setIsEditingVehicle(true)}
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-2"
+                    >
+                      <Edit className="h-4 w-4" />
+                      Edit
+                    </Button>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {vehicle ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Hash className="h-4 w-4 text-gray-400" />
+                        <span className="font-medium">{vehicle.plate_number}</span>
+                        <span className={`ml-auto px-2 py-1 rounded-full text-xs font-medium ${
+                          vehicle.is_active 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {vehicle.is_active ? 'Active' : 'Inactive'}
                         </span>
                       </div>
-                    )}
-                    {vehicle.fuel_type && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Fuel:</span>
-                        <span className="capitalize">{vehicle.fuel_type}</span>
+                      
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Type:</span>
+                          <span>{formatVehicleType(vehicle.vehicle_type)}</span>
+                        </div>
+                        {vehicle.brand && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Brand:</span>
+                            <span>{vehicle.brand}</span>
+                          </div>
+                        )}
+                        {vehicle.model && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Model:</span>
+                            <span>{vehicle.model}</span>
+                          </div>
+                        )}
+                        {vehicle.year && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Year:</span>
+                            <span>{vehicle.year}</span>
+                          </div>
+                        )}
+                        {vehicle.capacity_kg && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Capacity:</span>
+                            <span className="flex items-center gap-1">
+                              <Weight className="h-3 w-3" />
+                              {vehicle.capacity_kg} kg
+                            </span>
+                          </div>
+                        )}
+                        {vehicle.fuel_type && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Fuel:</span>
+                            <span className="capitalize">{vehicle.fuel_type}</span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <Truck className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                      <p className="text-sm text-gray-500">No vehicle registered</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-medium text-gray-900">Edit Vehicle Information</h3>
+                  <Button
+                    onClick={() => setIsEditingVehicle(false)}
+                    variant="outline"
+                    size="sm"
+                  >
+                    Cancel
+                  </Button>
                 </div>
-              ) : (
-                <div className="text-center py-4">
-                  <Truck className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">No vehicle registered</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                <VehicleForm 
+                  driverId={driverId!}
+                  readOnly={false}
+                  onVehicleSaved={() => {
+                    setIsEditingVehicle(false);
+                    loadDriverData(); // Reload data to show updated vehicle info
+                    toast.success('Vehicle information updated successfully');
+                  }}
+                />
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Order Batches */}

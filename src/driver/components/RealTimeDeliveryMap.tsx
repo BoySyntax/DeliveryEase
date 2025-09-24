@@ -849,7 +849,7 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
       const depot: DepotLocation = {
         latitude: 8.4542,
         longitude: 124.6319,
-        name: "DeliveryEase Depot",
+        name: "fordaGO Depot",
         address: "Cagayan de Oro City, Philippines"
       };
       

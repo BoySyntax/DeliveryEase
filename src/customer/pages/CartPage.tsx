@@ -302,6 +302,7 @@ export default function CartPage() {
                         src={item.product.image_url}
                         alt={item.product.name}
                         className="w-full h-full object-cover rounded"
+                        draggable={false}
                       />
                     </div>
                     <div className="flex-1">

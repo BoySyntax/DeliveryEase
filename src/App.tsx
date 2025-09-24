@@ -16,6 +16,7 @@ const AdminProducts = lazy(() => import('./admin/pages/ProductsPage'));
 const AdminCategories = lazy(() => import('./admin/pages/CategoriesPage'));
 const AdminVerifyOrders = lazy(() => import('./admin/pages/VerifyOrdersPage'));
 const AdminBatchOrders = lazy(() => import('./admin/pages/BatchOrdersPage'));
+const AdminOrderList = lazy(() => import('./admin/pages/OrderListPage'));
 const AdminDrivers = lazy(() => import('./admin/pages/DriversPage'));
 const AdminDriverDetail = lazy(() => import('./admin/pages/DriverDetailPage'));
 
@@ -119,6 +120,7 @@ function App() {
           <Route path="categories" element={<AdminCategories />} />
           <Route path="verify-orders" element={<AdminVerifyOrders />} />
           <Route path="batch-orders" element={<AdminBatchOrders />} />
+          <Route path="order-list" element={<AdminOrderList />} />
           <Route path="drivers" element={<AdminDrivers />} />
           <Route path="drivers/:driverId" element={<AdminDriverDetail />} />
         </Route>

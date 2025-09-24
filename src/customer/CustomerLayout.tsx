@@ -254,10 +254,10 @@ const CustomerLayout = memo(function CustomerLayout() {
       {/* Header */}
       <header className="bg-white shadow-sm sticky top-0 z-[100] sm:z-[100] relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-12 sm:h-14">
+          <div className="flex items-center justify-between h-16 sm:h-18">
             {/* Logo */}
             <div className="flex items-center flex-shrink-0">
-              <img src={logo} alt="Logo" className="w-12 h-12 sm:w-14 sm:h-14 object-contain brightness-110 contrast-125 saturate-110" />
+              <img src={logo} alt="Logo" className="w-14 h-14 sm:w-16 sm:h-16 object-contain brightness-110 contrast-125 saturate-110" />
             </div>
             
             {/* Spacer */}
@@ -272,7 +272,7 @@ const CustomerLayout = memo(function CustomerLayout() {
                   className="sm:hidden p-2 rounded-full hover:bg-gray-100 transition-colors"
                   aria-label="Search products"
                 >
-                  <Search size={18} className="text-gray-600" />
+                  <Search size={20} className="text-gray-600" />
                 </button>
               )}
 
@@ -282,7 +282,7 @@ const CustomerLayout = memo(function CustomerLayout() {
                   <form onSubmit={handleSearch} className="flex items-center">
                                           <Input
                         placeholder="Search for products..."
-                        icon={<Search size={18} className="text-gray-400" />}
+                        icon={<Search size={20} className="text-gray-400" />}
                         value={searchQuery}
                         onChange={handleSearchInputChange}
                         className="w-80 lg:w-96 xl:w-[28rem] rounded-full px-4 py-2 text-sm text-gray-900 border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 shadow-sm placeholder-gray-400"
@@ -298,7 +298,7 @@ const CustomerLayout = memo(function CustomerLayout() {
                   className="sm:hidden p-2 rounded-full hover:bg-gray-100 transition-colors"
                   aria-label="Search products"
                 >
-                  <Search size={18} className="text-gray-600" />
+                  <Search size={20} className="text-gray-600" />
                 </button>
               )}
 
@@ -309,7 +309,7 @@ const CustomerLayout = memo(function CustomerLayout() {
                     <div className="flex-[4] min-w-0">
                       <Input
                         placeholder="Search for products..."
-                        icon={<Search size={18} className="text-gray-400" />}
+                        icon={<Search size={20} className="text-gray-400" />}
                         value={searchQuery}
                         onChange={handleSearchInputChange}
                         className="w-full rounded-full px-4 py-2.5 text-sm text-gray-900 border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 shadow-sm placeholder-gray-400"
@@ -392,7 +392,7 @@ const CustomerLayout = memo(function CustomerLayout() {
                 <div className="flex-1">
                   <Input
                     placeholder="Search for products..."
-                    icon={<Search size={18} className="text-gray-400" />}
+                    icon={<Search size={20} className="text-gray-400" />}
                     value={searchQuery}
                     onChange={handleSearchInputChange}
                     className="w-full rounded-md px-4 py-2.5 text-sm text-gray-900 border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 shadow-sm placeholder-gray-400"

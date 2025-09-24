@@ -37,6 +37,11 @@ export default function HomePage() {
   const [currentCategoryPage, setCurrentCategoryPage] = useState(0);
   const categoriesScrollRef = useRef<HTMLDivElement>(null);
   const [categoriesPerPage, setCategoriesPerPage] = useState(2);
+  const [touchStartX, setTouchStartX] = useState(0);
+  const [touchEndX, setTouchEndX] = useState(0);
+  const [mouseStartX, setMouseStartX] = useState(0);
+  const [mouseEndX, setMouseEndX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     function updateCategoriesPerPage() {
@@ -96,15 +101,125 @@ export default function HomePage() {
 
   const totalPages = Math.ceil(categories.length / categoriesPerPage);
 
+  // Handle touch events for swiping
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStartX(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    setTouchEndX(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStartX || !touchEndX) return;
+    
+    const distance = touchStartX - touchEndX;
+    const isLeftSwipe = distance > 50;
+    const isRightSwipe = distance < -50;
+
+    if (isLeftSwipe && currentCategoryPage < totalPages - 1) {
+      // Swipe left - go to next page
+      scrollToCategoryPage(currentCategoryPage + 1);
+    }
+    if (isRightSwipe && currentCategoryPage > 0) {
+      // Swipe right - go to previous page
+      scrollToCategoryPage(currentCategoryPage - 1);
+    }
+  };
+
+  // Handle mouse events for desktop dragging
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    console.log('Mouse down detected');
+    setIsDragging(true);
+    setMouseStartX(e.clientX);
+    setMouseEndX(e.clientX);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    setMouseEndX(e.clientX);
+  };
+
+  const handleMouseUp = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    setIsDragging(false);
+    
+    if (!mouseStartX || !mouseEndX) return;
+    
+    const distance = mouseStartX - mouseEndX;
+    const isLeftSwipe = distance > 50;
+    const isRightSwipe = distance < -50;
+
+    if (isLeftSwipe && currentCategoryPage < totalPages - 1) {
+      // Swipe left - go to next page
+      scrollToCategoryPage(currentCategoryPage + 1);
+    }
+    if (isRightSwipe && currentCategoryPage > 0) {
+      // Swipe right - go to previous page
+      scrollToCategoryPage(currentCategoryPage - 1);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+  };
+
+  // Add global mouse event listeners for better drag handling
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (isDragging) {
+        setMouseEndX(e.clientX);
+      }
+    };
+
+    const handleGlobalMouseUp = () => {
+      if (isDragging) {
+        setIsDragging(false);
+        
+        if (!mouseStartX || !mouseEndX) return;
+        
+        const distance = mouseStartX - mouseEndX;
+        const isLeftSwipe = distance > 50;
+        const isRightSwipe = distance < -50;
+
+        if (isLeftSwipe && currentCategoryPage < totalPages - 1) {
+          scrollToCategoryPage(currentCategoryPage + 1);
+        }
+        if (isRightSwipe && currentCategoryPage > 0) {
+          scrollToCategoryPage(currentCategoryPage - 1);
+        }
+      }
+    };
+
+    if (isDragging) {
+      document.addEventListener('mousemove', handleGlobalMouseMove);
+      document.addEventListener('mouseup', handleGlobalMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleGlobalMouseMove);
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [isDragging, mouseStartX, mouseEndX, currentCategoryPage, totalPages]);
+
   const scrollToCategoryPage = (pageIndex: number) => {
     if (categoriesScrollRef.current) {
       const container = categoriesScrollRef.current;
-      // Calculate item width based on categoriesPerPage
-      const itemWidth = container.scrollWidth / totalPages;
+      
+      // Calculate the width of each individual category item
+      const containerWidth = container.clientWidth;
+      const itemWidth = containerWidth / categoriesPerPage;
+      
       let page = pageIndex;
       if (page < 0) page = 0;
       if (page >= totalPages) page = totalPages - 1;
-      const scrollPosition = page * itemWidth;
+      
+      // Scroll by the number of items visible at once
+      const scrollPosition = page * itemWidth * categoriesPerPage;
+      
       container.scrollTo({
         left: scrollPosition,
         behavior: 'smooth',
@@ -120,16 +235,22 @@ export default function HomePage() {
 
     const handleScroll = () => {
       const scrollLeft = container.scrollLeft;
-      const totalPages = Math.ceil(categories.length / categoriesPerPage);
-      const itemWidth = container.scrollWidth / totalPages;
+      const containerWidth = container.clientWidth;
       
-      const currentPage = Math.round(scrollLeft / itemWidth);
-      setCurrentCategoryPage(currentPage);
+      // Calculate the width of each individual category item
+      const itemWidth = containerWidth / categoriesPerPage;
+      
+      // Calculate current page based on how many items we've scrolled past
+      const currentPage = Math.round(scrollLeft / (itemWidth * categoriesPerPage));
+      
+      // Ensure currentPage is within bounds
+      const clampedPage = Math.max(0, Math.min(currentPage, totalPages - 1));
+      setCurrentCategoryPage(clampedPage);
     };
 
     container.addEventListener('scroll', handleScroll);
     return () => container.removeEventListener('scroll', handleScroll);
-  }, [categories.length]);
+  }, [categories.length, categoriesPerPage]);
 
   const handleAddToCart = async (productId: string) => {
     if (addingToCart === productId) return; // Prevent multiple rapid clicks
@@ -277,8 +398,24 @@ export default function HomePage() {
             {/* Scrollable Categories */}
             <div 
               ref={categoriesScrollRef}
-              className="flex overflow-x-auto scrollbar-hide px-16 relative gap-4 md:gap-16"
+              className={`flex overflow-x-auto scrollbar-hide px-16 relative gap-4 md:gap-16 select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
               style={{ scrollSnapType: 'x mandatory' }}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onMouseDown={handleMouseDown}
+              onScroll={() => {
+                // Trigger scroll handler immediately for better responsiveness
+                const container = categoriesScrollRef.current;
+                if (!container || categories.length <= 2) return;
+
+                const scrollLeft = container.scrollLeft;
+                const containerWidth = container.clientWidth;
+                const itemWidth = containerWidth / categoriesPerPage;
+                const currentPage = Math.round(scrollLeft / (itemWidth * categoriesPerPage));
+                const clampedPage = Math.max(0, Math.min(currentPage, totalPages - 1));
+                setCurrentCategoryPage(clampedPage);
+              }}
             >
               {/* Original categories only */}
               {categories.map((category, index) => (
@@ -297,6 +434,7 @@ export default function HomePage() {
                           alt={category.name}
                           className="w-20 h-20 md:w-28 md:h-28 object-contain group-hover:scale-125 transition-transform duration-200"
                           style={{ objectFit: 'contain' }}
+                          draggable={false}
                           onError={(e) => {
                             // Fallback to placeholder if image fails to load
                             const target = e.target as HTMLImageElement;

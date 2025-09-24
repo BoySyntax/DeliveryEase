@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { User, Upload } from 'lucide-react';
@@ -8,7 +7,7 @@ import Button from '../../ui/components/Button';
 import Input from '../../ui/components/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/components/Card';
 import Loader from '../../ui/components/Loader';
-import VehicleForm from '../components/VehicleForm';
+import VehicleDisplay from '../components/VehicleDisplay';
 import { useProfile } from '../../lib/auth';
 import { cleanImageUrl } from '../../lib/utils';
 
@@ -17,7 +16,6 @@ type ProfileFormData = {
 };
 
 export default function ProfilePage() {
-  const navigate = useNavigate();
   const { profile } = useProfile();
   const [loading, setLoading] = useState(true);
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<ProfileFormData>();
@@ -80,10 +78,6 @@ export default function ProfilePage() {
     }
   };
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    navigate('/');
-  };
 
   // Handle profile image upload
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -409,12 +403,8 @@ export default function ProfilePage() {
         {/* Vehicle Information */}
         <div className="space-y-6">
           {profile?.id && (
-            <VehicleForm 
+            <VehicleDisplay 
               driverId={profile.id}
-              onVehicleSaved={() => {
-                // Optional: Add any callback logic here
-                console.log('Vehicle saved successfully');
-              }}
             />
           )}
         </div>

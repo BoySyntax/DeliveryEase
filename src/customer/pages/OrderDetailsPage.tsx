@@ -92,6 +92,7 @@ export default function OrderDetailsPage() {
                   src={item.product.image_url}
                   alt={item.product.name}
                   className="w-16 h-16 rounded object-cover border"
+                  draggable={false}
                 />
               )}
               <div className="flex-1">

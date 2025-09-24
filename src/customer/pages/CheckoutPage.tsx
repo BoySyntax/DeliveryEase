@@ -54,6 +54,10 @@ export default function CheckoutPage() {
   const [loadingAddresses, setLoadingAddresses] = useState(true);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
+  const [isReorderFlow, setIsReorderFlow] = useState(false);
+  const [detectingReorder, setDetectingReorder] = useState(true);
+  const [reorderProcessed, setReorderProcessed] = useState(false);
+  const [originalOrderIdState, setOriginalOrderIdState] = useState<string | null>(null);
   const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<CheckoutForm>();
 
   // Build a clean, comma-separated location string without empty values
@@ -97,39 +101,117 @@ export default function CheckoutPage() {
           }
           setCartItems([{ product, quantity: qty }]);
         } else {
-          // Load Cart Items (pick latest cart if multiple exist)
-          const { data: carts, error: cartError } = await supabase
-            .from('carts')
-            .select('id')
-            .eq('customer_id', user.id)
-            .order('created_at', { ascending: false })
-            .limit(1);
-
-          if (cartError) throw new Error('Error fetching cart: ' + cartError.message);
-
-          if (!carts || carts.length === 0) {
-            navigate('/customer/cart');
-            return;
+        // Check for reorder items in session storage first
+        const reorderItems = sessionStorage.getItem('reorderItems');
+        const isReorder = sessionStorage.getItem('isReorder');
+        const ssOriginalOrderId = sessionStorage.getItem('originalOrderId');
+        
+        console.log('🔍 Checkout: Checking for reorder items...');
+        console.log('📦 reorderItems:', reorderItems);
+        console.log('🔄 isReorder:', isReorder);
+        console.log('🔄 reorderProcessed:', reorderProcessed);
+        console.log('🔄 isReorderFlow state:', isReorderFlow);
+        
+        if (reorderItems && isReorder === 'true' && !reorderProcessed && !isReorderFlow) {
+          // Set reorder flow state
+          setIsReorderFlow(true);
+          console.log('🔄 Reorder flow detected and set to true');
+          if (ssOriginalOrderId) {
+            setOriginalOrderIdState(ssOriginalOrderId);
+            console.log('🆔 Captured originalOrderId for reorder:', ssOriginalOrderId);
+          } else {
+            console.log('⚠️ No originalOrderId found in session storage during reorder detection');
           }
+          
+          // Load reorder items by fetching products for provided IDs
+          const parsedItems: Array<{ product_id: string; quantity: number }> = JSON.parse(reorderItems);
+          console.log('📋 Parsed reorder items:', parsedItems);
+          const productIds = parsedItems.map(i => i.product_id);
+          console.log('🆔 Product IDs to fetch:', productIds);
+          
+          if (productIds.length > 0) {
+            const { data: products, error: productsError } = await supabase
+              .from('products')
+              .select('id, name, price, quantity, image_url')
+              .in('id', productIds);
+            if (productsError) throw new Error('Error fetching products for reorder: ' + productsError.message);
 
-          const { data: items, error: itemsError } = await supabase
-            .from('cart_items')
-            .select(`
-              id,
-              quantity,
-              product:products (
-                id,
-                name,
-                price,
-                quantity
-              )
-            `)
-            .eq('cart_id', carts[0].id);
-
-          if (itemsError) throw new Error('Error fetching cart items: ' + itemsError.message);
-
-          if (items) {
+            console.log('🛍️ Fetched products:', products);
+            const productMap = new Map(products.map(p => [p.id, p]));
+            const items: CartItem[] = parsedItems
+              .map(({ product_id, quantity }) => {
+                const product = productMap.get(product_id);
+                if (!product) {
+                  console.log(`❌ Product ${product_id} not found or unavailable`);
+                  return null;
+                }
+                return { product, quantity } as CartItem;
+              })
+              .filter(Boolean) as CartItem[];
+            console.log('✅ Final cart items:', items);
+            
+            // Log if some products were not found
+            if (items.length < parsedItems.length) {
+              console.log(`⚠️ Only ${items.length} of ${parsedItems.length} reorder items are available`);
+              if (items.length === 0) {
+                toast.error('No reorder items are currently available');
+              } else {
+                toast.error(`Only ${items.length} of ${parsedItems.length} reorder items are available`);
+              }
+            }
+            
             setCartItems(items);
+          } else {
+            // No product IDs means empty reorder
+            console.log('❌ No product IDs found in reorder items');
+            setCartItems([]);
+          }
+          
+          // Mark reorder as processed
+          setReorderProcessed(true);
+        } else {
+          // Not a reorder flow
+          setIsReorderFlow(false);
+        }
+        
+        // Reorder detection complete
+        setDetectingReorder(false);
+        
+        // Load Cart Items (pick latest cart if multiple exist) - Only if not a reorder flow
+        if (!(reorderItems && isReorder === 'true')) {
+          const { data: carts, error: cartError } = await supabase
+              .from('carts')
+              .select('id')
+              .eq('customer_id', user.id)
+              .order('created_at', { ascending: false })
+              .limit(1);
+
+            if (cartError) throw new Error('Error fetching cart: ' + cartError.message);
+
+            if (!carts || carts.length === 0) {
+              navigate('/customer/cart');
+              return;
+            }
+
+            const { data: items, error: itemsError } = await supabase
+              .from('cart_items')
+              .select(`
+                id,
+                quantity,
+                product:products (
+                  id,
+                  name,
+                  price,
+                  quantity
+                )
+              `)
+              .eq('cart_id', carts[0].id);
+
+            if (itemsError) throw new Error('Error fetching cart items: ' + itemsError.message);
+
+            if (items) {
+              setCartItems(items);
+            }
           }
         }
 
@@ -196,6 +278,16 @@ export default function CheckoutPage() {
       return;
     }
     setLoading(true);
+    
+      console.log('🚀 Starting order submission...');
+      console.log('📊 State check:');
+      console.log('  - isReorderFlow:', isReorderFlow);
+      console.log('  - cartItems.length:', cartItems.length);
+      console.log('  - detectingReorder:', detectingReorder);
+      console.log('  - reorderProcessed:', reorderProcessed);
+      console.log('  - sessionStorage isReorder:', sessionStorage.getItem('isReorder'));
+      console.log('  - sessionStorage originalOrderId:', sessionStorage.getItem('originalOrderId'));
+    
     try {
       // Check user authentication
       const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -213,11 +305,17 @@ export default function CheckoutPage() {
       }
 
       console.log('Selected address for order:', selectedAddress); // Debug log
+      console.log('🔄 Order placement debug:');
+      console.log('  - isReorderFlow:', isReorderFlow);
+      console.log('  - cartItems length:', cartItems.length);
+      console.log('  - cartItems:', cartItems);
 
       // If single-product checkout, skip cart fetch and use cartItems
       const productId = params.get('product');
       let itemsToOrder = cartItems;
-      if (!productId) {
+      
+      // Only fetch from cart if it's not a single-product checkout AND not a reorder flow
+      if (!productId && !isReorderFlow) {
         // Get cart items with product details (re-fetch to ensure latest data)
         const { data: carts, error: cartError } = await supabase
           .from('carts')
@@ -255,6 +353,13 @@ export default function CheckoutPage() {
           return;
         }
         itemsToOrder = cartItemsData;
+      }
+      
+      // For reorder flow, validate that we have items in cartItems state
+      if (isReorderFlow && (!itemsToOrder || itemsToOrder.length === 0)) {
+        toast.error('No reorder items found. Please try again.');
+        navigate('/customer/orders');
+        return;
       }
 
       // Validate stock availability
@@ -298,23 +403,134 @@ export default function CheckoutPage() {
        console.log('Street address being sent:', deliveryAddress.street_address);
        console.log('================================');
 
-      // Start a transaction
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .insert([{
-          customer_id: user.id,
-          total,
-          order_status_code: 'pending',
-          // Permanently tie the order to the selected address id and let DB snapshot it
-          selected_address_id: selectedAddress.id,
-          delivery_address: deliveryAddress,
-          notes: data.notes,
-          created_at: new Date().toISOString()
-        }])
-        .select()
-        .single();
+      // Use the captured original order ID from state if available
+      const originalOrderId = originalOrderIdState;
+      
+      // Fallback: check session storage directly if state isn't working
+      const sessionIsReorder = sessionStorage.getItem('isReorder') === 'true';
+      const sessionOriginalOrderId = sessionStorage.getItem('originalOrderId');
+      
+      console.log('🔍 Reorder detection:');
+      console.log('  - isReorderFlow state:', isReorderFlow);
+      console.log('  - sessionIsReorder:', sessionIsReorder);
+      console.log('  - originalOrderId from state:', originalOrderId);
+      console.log('  - sessionOriginalOrderId:', sessionOriginalOrderId);
+      console.log('  - reorderProcessed:', reorderProcessed);
+      
+      // Use session storage as fallback if state isn't working
+      const finalIsReorder = isReorderFlow || sessionIsReorder;
+      const finalOriginalOrderId = originalOrderId || sessionOriginalOrderId;
 
-      if (orderError) throw new Error('Error creating order: ' + orderError.message);
+      // Guard: if this is a reorder but we lost the original order id, stop and ask user to retry
+      if (finalIsReorder && !finalOriginalOrderId) {
+        toast.error('Reorder session expired. Please tap Reorder again.');
+        navigate('/customer/orders');
+        return;
+      }
+      
+      let orderIdForThisCheckout: string | null = null;
+      
+      let reorderHandledByRPC = false;
+
+      if (finalIsReorder && finalOriginalOrderId) {
+        // Try RPC first to safely bypass RLS and update items atomically
+        console.log('🔄 Attempting reorder via RPC for order:', finalOriginalOrderId);
+        toast.loading('Updating your existing order...', { id: 'reorder-toast' });
+
+        const rpcItems = itemsToOrder.map(item => ({
+          product_id: item.product.id,
+          quantity: item.quantity,
+          price: item.product.price
+        }));
+
+        try {
+          const { data: rpcOrder, error: rpcError } = await (supabase as any).rpc('customer_reorder', {
+            p_order_id: finalOriginalOrderId,
+            p_items: rpcItems,
+            p_total: total,
+            p_selected_address_id: selectedAddress.id,
+            p_delivery_address: deliveryAddress,
+            p_notes: data.notes || null
+          });
+
+          if (rpcError) {
+            console.warn('⚠️ RPC customer_reorder failed, will fallback to manual path:', rpcError);
+          } else if (rpcOrder) {
+            orderIdForThisCheckout = (rpcOrder as { id: string }).id;
+            reorderHandledByRPC = true;
+            console.log('✅ Reorder via RPC succeeded. Order ID:', orderIdForThisCheckout);
+            toast.success('Order updated successfully! Using the same order ID.', { id: 'reorder-toast' });
+            // Preserve session until navigation below
+            console.log('🧹 Preserving reorder session storage until navigation');
+          }
+        } catch (rpcEx) {
+          console.warn('⚠️ Exception during RPC reorder, will fallback to manual path:', rpcEx);
+        }
+
+        if (!reorderHandledByRPC) {
+          // Fallback: UPDATE EXISTING REJECTED ORDER manually
+          console.log('🔄 Fallback: updating existing order to pending via standard update');
+
+          const { data: updatedOrder, error: updateError } = await supabase
+            .from('orders')
+            .update({
+              approval_status: 'pending',
+              delivery_status: 'pending',
+              total: total,
+              selected_address_id: selectedAddress.id,
+              delivery_address: deliveryAddress,
+              notes: data.notes
+            })
+            .eq('id', finalOriginalOrderId)
+            .select()
+            .single();
+
+          if (updateError) {
+            console.error('❌ Error updating order:', updateError);
+            throw new Error('Error updating order: ' + updateError.message);
+          }
+
+          orderIdForThisCheckout = updatedOrder.id;
+          console.log('✅ Order updated to pending with ID:', orderIdForThisCheckout);
+          toast.success('Order updated successfully! Using the same order ID.', { id: 'reorder-toast' });
+          // Preserve session until navigation below
+          console.log('🧹 Preserving reorder session storage until navigation');
+        }
+      } else {
+        // CREATE NEW ORDER (for regular checkout)
+        console.log('🆕 Creating NEW order...');
+        
+        const { data: newOrder, error: orderError } = await supabase
+          .from('orders')
+          .insert([{
+            customer_id: user.id,
+            total,
+            order_status_code: 'pending',
+            approval_status: 'pending',
+            selected_address_id: selectedAddress.id,
+            delivery_address: deliveryAddress,
+            notes: data.notes,
+            created_at: new Date().toISOString()
+          }])
+          .select()
+          .single();
+
+        if (orderError) throw new Error('Error creating order: ' + orderError.message);
+        
+        orderIdForThisCheckout = newOrder.id;
+        console.log('✅ NEW order created with ID:', orderIdForThisCheckout);
+        console.log('📊 Order details:', {
+          id: orderIdForThisCheckout,
+          total: newOrder.total,
+          isReorder: isReorderFlow,
+          approval_status: newOrder.approval_status || 'pending'
+        });
+      }
+
+      // Ensure we have an order id for downstream operations
+      if (!orderIdForThisCheckout) {
+        throw new Error('Order ID missing after placing order');
+      }
 
       // Notification will be created automatically by database trigger
       // But let's add a fallback in case the trigger fails
@@ -325,13 +541,13 @@ export default function CheckoutPage() {
             .from('notifications')
             .select('id')
             .eq('user_id', user.id)
-            .eq('data->>orderId', order.id)
+            .eq('data->>orderId', orderIdForThisCheckout as string)
             .limit(1);
           
           if (!notifications || notifications.length === 0) {
             console.log('No notification found, creating fallback notification');
             await orderNotificationService.createNotification({
-              orderId: order.id,
+              orderId: orderIdForThisCheckout as string,
               title: 'Order Placed',
               message: 'Your order has been successfully placed and is pending approval.'
             });
@@ -341,26 +557,62 @@ export default function CheckoutPage() {
         }
       }, 2000); // Wait 2 seconds for trigger to execute
 
-      // Create order items with reservation status (stock reserved, not yet deducted)
-      const orderItems = itemsToOrder.map(item => ({
-        order_id: order.id,
-        product_id: item.product.id,
-        quantity: item.quantity,
-        price: item.product.price,
-        reservation_status: 'reserved'
-      }));
+      if (finalIsReorder && finalOriginalOrderId && !reorderHandledByRPC) {
+        // UPDATE existing order items for reorder
+        console.log('🔄 Updating order items for reorder...');
+        
+        // First, delete existing order items
+        const { error: deleteError } = await supabase
+          .from('order_items')
+          .delete()
+          .eq('order_id', finalOriginalOrderId);
 
-      // Insert order items
-      const { error: itemsInsertError } = await supabase
-        .from('order_items')
-        .insert(orderItems);
+        if (deleteError) throw new Error('Error deleting old order items: ' + deleteError.message);
 
-      if (itemsInsertError) throw new Error('Error creating order items: ' + itemsInsertError.message);
+        // Then insert new order items
+        const orderItems = itemsToOrder.map(item => ({
+          order_id: orderIdForThisCheckout!,
+          product_id: item.product.id,
+          quantity: item.quantity,
+          price: item.product.price,
+          reservation_status: 'reserved'
+        }));
+
+        const { error: itemsInsertError } = await supabase
+          .from('order_items')
+          .insert(orderItems);
+
+        if (itemsInsertError) throw new Error('Error updating order items: ' + itemsInsertError.message);
+        
+        console.log('✅ Order items updated for reorder');
+      } else if (!finalIsReorder) {
+        // CREATE new order items for regular checkout
+        console.log('🆕 Creating new order items...');
+        
+        const orderItems = itemsToOrder.map(item => ({
+          order_id: orderIdForThisCheckout!,
+          product_id: item.product.id,
+          quantity: item.quantity,
+          price: item.product.price,
+          reservation_status: 'reserved'
+        }));
+
+        const { error: itemsInsertError } = await supabase
+          .from('order_items')
+          .insert(orderItems);
+
+        if (itemsInsertError) throw new Error('Error creating order items: ' + itemsInsertError.message);
+        
+        console.log('✅ Order items created');
+      }
+
+      // Reorder logic is now handled above by updating the existing order
+      // No need for additional tracking since we're updating the same order
 
       // Do not update product quantities here; stock will be decremented upon order approval
 
-      // If not single-product checkout, clear cart and notify badge
-      if (!productId) {
+      // If not single-product checkout and not reorder flow, clear cart and notify badge
+      if (!productId && !isReorderFlow) {
         const { data: carts, error: cartError } = await supabase
           .from('carts')
           .select('id')
@@ -386,7 +638,7 @@ export default function CheckoutPage() {
           // Generate a unique file path including receipts folder
           const fileExtension = selectedFile.name.split('.').pop();
           const timestamp = new Date().getTime();
-          const filePath = `receipts/order-${order.id}/${timestamp}.${fileExtension}`;
+          const filePath = `receipts/order-${orderIdForThisCheckout}/${timestamp}.${fileExtension}`;
 
           console.log('Starting payment proof upload during order placement:', {
             bucket: 'payment-proof',
@@ -430,7 +682,7 @@ export default function CheckoutPage() {
           const { error: proofError } = await supabase
             .from('payment_proofs')
             .insert([{
-              order_id: order.id,
+              order_id: orderIdForThisCheckout!,
               file_url: filePath,
               uploaded_at: new Date().toISOString()
             }]);
@@ -445,7 +697,11 @@ export default function CheckoutPage() {
           }
 
           console.log('Payment proof details saved to database.');
-          toast.success('Order placed and payment proof uploaded successfully!');
+          if (finalIsReorder) {
+            toast.success('Order updated successfully! Your order is now pending approval.');
+          } else {
+            toast.success('Order placed and payment proof uploaded successfully!');
+          }
         } catch (uploadError) {
           console.error('Error during payment proof upload process:', uploadError);
           toast.error(uploadError instanceof Error ? uploadError.message : 'Failed to upload payment proof');
@@ -455,9 +711,17 @@ export default function CheckoutPage() {
         }
       } else {
         // No file selected, just place the order
-        toast.success('Order placed successfully!');
+        if (finalIsReorder) {
+          toast.success('Order updated successfully! Your order is now pending approval.');
+        } else {
+          toast.success('Order placed successfully!');
+        }
       }
 
+      // Clear reorder session storage right before navigating back to orders
+      sessionStorage.removeItem('reorderItems');
+      sessionStorage.removeItem('isReorder');
+      sessionStorage.removeItem('originalOrderId');
       // Navigate after order is placed and upload attempted/completed
       navigate('/customer/orders');
 
@@ -497,7 +761,11 @@ export default function CheckoutPage() {
     }
   };
 
-  if ((loadingCart || loadingAddresses) && !isSingleProductCheckout) {
+  if (detectingReorder) {
+    return <Loader label="Loading reorder items..." />;
+  }
+
+  if ((loadingCart || loadingAddresses) && !isSingleProductCheckout && !isReorderFlow) {
     return <Loader label={loadingCart ? "Loading cart..." : "Loading addresses..."} />;
   }
 
@@ -505,7 +773,7 @@ export default function CheckoutPage() {
     return <Loader label="Processing order..." />;
   }
 
-  if (cartItems.length === 0 && !isSingleProductCheckout) {
+  if (cartItems.length === 0 && !isSingleProductCheckout && !isReorderFlow) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500">Your cart is empty</p>
@@ -519,6 +787,37 @@ export default function CheckoutPage() {
     );
   }
 
+  if (cartItems.length === 0 && isReorderFlow) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <div className="text-center py-12">
+          <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 mb-4">
+            <svg className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No Reorder Items Found</h3>
+          <p className="text-gray-500 mb-6">
+            The items from your previous order are no longer available or have been removed from our inventory.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Button
+              variant="outline"
+              onClick={() => navigate('/customer/orders')}
+            >
+              Back to Orders
+            </Button>
+            <Button
+              onClick={() => navigate('/customer')}
+            >
+              Browse Products
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-2xl mx-auto">
       <Button
@@ -527,10 +826,11 @@ export default function CheckoutPage() {
         onClick={() => navigate('/customer/cart')}
         className="mb-6"
       >
-        {!isSingleProductCheckout && 'Back to Cart'}
+        {!isSingleProductCheckout && !isReorderFlow && 'Back to Cart'}
       </Button>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        
         {/* 2. Delivery Information */}
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">

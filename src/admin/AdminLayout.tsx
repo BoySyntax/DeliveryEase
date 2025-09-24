@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Package, Tags, Users, ShoppingBag, LogOut, Truck, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Package, Tags, Users, ShoppingBag, LogOut, Truck, Menu, X, Calendar } from 'lucide-react';
 import { useProfile } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import Loader from '../ui/components/Loader';
@@ -42,6 +42,7 @@ export default function AdminLayout() {
     { icon: <Tags size={20} />, label: 'Categories', path: '/admin/categories' },
     { icon: <Package size={20} />, label: 'Verify Orders', path: '/admin/verify-orders' },
     { icon: <Truck size={20} />, label: 'Order Batches', path: '/admin/batch-orders' },
+    { icon: <Calendar size={20} />, label: 'Order List', path: '/admin/order-list' },
     { icon: <Users size={20} />, label: 'Drivers', path: '/admin/drivers' },
   ];
 

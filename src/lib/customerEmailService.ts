@@ -77,11 +77,11 @@ class CustomerEmailService {
             <body>
               <div class="container">
                 <div class="header">
-                  <h1>DeliveryEase</h1>
+                  <h1>fordaGO</h1>
                 </div>
                 <div class="content">
                   <p>${body}</p>
-                  <p>Thank you for choosing DeliveryEase!</p>
+                  <p>Thank you for choosing fordaGO!</p>
                 </div>
                 <div class="footer">
                   <p>This is an automated message. Please do not reply to this email.</p>

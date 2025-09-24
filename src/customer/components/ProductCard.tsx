@@ -26,6 +26,7 @@ export default function ProductCard({ id, name, price, imageUrl, quantity, unit,
             src={imageUrl} 
             alt={name}
             className="h-full w-full object-cover object-center transition-transform group-hover:scale-105"
+            draggable={false}
           />
         </div>
         <CardContent className="p-2 sm:p-3 flex flex-col flex-1">

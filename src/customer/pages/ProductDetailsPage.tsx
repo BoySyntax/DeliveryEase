@@ -195,6 +195,7 @@ export default function ProductDetailsPage() {
             src={product.image_url}
             alt={product.name}
             className="w-full aspect-square object-cover rounded-lg"
+            draggable={false}
           />
         </div>
         <div className="space-y-6">
