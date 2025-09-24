@@ -7,9 +7,14 @@ export default function LoginPage() {
 
   const handleGoogleSignIn = async () => {
     try {
+      // Force use of fordago.site for production
       const redirectUri = window.location.hostname === 'localhost' 
         ? `${window.location.origin}/auth/callback`
         : 'https://fordago.site/auth/callback';
+      
+      console.log('🔍 DEBUG: Hostname:', window.location.hostname);
+      console.log('🔍 DEBUG: Origin:', window.location.origin);
+      console.log('🔍 DEBUG: Redirect URI being used:', redirectUri);
         
       console.log('🔍 DEBUG: Redirect URI being used:', redirectUri);
       console.log('🔍 DEBUG: Current origin:', window.location.origin);
