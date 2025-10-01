@@ -212,6 +212,7 @@ export default function VerifyOrdersPage() {
     console.log('=== HANDLE VERIFY ORDER CALLED ===');
     console.log('Order ID:', orderId);
     console.log('Approved:', approved);
+    console.log('Action:', approved ? 'APPROVING' : 'REJECTING');
     
     try {
       // Get the order's current address through customer_id
@@ -257,26 +258,35 @@ export default function VerifyOrdersPage() {
       
       // Send email notification if order was rejected
       if (!approved) {
+        console.log('🚨 ORDER REJECTED - Starting email sending process...');
+        alert('REJECT BUTTON CLICKED - Starting email process...');
         try {
           // Get customer email from profiles table
-          const { data: emailResult } = await supabase
+          const { data: emailResult, error: emailError } = await supabase
             .from('profiles')
             .select('id, email')
             .eq('id', orderData.customer_id)
             .single();
           
+          console.log('📧 Email query result:', { emailResult, emailError });
+          
           if (emailResult && emailResult.email) {
             // Get customer name from profiles table
-            const { data: nameResult } = await supabase
+            const { data: nameResult, error: nameError } = await supabase
               .from('profiles')
               .select('name')
               .eq('id', orderData.customer_id)
               .single();
             
+            console.log('👤 Name query result:', { nameResult, nameError });
+            
             const customerName = nameResult?.name || 'Customer';
             
+            console.log('📨 Preparing to send email to:', emailResult.email);
+            console.log('📦 Order items:', orderData.items);
+            
             // Call the quick-processor function to send rejected order email
-            const { data: emailResponse, error: emailError } = await supabase.functions.invoke('quick-processor', {
+            const { data: emailResponse, error: emailError2 } = await supabase.functions.invoke('quick-processor', {
               body: {
                 orderId: orderId,
                 customerName: customerName,
@@ -292,11 +302,18 @@ export default function VerifyOrdersPage() {
               }
             });
 
-            if (emailError) {
-              console.error('Error sending rejected order email:', emailError);
+            console.log('📧 Email function response:', { emailResponse, emailError2 });
+
+            if (emailError2) {
+              console.error('❌ Error sending rejected order email:', emailError2);
+              toast.error('Failed to send rejection email');
             } else {
-              console.log('Rejected order email sent successfully:', emailResponse);
+              console.log('✅ Rejected order email sent successfully:', emailResponse);
+              toast.success('Rejection email sent to customer');
             }
+          } else {
+            console.error('❌ No customer email found for order:', orderData.customer_id);
+            toast.error('Customer email not found');
           }
         } catch (emailError) {
           console.error('Error sending rejected order email:', emailError);

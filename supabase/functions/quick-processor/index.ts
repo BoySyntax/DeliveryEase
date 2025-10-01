@@ -27,6 +27,14 @@ serve(async (req) => {
 
     const { orderId, customerName, customerEmail, status, orderItems, totalAmount } = body;
     
+    console.log('=== EMAIL PROCESSING DEBUG ===');
+    console.log('Order ID:', orderId);
+    console.log('Customer Name:', customerName);
+    console.log('Customer Email:', customerEmail);
+    console.log('Status:', status);
+    console.log('Order Items:', orderItems);
+    console.log('Total Amount:', totalAmount);
+    
     // Debug order items and image URLs
     if (orderItems && orderItems.length > 0) {
       console.log('Order items received:', orderItems.length);
@@ -539,8 +547,10 @@ serve(async (req) => {
       </html>
     `;
 
+    console.log('=== SENDING EMAIL ===');
     console.log('Attempting to send email to:', customerEmail);
     console.log('Email subject:', subject);
+    console.log('API Key present:', !!apiKey);
 
     // Send email via Resend
     const response = await fetch('https://api.resend.com/emails', {
