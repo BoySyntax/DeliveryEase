@@ -232,7 +232,6 @@ serve(async (req) => {
             font-size: 18px;
             font-weight: 700;
             padding-bottom: 8px;
-            border-bottom: 1px solid #e0e0e0;
           }
           .items-container {
             background: transparent;
@@ -516,6 +515,15 @@ serve(async (req) => {
                   </div>
                 </div>
               ` : ''}
+              
+              ${status === 'rejected' ? `
+                <div style="text-align: center; margin: 20px 0;">
+                  <a href="https://www.fordago.site/customer/checkout?reorder=${orderId}" 
+                     style="display: inline-block; background-color: #3b82f6; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; font-weight: 500; font-size: 14px; transition: background-color 0.2s; box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);">
+                    Reorder This Order
+                  </a>
+                </div>
+              ` : ''}
             </div>
 
             <div class="thank-you-banner">
@@ -524,18 +532,6 @@ serve(async (req) => {
                 : 'Thank you for choosing fordaGO! We\'re committed to delivering your order safely and on time.'
               }</p>
             </div>
-
-            ${status === 'rejected' ? `
-              <div class="reorder-section" style="text-align: center; margin: 30px 0; padding: 20px; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #e0e0e0;">
-                <h3 style="margin: 0 0 15px 0; color: #1a1a1a; font-size: 18px; font-weight: 600;">Want to try again?</h3>
-                <p style="margin: 0 0 20px 0; color: #666; font-size: 14px;">You can easily reorder the same items with one click.</p>
-                <a href="https://www.fordago.site/customer/checkout?reorder=${orderId}" 
-                   style="display: inline-block; background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px; transition: background-color 0.2s; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);">
-                  🔄 Reorder This Order
-                </a>
-                <p style="margin: 15px 0 0 0; color: #999; font-size: 12px;">This will take you to checkout with the same items</p>
-              </div>
-            ` : ''}
           </div>
           
           <div class="footer">

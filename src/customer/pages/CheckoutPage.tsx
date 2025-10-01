@@ -381,6 +381,17 @@ export default function CheckoutPage() {
           console.log('✅ Reorder already processed');
           return;
         }
+        
+        // Check if user has already reordered this specific order
+        const reorderKey = `reordered_${reorderFromEmail}`;
+        const hasReordered = sessionStorage.getItem(reorderKey);
+        
+        if (hasReordered) {
+          console.log('⚠️ User has already reordered this order');
+          toast.info('You have already reordered this order. Check your recent orders.');
+          navigate('/customer/orders');
+          return;
+        }
         console.log('📧 Reorder from email - loading order:', reorderFromEmail);
         console.log('🔄 Setting reorder flow state immediately');
         setIsReorderFlow(true);
@@ -975,6 +986,12 @@ export default function CheckoutPage() {
           console.log('Payment proof details saved to database.');
           if (finalIsReorder) {
             toast.success('Order updated successfully! Your order is now pending approval.');
+            // Mark this order as reordered to prevent future reorders
+            if (finalOriginalOrderId) {
+              const reorderKey = `reordered_${finalOriginalOrderId}`;
+              sessionStorage.setItem(reorderKey, 'true');
+              console.log('✅ Marked order as reordered:', finalOriginalOrderId);
+            }
           } else {
             toast.success('Order placed and payment proof uploaded successfully!');
           }
@@ -989,6 +1006,12 @@ export default function CheckoutPage() {
         // No file selected, just place the order
         if (finalIsReorder) {
           toast.success('Order updated successfully! Your order is now pending approval.');
+          // Mark this order as reordered to prevent future reorders
+          if (finalOriginalOrderId) {
+            const reorderKey = `reordered_${finalOriginalOrderId}`;
+            sessionStorage.setItem(reorderKey, 'true');
+            console.log('✅ Marked order as reordered:', finalOriginalOrderId);
+          }
         } else {
           toast.success('Order placed successfully!');
         }
