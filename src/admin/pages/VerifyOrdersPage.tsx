@@ -259,7 +259,6 @@ export default function VerifyOrdersPage() {
       // Send email notification if order was rejected
       if (!approved) {
         console.log('🚨 ORDER REJECTED - Starting email sending process...');
-        alert('REJECT BUTTON CLICKED - Starting email process...');
         try {
           // Get customer email from profiles table
           const { data: emailResult, error: emailError } = await supabase
