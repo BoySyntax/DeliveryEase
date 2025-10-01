@@ -7,7 +7,6 @@ import { Database } from '../../lib/database.types';
 import Loader from '../../ui/components/Loader';
 import { toast } from 'react-hot-toast';
 import { checkBatchAutoAssignment } from '../../lib/batch-auto-assignment';
-import { directEmailService } from '../../lib/directEmailService';
 
 
 
@@ -237,12 +236,6 @@ export default function VerifyOrdersPage() {
 
       console.log('Order data:', orderData); // Debug log
 
-      // Get customer name from profiles
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('name')
-        .eq('id', orderData.customer_id)
-        .single();
 
       // IMPORTANT: Do NOT overwrite delivery_address here.
       // The order already stores the customer's selected delivery_address.
@@ -251,7 +244,7 @@ export default function VerifyOrdersPage() {
         .from('orders')
         .update({ 
           approval_status: approved ? 'approved' : 'rejected',
-          delivery_status: approved ? 'pending' : undefined
+          delivery_status: approved ? 'pending' : 'pending'
         })
         .eq('id', orderId);
 
@@ -260,6 +253,56 @@ export default function VerifyOrdersPage() {
         throw updateError;
       }
 
+      console.log(`Order ${orderId} ${approved ? 'approved' : 'rejected'} successfully`);
+      
+      // Send email notification if order was rejected
+      if (!approved) {
+        try {
+          // Get customer email from profiles table
+          const { data: emailResult } = await supabase
+            .from('profiles')
+            .select('id, email')
+            .eq('id', orderData.customer_id)
+            .single();
+          
+          if (emailResult && emailResult.email) {
+            // Get customer name from profiles table
+            const { data: nameResult } = await supabase
+              .from('profiles')
+              .select('name')
+              .eq('id', orderData.customer_id)
+              .single();
+            
+            const customerName = nameResult?.name || 'Customer';
+            
+            // Call the quick-processor function to send rejected order email
+            const { data: emailResponse, error: emailError } = await supabase.functions.invoke('quick-processor', {
+              body: {
+                orderId: orderId,
+                customerName: customerName,
+                customerEmail: emailResult.email,
+                status: 'rejected',
+                orderItems: orderData.items?.map((item: any) => ({
+                  productName: item.product?.name || 'Unknown Product',
+                  quantity: item.quantity,
+                  price: item.price,
+                  imageUrl: null
+                })) || [],
+                totalAmount: orderData.total
+              }
+            });
+
+            if (emailError) {
+              console.error('Error sending rejected order email:', emailError);
+            } else {
+              console.log('Rejected order email sent successfully:', emailResponse);
+            }
+          }
+        } catch (emailError) {
+          console.error('Error sending rejected order email:', emailError);
+        }
+      }
+      
       toast.success(`Order ${approved ? 'approved' : 'rejected'} successfully`);
       
       // Send email notification if order was approved
@@ -273,29 +316,63 @@ export default function VerifyOrdersPage() {
             .single();
           
           if (emailResult && emailResult.email) {
+            // Get customer name from profiles table
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('name')
+              .eq('id', orderData.customer_id)
+              .single();
+            
             const customerName = profileData?.name || 'Customer';
             
             console.log('🔍 Sending email notification for customer:', orderData.customer_id);
             console.log('📧 Customer email:', emailResult.email);
             
-            // Send email notification using directEmailService
-            const emailSent = await directEmailService.sendOrderVerifiedEmail(
-              orderId,
-              emailResult.email,
-              customerName,
-              orderData.items?.map(item => ({
+            // Debug the order items before sending
+            console.log('🔍 Order items before email:', orderData.items);
+            const processedItems = orderData.items?.map(item => {
+              const rawImageUrl = (item.product as any)?.image_url;
+              const cleanedImageUrl = cleanImageUrl(rawImageUrl);
+              console.log('🖼️ Image URL processing:', {
+                productName: item.product?.name,
+                rawImageUrl: rawImageUrl,
+                cleanedImageUrl: cleanedImageUrl,
+                hasRawUrl: !!rawImageUrl,
+                hasCleanedUrl: !!cleanedImageUrl
+              });
+              
+              // Use raw URL directly for testing
+              const finalImageUrl = rawImageUrl || cleanedImageUrl;
+              console.log('🎯 Final image URL being sent:', finalImageUrl);
+              
+              return {
                 productName: item.product?.name || 'Unknown Product',
                 quantity: item.quantity,
-                price: item.price
-              })) || [],
-              orderData.total
-            );
-            
-            if (emailSent) {
-              console.log('✅ Email notification sent successfully!');
+                price: item.price,
+                imageUrl: finalImageUrl || null
+              };
+            }) || [];
+
+            // Send email notification using quick-processor Edge Function
+            const { data, error } = await supabase.functions.invoke('quick-processor', {
+              body: {
+                orderId: orderId,
+                customerName: customerName,
+                customerEmail: emailResult.email,
+                status: 'verified',
+                orderItems: processedItems,
+                totalAmount: orderData.total
+              }
+            });
+
+            if (error) {
+              console.error('❌ Edge Function error:', error);
+              toast.error('Order approved but email failed to send');
+            } else if (data && data.success) {
+              console.log('✅ Email sent successfully!', data);
               toast.success('Order approved and email sent!');
             } else {
-              console.error('❌ Failed to send email notification');
+              console.error('❌ Email sending failed:', data);
               toast.error('Order approved but email failed to send');
             }
           } else {
@@ -304,6 +381,7 @@ export default function VerifyOrdersPage() {
           }
         } catch (emailError) {
           console.error('Error sending email notification:', emailError);
+          toast.error('Order approved but email failed to send');
         }
       }
       

@@ -21,10 +21,10 @@ class DirectEmailService {
   // Send email notification via Supabase Edge Function
   async sendOrderEmail(emailData: DirectEmailData): Promise<boolean> {
     try {
-      console.log('📧 Sending email via Edge Function to:', emailData.customerEmail);
+      console.log('📧 Sending email via minimal-email Edge Function to:', emailData.customerEmail);
 
-      // Call our enhanced quick-processor Edge Function
-      const { data, error } = await supabase.functions.invoke('quick-processor', {
+      // Call our minimal-email Edge Function
+      const { data, error } = await supabase.functions.invoke('minimal-email', {
         body: {
           orderId: emailData.orderId,
           customerName: emailData.customerName,
@@ -42,15 +42,15 @@ class DirectEmailService {
       }
 
       if (data && data.success) {
-        console.log('✅ Email sent successfully via Edge Function!');
+        console.log('✅ Email sent successfully via minimal-email Edge Function!');
         return true;
       } else {
-        console.error('❌ Email sending failed via Edge Function:', data);
+        console.error('❌ Email sending failed via minimal-email Edge Function:', data);
         return false;
       }
 
     } catch (error) {
-      console.error('❌ Error sending email via Edge Function:', error);
+      console.error('❌ Error sending email via minimal-email Edge Function:', error);
       return false;
     }
   }
@@ -63,7 +63,7 @@ class DirectEmailService {
     orderItems?: Array<{productName: string; quantity: number; price: number}>,
     totalAmount?: number
   ): Promise<boolean> {
-    console.log('🚀 Sending verification email via Edge Function...');
+    console.log('🚀 Sending verification email via minimal-email Edge Function...');
     
     return this.sendOrderEmail({
       orderId,
@@ -84,7 +84,7 @@ class DirectEmailService {
     orderItems?: Array<{productName: string; quantity: number; price: number}>,
     totalAmount?: number
   ): Promise<boolean> {
-    console.log('🚀 Sending delivery email via Edge Function...');
+    console.log('🚀 Sending delivery email via minimal-email Edge Function...');
     
     return this.sendOrderEmail({
       orderId,

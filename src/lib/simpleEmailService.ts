@@ -43,7 +43,7 @@ class SimpleEmailService {
               <style>
                 body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
                 .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background-color: #4F46E5; color: white; padding: 20px; text-align: center; }
+                .header { background-color: #0a2767; color: white; padding: 20px; text-align: center; }
                 .content { padding: 20px; background-color: #f9f9f9; }
                 .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
               </style>
@@ -51,11 +51,11 @@ class SimpleEmailService {
             <body>
               <div class="container">
                 <div class="header">
-                  <h1>DeliveryEase</h1>
+                  <h1>fordaGO</h1>
                 </div>
                 <div class="content">
                   <p>${body}</p>
-                  <p>Thank you for choosing DeliveryEase!</p>
+                  <p>Thank you for choosing fordaGO!</p>
                 </div>
                 <div class="footer">
                   <p>This is an automated message. Please do not reply to this email.</p>

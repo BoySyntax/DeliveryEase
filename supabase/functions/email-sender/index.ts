@@ -6,23 +6,27 @@ declare const Deno: any;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, accept-profile',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
 }
 
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { 
+      status: 200,
+      headers: corsHeaders 
+    })
   }
 
   try {
-    console.log('Send-email function called');
+    console.log('Email-sender function called');
     
     const body = await req.json()
-    console.log('Send-email received:', body);
+    console.log('Email-sender received:', body);
 
-    const { orderId, customerName, customerEmail, status, estimatedDeliveryDate } = body;
+    const { orderId, customerName, customerEmail, status } = body;
 
     if (!orderId || !customerName || !customerEmail || !status) {
       console.log('Missing required fields');
@@ -35,9 +39,9 @@ serve(async (req) => {
       )
     }
 
-    // Check if Resend API key exists
+    // Get Resend API key from environment
     const apiKey = Deno.env.get('RESEND_API_KEY');
-    console.log('Resend API key found:', apiKey ? 'Yes' : 'No');
+    console.log('RESEND_API_KEY exists:', apiKey ? 'Yes' : 'No');
 
     if (!apiKey) {
       console.log('No Resend API key found');
@@ -51,7 +55,10 @@ serve(async (req) => {
     }
 
     // Create email content
-    const subject = status === 'verified' ? '✅ Order Payment Verified - DeliveryEase' : '🚚 Order Out for Delivery - DeliveryEase';
+    const subject = status === 'verified' 
+      ? '✅ Order Payment Verified - fordaGO' 
+      : '🚚 Order Out for Delivery - fordaGO';
+
     const htmlContent = `
       <!DOCTYPE html>
       <html>
@@ -113,23 +120,13 @@ serve(async (req) => {
             background-color: #f8fafc;
             border-top: 1px solid #e2e8f0;
           }
-          .cta-button {
-            display: inline-block;
-            background: linear-gradient(135deg, #0a2767 0%, #09235d 100%);
-            color: white;
-            padding: 12px 24px;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 600;
-            margin: 20px 0;
-          }
         </style>
       </head>
       <body>
         <div class="container">
-        <div class="header">
-          <h1>🚚 DeliveryEase</h1>
-        </div>
+          <div class="header">
+            <h1>🚚 fordaGO</h1>
+          </div>
           <div class="content">
             <div class="status-badge">
               ${status === 'verified' ? 'Payment Verified' : 'Out for Delivery'}
@@ -139,7 +136,7 @@ serve(async (req) => {
             <p style="margin: 0 0 20px 0; color: #475569; font-size: 16px;">
               ${status === 'verified' 
                 ? 'Great news! Your payment has been verified and your order is being prepared for delivery.'
-                : `Your order is now out for delivery and will arrive ${estimatedDeliveryDate ? `on ${estimatedDeliveryDate}` : 'soon'}!`
+                : 'Your order is now out for delivery and will arrive soon!'
               }
             </p>
 
@@ -151,19 +148,13 @@ serve(async (req) => {
               </p>
             </div>
 
-            ${status === 'verified' ? '' : `
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="#" class="cta-button">Track Your Order</a>
-            </div>
-            `}
-
             <p style="color: #64748b; font-size: 14px; margin: 20px 0 0 0;">
-              Thank you for choosing DeliveryEase! We're committed to delivering your order safely and on time.
+              Thank you for choosing fordaGO! We're committed to delivering your order safely and on time.
             </p>
           </div>
           <div class="footer">
-            <p>This is an automated message from DeliveryEase. Please do not reply to this email.</p>
-            <p>Need help? Contact our support team at support@deliveryease.com</p>
+            <p>This is an automated message from fordaGO. Please do not reply to this email.</p>
+            <p>Need help? Contact our support team at support@fordago.com</p>
           </div>
         </div>
       </body>
@@ -203,7 +194,11 @@ serve(async (req) => {
 
     console.log('Email sent successfully');
     return new Response(
-      JSON.stringify({ success: true, message: 'Email sent successfully' }),
+      JSON.stringify({ 
+        success: true, 
+        message: 'Email sent successfully',
+        orderId
+      }),
       { 
         status: 200, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -211,7 +206,7 @@ serve(async (req) => {
     )
 
   } catch (error) {
-    console.error('Error in send-email function:', error);
+    console.error('Error in email-sender function:', error);
     return new Response(
       JSON.stringify({ success: false, error: 'Internal server error: ' + error.message }),
       { 
@@ -221,3 +216,6 @@ serve(async (req) => {
     )
   }
 })
+
+
+

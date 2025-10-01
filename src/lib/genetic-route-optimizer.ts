@@ -92,12 +92,12 @@ export class GeneticRouteOptimizer {
       ...config
     };
     
-    // Default depot location (CDO City - DeliveryEase depot)
+    // Default depot location (CDO City - fordaGO depot)
     // Based on the map, depot should be in the upper-right area near Nazareth/Consolacion
     this.depot = depot || {
       latitude: 8.4850,  // Adjusted to be more in the upper-right area
       longitude: 124.6500, // Adjusted to be more in the upper-right area
-      name: "DeliveryEase Depot",
+      name: "fordaGO Depot",
       address: "Cagayan de Oro City, Philippines"
     };
   }
@@ -1746,7 +1746,7 @@ export async function optimizeAndAssignBatch(batchId: string, orders: DeliveryLo
     const depotLocation = depot || {
       latitude: 8.4850,  // Adjusted to be more in the upper-right area
       longitude: 124.6500, // Adjusted to be more in the upper-right area
-      name: "DeliveryEase Depot",
+      name: "fordaGO Depot",
       address: "Cagayan de Oro City, Philippines"
     };
     

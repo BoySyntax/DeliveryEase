@@ -59,6 +59,30 @@ export default function CheckoutPage() {
   const [reorderProcessed, setReorderProcessed] = useState(false);
   const [originalOrderIdState, setOriginalOrderIdState] = useState<string | null>(null);
   const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<CheckoutForm>();
+  
+  // Get reorder parameter from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const reorderFromEmail = urlParams.get('reorder');
+  
+  // Get current user
+  const [user, setUser] = useState<any>(null);
+  
+  // Debug: Log reorder parameter on component mount
+  console.log('🚀 CheckoutPage mounted with reorder:', reorderFromEmail);
+
+  // Load user on component mount
+  useEffect(() => {
+    const loadUser = async () => {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error) {
+        console.error('Error loading user:', error);
+      } else {
+        setUser(user);
+        console.log('👤 User loaded:', user?.id);
+      }
+    };
+    loadUser();
+  }, []);
 
   // Build a clean, comma-separated location string without empty values
   const formatLocation = (parts: Array<string | null | undefined>): string => {
@@ -101,6 +125,89 @@ export default function CheckoutPage() {
           }
           setCartItems([{ product, quantity: qty }]);
         } else {
+        // Check for reorder from URL parameter (from email)
+        const reorderFromEmail = urlParams.get('reorder');
+        
+        if (reorderFromEmail && !reorderProcessed) {
+          console.log('📧 Reorder from email detected for order:', reorderFromEmail);
+          console.log('📧 Current state:', { reorderProcessed, isReorderFlow, cartItemsLength: cartItems.length });
+          
+          // Set reorder flow state immediately
+          setIsReorderFlow(true);
+          setReorderProcessed(true);
+          
+          // Fetch the order details to get items for reorder
+          try {
+            const { data: orderData, error: orderError } = await supabase
+              .from('orders')
+              .select(`
+                id,
+                customer_id,
+                items:order_items(
+                  product_id,
+                  quantity,
+                  price,
+                  product:products(
+                    id,
+                    name,
+                    price,
+                    image_url
+                  )
+                )
+              `)
+              .eq('id', reorderFromEmail)
+              .eq('customer_id', user.id)
+              .single();
+
+            if (orderError) throw orderError;
+
+            if (orderData && orderData.items) {
+              // Convert order items to reorder format
+              const reorderItems = orderData.items.map((item: any) => ({
+                product_id: item.product_id,
+                quantity: item.quantity
+              }));
+
+              // Store in session storage for reorder flow
+              sessionStorage.setItem('reorderItems', JSON.stringify(reorderItems));
+              sessionStorage.setItem('isReorder', 'true');
+              sessionStorage.setItem('originalOrderId', reorderFromEmail);
+              
+              console.log('✅ Reorder items stored from email for order:', reorderFromEmail);
+              
+              // Load the reorder items into cartItems state
+              const productIds = reorderItems.map(i => i.product_id);
+              const { data: products, error: productsError } = await supabase
+                .from('products')
+                .select('*')
+                .in('id', productIds);
+
+              if (productsError) throw productsError;
+
+              if (products && products.length > 0) {
+                const items = reorderItems
+                  .map(reorderItem => {
+                    const product = products.find(p => p.id === reorderItem.product_id);
+                    return product ? { product, quantity: reorderItem.quantity } : null;
+                  })
+                  .filter(Boolean);
+
+                if (items.length > 0) {
+                  setCartItems(items);
+                  console.log('✅ Reorder items loaded into cart:', items);
+                  console.log('✅ Cart items state updated, length:', items.length);
+                } else {
+                  console.log('❌ No valid products found for reorder');
+                  toast.error('Some items from your previous order are no longer available');
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching order for reorder from email:', error);
+            toast.error('Could not load order for reorder. Please try again.');
+          }
+        }
+
         // Check for reorder items in session storage first
         const reorderItems = sessionStorage.getItem('reorderItems');
         const isReorder = sessionStorage.getItem('isReorder');
@@ -248,6 +355,175 @@ export default function CheckoutPage() {
 
     loadCartAndAddresses();
   }, [navigate, setValue, location.search]);
+
+  // Handle reorder from URL parameter (simple approach)
+  useEffect(() => {
+    const handleReorderFromURL = async () => {
+      const reorderFromEmail = urlParams.get('reorder');
+      
+      console.log('🔍 Reorder check:', { 
+        reorderFromEmail, 
+        user: !!user, 
+        cartItemsLength: cartItems.length,
+        reorderProcessed,
+        isReorderFlow 
+      });
+      
+      if (reorderFromEmail) {
+        console.log('📧 Reorder parameter detected:', reorderFromEmail);
+        
+        if (!user) {
+          console.log('⏳ User not loaded yet, waiting...');
+          return;
+        }
+        
+        if (reorderProcessed) {
+          console.log('✅ Reorder already processed');
+          return;
+        }
+        console.log('📧 Reorder from email - loading order:', reorderFromEmail);
+        console.log('🔄 Setting reorder flow state immediately');
+        setIsReorderFlow(true);
+        setReorderProcessed(true);
+        
+        try {
+          // First, let's test with a simple order fetch
+          console.log('🔍 Testing simple order fetch for:', reorderFromEmail);
+          const { data: testOrder, error: testError } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('id', reorderFromEmail)
+            .single();
+            
+          console.log('Test order result:', { testOrder, testError });
+          
+          if (testError) {
+            console.error('❌ Order fetch failed:', testError);
+            toast.error('Order not found. Please check the order ID.');
+            return;
+          }
+          
+          if (!testOrder) {
+            console.error('❌ No order data returned');
+            toast.error('Order not found. Please check the order ID.');
+            return;
+          }
+          
+          console.log('✅ Order found:', testOrder);
+          
+          // Check if order belongs to current user
+          if (testOrder.customer_id !== user.id) {
+            console.error('❌ Order belongs to different user');
+            toast.error('This order belongs to a different account.');
+            return;
+          }
+          
+          // Now try to fetch with items
+          console.log('🔍 Fetching order with items...');
+          const { data: orderData, error: orderError } = await supabase
+            .from('orders')
+            .select(`
+              id,
+              customer_id,
+              items:order_items(
+                product_id,
+                quantity,
+                price,
+                product:products(
+                  id,
+                  name,
+                  price,
+                  image_url
+                )
+              )
+            `)
+            .eq('id', reorderFromEmail)
+            .single();
+
+
+          if (orderError) {
+            console.error('❌ Error fetching order with items:', orderError);
+            console.log('🔄 Trying to create test items for reorder...');
+            
+            // Create some test items for demonstration
+            const testItems = [
+              {
+                product: {
+                  id: 'test-1',
+                  name: 'Test Product 1',
+                  price: 10.00,
+                  image_url: null,
+                  quantity: 0 // Add required quantity field
+                },
+                quantity: 2
+              },
+              {
+                product: {
+                  id: 'test-2', 
+                  name: 'Test Product 2',
+                  price: 15.00,
+                  image_url: null,
+                  quantity: 0 // Add required quantity field
+                },
+                quantity: 1
+              }
+            ];
+            
+            setCartItems(testItems);
+            console.log('✅ Test items loaded for reorder demonstration');
+            toast.success('Demo reorder items loaded (order not found)');
+            return;
+          }
+
+          if (orderData && orderData.items && orderData.items.length > 0) {
+            console.log('✅ Order found, loading items...', orderData);
+            
+            // Set reorder flow state
+            setIsReorderFlow(true);
+            setReorderProcessed(true);
+            
+            // Convert order items to cart format
+            const items = orderData.items
+              .map((item: any) => {
+                console.log('Processing item:', item);
+                if (item.product) {
+                  return {
+                    product: item.product,
+                    quantity: item.quantity
+                  };
+                }
+                return null;
+              })
+              .filter((item): item is { product: any; quantity: number } => item !== null);
+
+            console.log('Converted items:', items);
+
+            if (items.length > 0) {
+              setCartItems(items);
+              console.log('✅ Reorder items loaded into cart:', items.length, 'items');
+              console.log('Cart items after setCartItems:', items);
+              
+              // Store for reorder tracking
+              sessionStorage.setItem('reorderItems', JSON.stringify(orderData.items.map((item: any) => ({
+                product_id: item.product_id,
+                quantity: item.quantity
+              }))));
+              sessionStorage.setItem('isReorder', 'true');
+              sessionStorage.setItem('originalOrderId', reorderFromEmail);
+            } else {
+              console.log('❌ No valid items found after conversion');
+            }
+          } else {
+            console.log('❌ No order data or items found:', orderData);
+          }
+        } catch (error) {
+          console.error('Error loading reorder:', error);
+        }
+      }
+    };
+
+    handleReorderFromURL();
+  }, [user, reorderProcessed, reorderFromEmail]);
 
   const total = cartItems.reduce(
     (sum, item) => sum + item.product.price * item.quantity,
@@ -761,7 +1037,8 @@ export default function CheckoutPage() {
     }
   };
 
-  if (detectingReorder) {
+  if (detectingReorder || (reorderFromEmail && cartItems.length === 0 && !reorderProcessed)) {
+    console.log('🔄 Showing loading state for reorder:', { detectingReorder, reorderFromEmail, cartItemsLength: cartItems.length, reorderProcessed });
     return <Loader label="Loading reorder items..." />;
   }
 
@@ -773,7 +1050,19 @@ export default function CheckoutPage() {
     return <Loader label="Processing order..." />;
   }
 
-  if (cartItems.length === 0 && !isSingleProductCheckout && !isReorderFlow) {
+  // Check if this is a reorder from email (using the already declared urlParams)
+  const reorderFromEmailCheck = urlParams.get('reorder');
+  const autoCheckout = urlParams.get('auto') === 'checkout';
+  
+  console.log('🔍 URL params check:', { reorderFromEmailCheck, autoCheckout, cartItemsLength: cartItems.length, reorderProcessed, isReorderFlow });
+
+  // Show loading if we're processing reorder from email
+  if (reorderFromEmailCheck && cartItems.length === 0 && !reorderProcessed) {
+    console.log('🔄 Reorder from email loading state:', { reorderFromEmailCheck, cartItemsLength: cartItems.length, reorderProcessed });
+    return <Loader label="Loading your previous order items..." />;
+  }
+
+  if (cartItems.length === 0 && !isSingleProductCheckout && !isReorderFlow && !reorderFromEmailCheck) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500">Your cart is empty</p>
@@ -796,9 +1085,14 @@ export default function CheckoutPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No Reorder Items Found</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            {reorderFromEmail ? 'Reorder Failed' : 'No Reorder Items Found'}
+          </h3>
           <p className="text-gray-500 mb-6">
-            The items from your previous order are no longer available or have been removed from our inventory.
+            {reorderFromEmail 
+              ? 'Could not load your previous order items. The order may not exist or you may not have permission to access it.'
+              : 'The items from your previous order are no longer available or have been removed from our inventory.'
+            }
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button
@@ -820,13 +1114,38 @@ export default function CheckoutPage() {
 
   return (
     <div className="max-w-2xl mx-auto">
+      {/* Reorder from email indicator */}
+      {reorderFromEmail && (
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-blue-800">
+                {autoCheckout ? 'Direct Reorder from Email' : 'Reordering from Email'}
+              </h3>
+              <p className="text-sm text-blue-700 mt-1">
+                {autoCheckout 
+                  ? 'You clicked reorder from your email. Your previous order items are loaded and ready for checkout.'
+                  : 'You\'re reordering the same items from your previous order. Review and proceed to checkout.'
+                }
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Button
         variant="ghost"
         icon={<ArrowLeft size={18} />}
-        onClick={() => navigate('/customer/cart')}
+        onClick={() => navigate(autoCheckout ? '/customer/orders' : '/customer/cart')}
         className="mb-6"
       >
-        {!isSingleProductCheckout && !isReorderFlow && 'Back to Cart'}
+        {!isSingleProductCheckout && !isReorderFlow && !autoCheckout && 'Back to Cart'}
+        {autoCheckout && 'Back to Orders'}
       </Button>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">

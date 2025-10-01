@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { Database } from './database.types';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://api.fordago.com';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://api.fordago.site';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 // Add detailed error checking

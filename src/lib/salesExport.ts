@@ -35,7 +35,7 @@ class SalesExportService {
     const lines: string[] = [];
     
     // Header
-    lines.push('DeliveryEase Sales Report');
+    lines.push('fordaGO Sales Report');
     lines.push(`Generated on: ${format(new Date(), 'yyyy-MM-dd HH:mm:ss')}`);
     lines.push('');
     
@@ -100,7 +100,7 @@ class SalesExportService {
         dateRange: range,
         customStart: customStart?.toISOString(),
         customEnd: customEnd?.toISOString(),
-        source: 'DeliveryEase Admin Dashboard'
+        source: 'fordaGO Admin Dashboard'
       },
       metrics: {
         totalRevenue: data.metrics.totalRevenue,
@@ -149,7 +149,7 @@ class SalesExportService {
       
       try {
         await navigator.share({
-          title: 'DeliveryEase Sales Report',
+          title: 'fordaGO Sales Report',
           text: summary,
           url: window.location.href
         });
