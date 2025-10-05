@@ -1,246 +1,150 @@
-import { Bell, Check, X } from 'lucide-react';
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { orderNotificationService, OrderNotification } from '../../lib/orderNotificationService';
-import { cn } from '../../lib/utils';
-import clockLoopGif from '../../assets/Clock_loop.gif';
-import successTickGif from '../../assets/Success tick.gif';
-import failedStatusGif from '../../assets/Failed Status.gif';
-import truckkkGif from '../../assets/truckkk.gif';
-import receiveOrderGif from '../../assets/Receive order (1).gif';
+import { useState } from 'react';
+import { Bell, AlertTriangle, Package } from 'lucide-react';
+import { useLowStockNotifications, LowStockProduct } from '../../lib/useLowStockNotifications';
 
 interface NotificationIconProps {
   className?: string;
 }
 
-export default function NotificationIcon({ className }: NotificationIconProps) {
-  const [notifications, setNotifications] = useState<OrderNotification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+export default function NotificationIcon({ className = '' }: NotificationIconProps) {
+  const { lowStockProducts, outOfStockCount, lowStockCount, totalNotifications, loading } = useLowStockNotifications();
   const [isOpen, setIsOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
 
-  useEffect(() => {
-    loadNotifications();
-    loadUnreadCount();
+  if (loading) {
+    return null;
+  }
 
-    // Subscribe to real-time notifications
-    const setupSubscription = async () => {
-      const subscription = await orderNotificationService.subscribeToNotifications((newNotification) => {
-        setNotifications(prev => [newNotification, ...prev]);
-        setUnreadCount(prev => prev + 1);
-      });
-    };
+  if (totalNotifications === 0) {
+    return null;
+  }
 
-    setupSubscription();
-
-    return () => {
-      orderNotificationService.unsubscribeFromNotifications();
-    };
-  }, []);
-
-  const loadNotifications = async () => {
-    setLoading(true);
-    try {
-      const data = await orderNotificationService.getNotifications();
-      setNotifications(data);
-    } catch (error) {
-      console.error('Error loading notifications:', error);
-    } finally {
-      setLoading(false);
-    }
+  const getNotificationColor = () => {
+    if (outOfStockCount > 0) return 'text-red-500';
+    if (lowStockCount > 0) return 'text-yellow-500';
+    return 'text-gray-500';
   };
 
-  const loadUnreadCount = async () => {
-    try {
-      const count = await orderNotificationService.getUnreadCount();
-      setUnreadCount(count);
-    } catch (error) {
-      console.error('Error loading unread count:', error);
-    }
-  };
-
-  const handleNotificationClick = async (notification: OrderNotification) => {
-    try {
-      // Mark as read
-      await orderNotificationService.markAsRead(notification.id);
-      
-      setNotifications(prev => 
-        prev.map(notif => 
-          notif.id === notification.id ? { ...notif, notification_read: true } : notif
-        )
-      );
-      setUnreadCount(prev => Math.max(0, prev - 1));
-      
-      // Navigate to order details using the order ID
-      if (notification.data?.orderId) {
-        navigate(`/customer/orders/${notification.data.orderId}`);
-      }
-      
-      // Close dropdown
-      setIsOpen(false);
-    } catch (error) {
-      console.error('Error handling notification click:', error);
-    }
-  };
-
-  const handleMarkAllAsRead = async () => {
-    try {
-      await orderNotificationService.markAllAsRead();
-      setNotifications(prev => prev.map(notif => ({ ...notif, notification_status: 'read' })));
-      setUnreadCount(0);
-    } catch (error) {
-      console.error('Error marking all notifications as read:', error);
-    }
-  };
-
-  const getNotificationIcon = (status: string) => {
-    switch (status) {
-      case 'verified':
-        return <div className="w-16 h-16 rounded-full flex items-center justify-center overflow-hidden">
-          <img src={successTickGif} alt="Verified" className="w-14 h-14 object-contain" />
-        </div>;
-      case 'delivered':
-        return <div className="w-16 h-16 rounded-full flex items-center justify-center overflow-hidden">
-          <img src={receiveOrderGif} alt="Delivered" className="w-14 h-14 object-contain" />
-        </div>;
-      case 'rejected':
-        return <div className="w-16 h-16 rounded-full flex items-center justify-center overflow-hidden">
-          <img src={failedStatusGif} alt="Rejected" className="w-14 h-14 object-contain" />
-        </div>;
-      case 'delivering':
-        return <div className="w-16 h-16 rounded-full flex items-center justify-center overflow-hidden">
-          <img src={truckkkGif} alt="Delivering" className="w-14 h-14 object-contain" />
-        </div>;
-      case 'placed':
-        return <div className="w-16 h-16 rounded-full flex items-center justify-center overflow-hidden">
-          <img src={clockLoopGif} alt="Pending" className="w-14 h-14 object-contain" />
-        </div>;
-      default:
-        return <div className="w-16 h-16 bg-gray-500 rounded-full flex items-center justify-center text-white text-3xl font-bold">
-          ℹ
-        </div>;
-    }
-  };
-
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
-
-    if (diffInMinutes < 1) return 'Just now';
-    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const getNotificationBgColor = () => {
+    if (outOfStockCount > 0) return 'bg-red-500';
+    if (lowStockCount > 0) return 'bg-yellow-500';
+    return 'bg-gray-500';
   };
 
   return (
-    <div className="relative">
+    <div className={`relative ${className}`}>
       {/* Notification Icon */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={cn(
-          "relative p-2 text-gray-600 hover:text-primary-600 transition-colors",
-          className
-        )}
+        className={`relative p-2.5 rounded-full transition-all duration-200 ${
+          isOpen 
+            ? 'bg-primary-50 text-primary-600 shadow-sm' 
+            : `hover:bg-gray-100 ${getNotificationColor()}`
+        }`}
+        aria-label={`${totalNotifications} stock notifications`}
       >
-        <Bell size={20} />
-        {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[1.1rem] h-5 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold shadow z-10">
-            {unreadCount > 99 ? '99+' : unreadCount}
+        <Bell 
+          size={22} 
+          className={`transition-transform duration-200 ${
+            isOpen ? 'scale-110' : 'hover:scale-105'
+          }`} 
+        />
+        
+        {/* Notification Badge */}
+        {totalNotifications > 0 && (
+          <span className={`absolute -top-1 -right-1 h-5 w-5 rounded-full ${getNotificationBgColor()} text-white text-xs flex items-center justify-center font-bold shadow-lg border-2 border-white animate-pulse`}>
+            {totalNotifications > 99 ? '99+' : totalNotifications}
           </span>
         )}
       </button>
 
-      {/* Notification Dropdown */}
+      {/* Dropdown */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-96 overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-900">Notifications</h3>
-            {unreadCount > 0 && (
-              <button
-                onClick={handleMarkAllAsRead}
-                className="text-xs text-primary-600 hover:text-primary-700"
-              >
-                Mark all as read
-              </button>
-            )}
+        <>
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 z-10" 
+            onClick={() => setIsOpen(false)}
+          />
+          
+          {/* Notification Panel */}
+          <div className="absolute right-0 top-full mt-2 w-80 sm:w-80 max-w-[calc(100vw-1rem)] sm:max-w-[calc(100vw-2rem)] bg-white border border-gray-200 rounded-xl shadow-xl z-20 max-h-96 overflow-y-auto animate-in slide-in-from-top-2 duration-200">
+            <div className="p-3 sm:p-4 border-b border-gray-200">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900">Stock Alerts</h3>
+              <p className="text-xs sm:text-sm text-gray-600">
+                {outOfStockCount > 0 && `${outOfStockCount} out of stock`}
+                {outOfStockCount > 0 && lowStockCount > 0 && ', '}
+                {lowStockCount > 0 && `${lowStockCount} low stock`}
+              </p>
           </div>
 
-          {/* Notifications List */}
-          <div className="max-h-80 overflow-y-auto">
-            {loading ? (
-              <div className="p-4 text-center text-gray-500">
-                Loading notifications...
-              </div>
-            ) : notifications.length === 0 ? (
-              <div className="p-4 text-center text-gray-500">
-                No notifications
-              </div>
-            ) : (
-              notifications.map((notification) => (
+            <div className="p-2">
+              {lowStockProducts.map((product) => (
                 <div
-                  key={notification.id}
-                                     className={cn(
-                     "p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer",
-                     !notification.notification_read && "bg-blue-50"
-                   )}
-                  onClick={() => handleNotificationClick(notification)}
+                  key={product.id}
+                  className={`flex items-center p-2 sm:p-3 rounded-lg mb-2 transition-all duration-200 hover:shadow-sm ${
+                    product.quantity === 0 
+                      ? 'bg-red-50 border border-red-200 hover:bg-red-100' 
+                      : 'bg-yellow-50 border border-yellow-200 hover:bg-yellow-100'
+                  }`}
                 >
-                  <div className="flex items-start gap-3">
-                                         <div className="mt-1">
-                       {getNotificationIcon(notification.notification_status)}
-                     </div>
-                    <div className="flex-1 min-w-0">
-                                             <div className="flex items-start justify-between">
-                         <h4 className="text-sm font-medium text-gray-900 truncate">
-                           {(() => {
-                             console.log('Notification status:', notification.notification_status);
-                             console.log('Notification message:', notification.notification_message);
-                             
-                             switch (notification.notification_status) {
-                               case 'verified': return 'Order Verified';
-                               case 'rejected': return 'Payment Rejected';
-                               case 'delivering': return 'Out for Delivery';
-                               case 'delivered': return 'Order Delivered';
-                               case 'placed': return 'Order Placed';
-                               default: return 'Order Placed';
-                             }
-                           })()}
-                         </h4>
-                         {!notification.notification_read && (
-                           <div className="w-2 h-2 bg-blue-500 rounded-full ml-2 flex-shrink-0" />
-                         )}
-                       </div>
-                                               <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-                          {notification.notification_message}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-2 flex items-center justify-between">
-                          <span>{formatTime(notification.notification_created_at)}</span>
-                          <span className="text-xs text-gray-300">
-                            {new Date(notification.notification_created_at).toLocaleTimeString([], { 
-                              hour: '2-digit', 
-                              minute: '2-digit',
-                              second: '2-digit'
-                            })}
-                          </span>
-                        </p>
+                  {/* Product Image */}
+                  <div className="flex-shrink-0 mr-2 sm:mr-3">
+                    {product.image_url ? (
+                      <img
+                        src={product.image_url}
+                        alt={product.name}
+                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg object-cover border border-gray-200 shadow-sm"
+                        onError={(e) => {
+                          // Fallback to icon if image fails to load
+                          e.currentTarget.style.display = 'none';
+                          e.currentTarget.nextElementSibling.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div 
+                      className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center ${
+                        product.quantity === 0 ? 'bg-red-100 text-red-500' : 'bg-yellow-100 text-yellow-500'
+                      }`}
+                      style={{ display: product.image_url ? 'none' : 'flex' }}
+                    >
+                      {product.quantity === 0 ? (
+                        <AlertTriangle size={16} className="sm:w-5 sm:h-5" />
+                      ) : (
+                        <Package size={16} className="sm:w-5 sm:h-5" />
+                      )}
                     </div>
                   </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">
+                      {product.name}
+                    </p>
+                    <p className={`text-xs ${
+                      product.quantity === 0 ? 'text-red-600' : 'text-yellow-600'
+                    }`}>
+                      {product.quantity === 0 
+                        ? 'Out of Stock' 
+                        : `Low Stock: ${product.quantity}${product.unit || ''}`
+                      }
+                    </p>
+                  </div>
                 </div>
-              ))
-            )}
+              ))}
+            </div>
+            
+            <div className="p-3 sm:p-4 border-t border-gray-200 bg-gray-50">
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  window.location.href = '/admin/products';
+                }}
+                className="w-full text-xs sm:text-sm text-primary-600 hover:text-primary-700 font-medium"
+              >
+                View All Products →
+              </button>
+            </div>
           </div>
-        </div>
-      )}
-
-      {/* Backdrop */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-40"
-          onClick={() => setIsOpen(false)}
-        />
+        </>
       )}
     </div>
   );

@@ -14,6 +14,7 @@ import SalesFilters from '../components/SalesFilters';
 
 type OrderStatus = 'pending' | 'assigned' | 'delivering' | 'delivered';
 
+
 type DashboardStats = {
   totalOrders: number;
   totalProducts: number;
@@ -51,6 +52,7 @@ export default function DashboardPage() {
       setSalesLoading(false);
     }
   }, []);
+
 
   useEffect(() => {
     loadStats();
@@ -267,6 +269,7 @@ export default function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+
     </div>
   );
 }

@@ -103,9 +103,9 @@ export default function RoutePage() {
       case 'assigned':
         return <Target className="h-5 w-5 text-blue-500" />;
       case 'delivering':
-        return <Truck className="h-5 w-5 text-orange-500" />;
+        return <Truck className="h-5 w-5 text-blue-600" />;
       default:
-        return <CheckCircle className="h-5 w-5 text-green-500" />;
+        return <CheckCircle className="h-5 w-5 text-blue-500" />;
     }
   };
 
@@ -114,9 +114,9 @@ export default function RoutePage() {
       case 'assigned':
         return 'bg-blue-50 border-blue-200 text-blue-800';
       case 'delivering':
-        return 'bg-orange-50 border-orange-200 text-orange-800';
+        return 'bg-blue-100 border-blue-300 text-blue-900';
       default:
-        return 'bg-green-50 border-green-200 text-green-800';
+        return 'bg-blue-50 border-blue-200 text-blue-800';
     }
   };
 

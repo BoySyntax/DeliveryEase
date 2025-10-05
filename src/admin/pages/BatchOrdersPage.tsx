@@ -8,7 +8,6 @@ import Loader from '../../ui/components/Loader';
 import { toast } from 'react-hot-toast';
 import Select from '../../ui/components/Select';
 import { Package, Users, MapPin, Weight, Truck, RefreshCw, Zap, AlertTriangle } from 'lucide-react';
-import { batchAssignmentEmailService } from '../../lib/batchAssignmentEmailService';
 
 type OrderStatus = Database['public']['Enums']['order_status'];
 
@@ -48,7 +47,7 @@ interface OrderData {
 interface BatchData {
   id: string;
   created_at: string;
-  status: 'pending' | 'assigned' | 'delivering' | 'delivered';
+  status: 'pending' | 'ready_for_delivery' | 'assigned' | 'delivering' | 'delivered';
   driver_id: string | null;
   barangay: string;
   batch_number: number;
@@ -143,12 +142,12 @@ export default function BatchOrdersPage() {
     }, 0);
   };
 
-  // Auto-assign batches that reach their maximum capacity
+  // Auto-assign batches that reach their minimum threshold (3500kg)
   const checkAndAutoAssignBatches = async (batches: BatchData[]) => {
     const batchesToAssign = batches.filter(batch => {
       const weight = calculateBatchWeight(batch);
-      const maxWeight = batch.max_weight || 3500;
-      return weight >= maxWeight && batch.status === 'pending' && !batch.driver_id;
+      const minWeight = 3500; // Minimum threshold for auto-assignment
+      return weight >= minWeight && (batch.status === 'pending' || batch.status === 'ready_for_delivery') && !batch.driver_id;
     });
 
     if (batchesToAssign.length === 0) return;
@@ -160,70 +159,41 @@ export default function BatchOrdersPage() {
     }
   };
 
-  // Auto-assign a single batch to available driver
+  // Auto-assign a single batch to available driver using database function
   const autoAssignBatch = async (batch: BatchData) => {
     try {
-      // Find available driver (not currently assigned to any batch)
-      const { data: availableDrivers, error: driversError } = await supabase
-        .from('profiles')
-        .select('id, name')
-        .eq('role', 'driver');
-
-      if (driversError) throw driversError;
-
-      if (!availableDrivers || availableDrivers.length === 0) {
-        console.log('❌ No drivers available for auto-assignment');
-        toast.error(`Batch ${batch.batch_number} ready but no drivers available`);
-        return;
-      }
-
-      // Get drivers not currently assigned to any active batch
-      const { data: assignedDrivers } = await supabase
-        .from('order_batches')
-        .select('driver_id')
-        .in('status', ['assigned', 'delivering'])
-        .not('driver_id', 'is', null);
-
-      const assignedDriverIds = (assignedDrivers || []).map(b => b.driver_id);
-      const availableForAssignment = availableDrivers.filter(d => !assignedDriverIds.includes(d.id));
-
-      if (availableForAssignment.length === 0) {
-        console.log('❌ All drivers are currently busy');
-        toast.error(`Batch ${batch.batch_number} ready but all drivers are busy`);
-        return;
-      }
-
-      // Assign to first available driver
-      const selectedDriver = availableForAssignment[0];
+      console.log(`🔄 Attempting to auto-assign Batch ${batch.batch_number}...`);
       
-      const { error: assignError } = await supabase
-        .from('order_batches')
-        .update({ 
-          driver_id: selectedDriver.id,
-          status: 'assigned'
-        })
-        .eq('id', batch.id);
+      // Use database function to handle assignment
+      const { data, error } = await supabase
+        .rpc('auto_assign_batch_to_driver', { batch_uuid: batch.id });
 
-      if (assignError) throw assignError;
+      if (error) {
+        console.error('Database assignment error:', error);
+        throw error;
+      }
+
+      if (!data || data.length === 0) {
+        console.log('❌ No assignment result returned');
+        toast.error(`Failed to auto-assign Batch ${batch.batch_number}`);
+        return;
+      }
+
+      const result = data[0];
+      
+      if (!result.success) {
+        console.log(`❌ Assignment failed: ${result.message}`);
+        toast.error(`Batch ${batch.batch_number}: ${result.message}`);
+        return;
+      }
 
       const weight = calculateBatchWeight(batch);
-      console.log(`✅ Batch ${batch.batch_number} auto-assigned to ${selectedDriver.name}`);
+      console.log(`✅ Batch ${batch.batch_number} auto-assigned to ${result.driver_name}`);
       
-      // Send batch assignment email to customers
-      try {
-        const emailSent = await batchAssignmentEmailService.sendBatchAssignmentEmailForBatch(batch.id, selectedDriver.id);
-        if (emailSent) {
-          console.log('📧 Batch assignment email sent successfully');
-        } else {
-          console.error('❌ Failed to send batch assignment email');
-        }
-      } catch (emailError) {
-        console.error('❌ Error sending batch assignment email:', emailError);
-      }
       
       // Show success toast with batch details
       toast.success(
-        `🚚 Batch ${batch.batch_number} auto-assigned to ${selectedDriver.name}!\n` +
+        `🚚 Batch ${batch.batch_number} auto-assigned to ${result.driver_name}!\n` +
         `📦 ${batch.orders.length} orders, ${weight.toFixed(1)}kg total`,
         { 
           duration: 6000,
@@ -287,11 +257,11 @@ export default function BatchOrdersPage() {
         setDrivers(driversData);
       }
 
-      // Load pending batches that have orders and weight > 0
+      // Load pending and ready_for_delivery batches that have orders and weight > 0
       const { data: batchData, error: batchError } = await supabase
         .from('order_batches')
         .select('*')
-        .eq('status', 'pending')
+        .in('status', ['pending', 'ready_for_delivery'])
         .gt('total_weight', 0) // Only batches with weight > 0
         .order('created_at', { ascending: false });
 
@@ -392,17 +362,6 @@ export default function BatchOrdersPage() {
 
       if (error) throw error;
 
-      // Send batch assignment email to customers
-      try {
-        const emailSent = await batchAssignmentEmailService.sendBatchAssignmentEmailForBatch(batchId, driverId);
-        if (emailSent) {
-          console.log('📧 Batch assignment email sent successfully');
-        } else {
-          console.error('❌ Failed to send batch assignment email');
-        }
-      } catch (emailError) {
-        console.error('❌ Error sending batch assignment email:', emailError);
-      }
 
       toast.success('Driver assigned successfully');
       loadData();
@@ -429,8 +388,8 @@ export default function BatchOrdersPage() {
   // Count batches ready for auto-assignment
   const batchesReadyForAssignment = batches.filter(batch => {
     const weight = calculateBatchWeight(batch);
-    const maxWeight = batch.max_weight || 3500;
-    return weight >= maxWeight && batch.status === 'pending' && !batch.driver_id;
+    const minWeight = 3500; // Minimum threshold for auto-assignment
+    return weight >= minWeight && (batch.status === 'pending' || batch.status === 'ready_for_delivery') && !batch.driver_id;
   });
 
   return (
@@ -493,6 +452,12 @@ export default function BatchOrdersPage() {
                             <MapPin className="w-4 h-4 mr-1" />
                             {batch.barangay}
                           </span>
+                          {batch.status === 'ready_for_delivery' && (
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                              <Zap className="w-4 h-4 mr-1" />
+                              Ready for Assignment
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -551,11 +516,11 @@ export default function BatchOrdersPage() {
                       </div>
                       
                       {/* Capacity Status */}
-                      {calculateBatchWeight(batch) >= (batch.max_weight || 3500) ? (
+                      {calculateBatchWeight(batch) >= 3500 ? (
                         <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-1 bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-medium">
+                          <div className="flex items-center gap-1 bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
                             <Zap className="w-3 h-3" />
-                            BATCH FULL - READY FOR ASSIGNMENT
+                            READY FOR ASSIGNMENT (3500kg+)
                           </div>
                         </div>
                       ) : (

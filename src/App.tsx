@@ -19,6 +19,7 @@ const AdminBatchOrders = lazy(() => import('./admin/pages/BatchOrdersPage'));
 const AdminOrderList = lazy(() => import('./admin/pages/OrderListPage'));
 const AdminDrivers = lazy(() => import('./admin/pages/DriversPage'));
 const AdminDriverDetail = lazy(() => import('./admin/pages/DriverDetailPage'));
+const AdminEmergencyRequests = lazy(() => import('./admin/pages/EmergencyRequestsPage'));
 
 // Customer routes - grouped for better chunking
 const CustomerLayout = lazy(() => import('./customer/CustomerLayout'));
@@ -123,6 +124,7 @@ function App() {
           <Route path="order-list" element={<AdminOrderList />} />
           <Route path="drivers" element={<AdminDrivers />} />
           <Route path="drivers/:driverId" element={<AdminDriverDetail />} />
+          <Route path="emergency-requests" element={<AdminEmergencyRequests />} />
         </Route>
 
         {/* Customer Routes */}

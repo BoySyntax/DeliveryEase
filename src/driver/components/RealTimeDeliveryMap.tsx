@@ -263,14 +263,20 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
       {
         enableHighAccuracy: true,
         timeout: 30000, // 30 seconds for high accuracy
-        maximumAge: 60000, // 1 minute cache
-        description: "High accuracy GPS"
+        maximumAge: 0, // No cache - force fresh location
+        description: "High accuracy GPS (fresh)"
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 20000, // 20 seconds for retry
+        maximumAge: 0, // No cache
+        description: "High accuracy GPS retry"
       },
       {
         enableHighAccuracy: false,
         timeout: 15000, // 15 seconds for network-based location
-        maximumAge: 300000, // 5 minutes cache
-        description: "Network-based location"
+        maximumAge: 0, // No cache
+        description: "Network-based location (fresh)"
       }
     ];
 
@@ -1378,15 +1384,6 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
 
 
               </div>
-              <button
-                onClick={() => {
-                  console.log('🔄 Manual refresh of delivery locations...');
-                  loadDeliveryLocations();
-                }}
-                className="px-3 py-1 rounded text-xs font-medium bg-blue-100 text-blue-700 hover:bg-blue-200"
-              >
-                🔄 Refresh Status
-              </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {getSortedDeliveryLocations().map((location, index) => {
@@ -1410,19 +1407,19 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
                     key={location.id}
                     className={`p-3 rounded-lg border ${
                       isCompleted 
-                        ? 'bg-green-50 border-green-200' 
+                        ? 'bg-blue-50 border-blue-200' 
                         : isNextToDeliver 
-                        ? 'bg-yellow-50 border-yellow-200' 
+                        ? 'bg-blue-100 border-blue-300' 
                         : 'bg-gray-50 border-gray-200'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white ${
-                        isCompleted ? 'bg-green-500' : isNextToDeliver ? 'bg-yellow-500' : 'bg-gray-400'
+                        isCompleted ? 'bg-blue-500' : isNextToDeliver ? 'bg-blue-600' : 'bg-gray-400'
                       }`}>
                         {isCompleted ? '✓' : sequenceNumber}
                       </div>
-                      <span className="font-semibold text-green-600">₱{location.total.toLocaleString()}</span>
+                      <span className="font-semibold text-blue-600">₱{location.total.toLocaleString()}</span>
                     </div>
                     <p className="font-medium text-gray-900 text-sm">{location.customer_name}</p>
                     <p className="text-xs text-gray-600">{location.address}</p>

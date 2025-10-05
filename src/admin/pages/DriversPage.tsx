@@ -58,12 +58,12 @@ export default function DriversPage() {
             activeOrders = ordersInBatches || 0;
           }
 
-          // Get total completed orders (delivered)
+          // Get total completed batches (delivered batches) for this driver
           const { count: totalOrders } = await supabase
-            .from('orders')
+            .from('order_batches')
             .select('*', { count: 'exact', head: true })
             .eq('driver_id', driver.id)
-            .eq('delivery_status', 'delivered');
+            .eq('status', 'delivered');
 
           return {
             ...driver,
@@ -129,7 +129,7 @@ export default function DriversPage() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Total Deliveries</p>
+                  <p className="text-sm text-gray-500">Total Batch Deliveries</p>
                   <p className="mt-1 text-2xl font-semibold text-primary-600">
                     {driver.total_orders}
                   </p>

@@ -25,7 +25,167 @@ serve(async (req) => {
     const body = await req.json();
     console.log('Request body received:', JSON.stringify(body, null, 2));
 
-    const { orderId, customerName, customerEmail, status, orderItems, totalAmount } = body;
+    const { orderId, customerName, customerEmail, status, orderItems, totalAmount, type, adminEmail, adminName, driverName, address, latitude, longitude } = body;
+    
+    // Handle rescue request emails first
+    if (type === 'rescue_request') {
+      try {
+        console.log('=== RESCUE REQUEST PROCESSING ===');
+        console.log('Admin Email:', adminEmail);
+        console.log('Admin Name:', adminName);
+        console.log('Driver Name:', driverName);
+        console.log('Address:', address);
+        console.log('Latitude:', latitude);
+        console.log('Longitude:', longitude);
+
+        // Validate required fields
+        if (!adminEmail || !driverName || !address || !latitude || !longitude) {
+          console.error('Missing required fields for rescue request');
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: 'Missing required fields',
+              message: 'Admin email, driver name, address, latitude, and longitude are required'
+            }),
+            { 
+              status: 400, 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          );
+        }
+
+      const rescueEmailHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>🚨 URGENT: Driver Rescue Request</title>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; background-color: #f4f4f4; }
+            .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
+            .header { background: linear-gradient(135deg, #dc2626, #ef4444); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; text-align: center; }
+            .alert-icon { font-size: 48px; margin-bottom: 10px; }
+            .content { margin-bottom: 20px; }
+            .location-info { background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #dc2626; margin: 15px 0; }
+            .map-link { display: inline-block; background: #dc2626; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 10px 0; font-weight: bold; }
+            .map-link:hover { background: #b91c1c; }
+            .footer { text-align: center; color: #666; font-size: 14px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }
+            .coordinates { font-family: monospace; background: #e5e7eb; padding: 8px; border-radius: 4px; margin: 10px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <div class="alert-icon">🚨</div>
+              <h1>URGENT: Driver Rescue Request</h1>
+              <p>Immediate attention required</p>
+            </div>
+            
+            <div class="content">
+              <h2>Driver Information</h2>
+              <p><strong>Driver Name:</strong> ${driverName}</p>
+              <p><strong>Request Time:</strong> ${new Date().toLocaleString()}</p>
+              
+              <div class="location-info">
+                <h3>📍 Current Location</h3>
+                <p><strong>Address:</strong> ${address}</p>
+                <div class="coordinates">
+                  <strong>Coordinates:</strong> ${latitude}, ${longitude}
+                </div>
+                <a href="https://www.google.com/maps?q=${latitude},${longitude}" target="_blank" class="map-link">
+                  🗺️ View on Google Maps
+                </a>
+              </div>
+              
+              <h3>⚠️ Action Required</h3>
+              <p>Please contact the driver immediately and provide assistance. The driver has requested rescue/emergency support.</p>
+              
+              <ul>
+                <li>Call the driver if you have their contact information</li>
+                <li>Send backup support to the location</li>
+                <li>Monitor the situation closely</li>
+                <li>Update the driver on assistance status</li>
+              </ul>
+            </div>
+            
+            <div class="footer">
+              <p>This is an automated emergency notification from DeliveryEase Driver Safety System.</p>
+              <p>Please respond immediately to ensure driver safety.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const rescueEmailData = {
+        from: 'DeliveryEase Safety <safety@deliveryease.com>',
+        to: adminEmail,
+        subject: `🚨 URGENT: ${driverName} - Driver Rescue Request`,
+        html: rescueEmailHtml
+      };
+
+      console.log('Sending rescue request email to:', adminEmail);
+      
+      // Use the same Resend API key as the main email processing
+      const apiKey = 're_9mbohhSC_8Qjsdd1R93WNED3NewD11f47';
+      console.log('Using Resend API key for rescue request:', apiKey ? 'Yes' : 'No');
+      
+      const rescueResponse = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(rescueEmailData),
+      });
+
+      if (!rescueResponse.ok) {
+        console.error('Failed to send rescue request email:', rescueResponse.status, rescueResponse.statusText);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Failed to send rescue request email',
+            status: rescueResponse.status
+          }),
+          { 
+            status: 500, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        );
+      }
+
+      const rescueResult = await rescueResponse.json();
+      console.log('Rescue request email sent successfully:', rescueResult);
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'Rescue request email sent successfully',
+          driverName,
+          adminEmail,
+          emailId: rescueResult.id
+        }),
+        { 
+          status: 200, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+      } catch (rescueError) {
+        console.error('Error in rescue request processing:', rescueError);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Rescue request processing failed',
+            message: rescueError.message
+          }),
+          { 
+            status: 500, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        );
+      }
+    }
     
     console.log('=== EMAIL PROCESSING DEBUG ===');
     console.log('Order ID:', orderId);

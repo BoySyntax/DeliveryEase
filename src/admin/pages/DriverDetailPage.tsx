@@ -131,11 +131,12 @@ export default function DriverDetailPage() {
         activeOrders = ordersInBatches || 0;
       }
 
+      // Count completed batches (delivered batches) for this driver
       const { count: totalOrders } = await supabase
-        .from('orders')
+        .from('order_batches')
         .select('*', { count: 'exact', head: true })
         .eq('driver_id', driverId)
-        .eq('delivery_status', 'delivered');
+        .eq('status', 'delivered');
 
       // Get the first order date for this driver
       const { data: firstOrder } = await supabase
@@ -385,7 +386,7 @@ export default function DriverDetailPage() {
                   <p className="text-2xl font-semibold text-green-600">
                     {driver.total_orders}
                   </p>
-                  <p className="text-sm text-gray-500">Total Deliveries</p>
+                  <p className="text-sm text-gray-500">Total Batch Deliveries</p>
                 </div>
               </div>
             </CardContent>

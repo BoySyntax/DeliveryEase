@@ -4,7 +4,6 @@ import { supabase } from '../../lib/supabase';
 import { Card, CardContent } from '../../ui/components/Card';
 import Loader from '../../ui/components/Loader';
 import { formatCurrency } from '../../lib/utils';
-import { orderNotificationService } from '../../lib/orderNotificationService';
 import { 
   Package, 
   CheckCircle, 
@@ -15,7 +14,8 @@ import {
   Users,
   Weight,
   TrendingUp,
-  RefreshCw
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 import { useProfile } from '../../lib/auth';
 import { toast } from 'react-hot-toast';
@@ -106,6 +106,7 @@ export default function DashboardPage() {
   const [recentCompletedBatch, setRecentCompletedBatch] = useState<CompletedBatch | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastNotificationTime, setLastNotificationTime] = useState<number>(0);
+  const [isSendingRescue, setIsSendingRescue] = useState(false);
 
   useEffect(() => {
     if (profile?.id) {
@@ -702,6 +703,180 @@ export default function DashboardPage() {
     }
   };
 
+  const getCurrentLocation = (): Promise<{lat: number, lng: number, address: string}> => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('Geolocation is not supported by this browser'));
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          
+          // For now, just use coordinates as address
+          // TODO: Add proper reverse geocoding service if needed
+          resolve({
+            lat: latitude,
+            lng: longitude,
+            address: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+          });
+        },
+        (error) => {
+          reject(error);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 60000
+        }
+      );
+    });
+  };
+
+  const handleRescueRequest = async () => {
+    if (!profile?.id) {
+      toast.error('Driver profile not found');
+      return;
+    }
+
+    try {
+      setIsSendingRescue(true);
+      
+      // Get current location
+      const location = await getCurrentLocation();
+      
+      // For now, just send the email notification
+      // TODO: Add database storage once migration is run
+      console.log('Rescue request data:', {
+        driver_id: profile.id,
+        driver_name: profile.name,
+        latitude: location.lat,
+        longitude: location.lng,
+        address: location.address,
+        status: 'pending',
+        requested_at: new Date().toISOString()
+      });
+
+      // Send notification to admins
+      console.log('🚨 Calling notifyAdminsOfRescueRequest...');
+      await notifyAdminsOfRescueRequest(profile.name || 'Driver', location);
+      console.log('✅ notifyAdminsOfRescueRequest completed');
+
+      toast.success('🚨 Rescue request sent! Admin has been notified of your location.', {
+        duration: 8000,
+        icon: '🚨'
+      });
+      
+      // Show location details in console for debugging
+      console.log('📍 Driver Location Details:', {
+        driver: profile.name,
+        coordinates: `${location.lat}, ${location.lng}`,
+        address: location.address,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      console.error('Error sending rescue request:', error);
+      if (error instanceof Error && error.message?.includes('FunctionsHttpError')) {
+        toast.error('Server error. Please try again or contact support directly.');
+      } else if (error instanceof Error && error.message?.includes('Geolocation')) {
+        toast.error('Location access denied. Please enable location services and try again.');
+      } else {
+        toast.error('Failed to send rescue request. Please try again or contact support directly.');
+      }
+    } finally {
+      setIsSendingRescue(false);
+    }
+  };
+
+
+  const notifyAdminsOfRescueRequest = async (driverName: string, location: {lat: number, lng: number, address: string}) => {
+    try {
+      console.log('🔍 Looking for admins to notify...');
+      
+      // First, create a database notification for the emergency request
+      console.log('📝 Creating emergency notification in database...');
+      
+      // Get admin user ID for the notification
+      const { data: adminData, error: adminError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('role', 'admin')
+        .limit(1)
+        .single();
+
+      if (adminError || !adminData) {
+        console.error('❌ No admin found for notification:', adminError);
+        // Continue without notification if no admin found
+      } else {
+        const { data: notificationData, error: notificationError } = await supabase
+          .from('notifications')
+          .insert({
+            user_id: adminData.id,
+            type: 'info',
+            title: `🚨 Rescue Request from ${driverName}`,
+            message: `Driver ${driverName} has requested emergency assistance at ${location.address}`,
+            read: false,
+            data: {
+              driver_name: driverName,
+              driver_id: profile?.id || '',
+              driver_avatar_url: profile?.avatar_url || undefined,
+              address: location.address,
+              latitude: location.lat,
+              longitude: location.lng,
+              requested_at: new Date().toISOString()
+            }
+          })
+          .select()
+          .single();
+
+        if (notificationError) {
+          console.error('❌ Error creating emergency notification:', notificationError);
+        } else {
+          console.log('✅ Emergency notification created:', notificationData);
+        }
+      }
+
+      // Get all admin emails
+      const { data: admins, error: adminsError } = await supabase
+        .from('profiles')
+        .select('email, name')
+        .eq('role', 'admin');
+
+      if (adminsError || !admins || admins.length === 0) {
+        console.error('❌ No admins found to notify:', adminsError);
+        return;
+      }
+
+      console.log('👥 Found admins:', admins);
+
+      // Send email to each admin
+      for (const admin of admins) {
+        if (admin.email) {
+          try {
+            console.log(`📧 Sending rescue email to admin: ${admin.email}`);
+            await directEmailService.sendRescueRequestEmail({
+              adminEmail: admin.email,
+              adminName: admin.name || 'Admin',
+              driverName: driverName,
+              driverId: profile?.id || '',
+              driverAvatarUrl: profile?.avatar_url || undefined,
+              address: location.address,
+              latitude: location.lat,
+              longitude: location.lng
+            });
+            console.log(`✅ Rescue email sent successfully to: ${admin.email}`);
+          } catch (emailError) {
+            console.error('❌ Error sending rescue email to admin:', admin.email, emailError);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error notifying admins:', error);
+    }
+  };
+
 
 
   if (loading) {
@@ -742,20 +917,21 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6 pb-20 md:pb-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-700 -mx-3 sm:-mx-4 md:-mx-6 lg:-mx-8 -mt-3 sm:-mt-4 md:-mt-6 px-3 sm:px-4 md:px-6 lg:px-8 pt-3 sm:pt-4 md:pt-6 pb-6 sm:pb-8 text-white">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="bg-gradient-to-r from-blue-700 to-blue-800 -mx-3 sm:-mx-4 md:-mx-6 lg:-mx-8 -mt-3 sm:-mt-4 md:-mt-6 px-3 sm:px-4 md:px-6 lg:px-8 pt-3 sm:pt-4 md:pt-6 pb-6 sm:pb-8 text-white">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold mb-1 sm:mb-2">Driver Dashboard</h1>
-            <p className="text-blue-100 text-sm sm:text-base">Welcome back, {profile?.name}!</p>
+            <p className="text-white text-xl sm:text-2xl font-bold">Welcome back, {profile?.name}!</p>
           </div>
-          <button
-            onClick={handleRefreshDashboard}
-            disabled={loading}
-            className="bg-white/20 hover:bg-white/30 text-white px-3 sm:px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50 text-sm sm:text-base w-full sm:w-auto"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button
+              onClick={handleRescueRequest}
+              disabled={isSendingRescue}
+              className="bg-red-500 hover:bg-red-600 text-white px-3 sm:px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50 text-sm sm:text-base w-full sm:w-auto"
+            >
+              <AlertTriangle className={`h-4 w-4 ${isSendingRescue ? 'animate-pulse' : ''}`} />
+              {isSendingRescue ? 'Sending...' : 'Rescue'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -782,7 +958,7 @@ export default function DashboardPage() {
 
       {/* Active Batch Section */}
       {activeBatch ? (
-        <Card className="border-2 border-green-200 bg-green-50">
+        <Card className="border-2 border-blue-200 bg-blue-50">
           <CardContent className="p-6">
             <div className="flex items-start justify-between mb-4">
               <div>
@@ -792,7 +968,7 @@ export default function DashboardPage() {
               <div className={`px-3 py-1 rounded-full text-sm font-medium ${
                 activeBatch.status === 'assigned' 
                   ? 'bg-blue-100 text-blue-800' 
-                  : 'bg-orange-100 text-orange-800'
+                  : 'bg-blue-200 text-blue-900'
               }`}>
                 {activeBatch.status === 'assigned' ? '📋 Ready' : '🚚 Delivering'}
               </div>
@@ -845,7 +1021,7 @@ export default function DashboardPage() {
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div 
-                  className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full transition-all duration-500"
+                  className="bg-gradient-to-r from-blue-400 to-blue-500 h-2 rounded-full transition-all duration-500"
                   style={{ 
                     width: `${Math.min(100, (activeBatch.total_weight / (activeBatch.max_weight || 3500)) * 100)}%` 
                   }}
@@ -869,7 +1045,7 @@ export default function DashboardPage() {
               )}
               <button 
                 onClick={handleViewRoute}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm sm:text-base"
+                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm sm:text-base"
               >
                 <Route className="h-4 w-4 sm:h-5 sm:w-5" />
                 View Route
@@ -887,7 +1063,7 @@ export default function DashboardPage() {
                   <div key={order.id} className="bg-white rounded-lg p-3">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-3">
-                        <div className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-medium">
+                        <div className="w-6 h-6 bg-blue-200 text-blue-800 rounded-full flex items-center justify-center text-sm font-medium">
                           {index + 1}
                         </div>
                         <div>
@@ -921,7 +1097,7 @@ export default function DashboardPage() {
                                   {item.product?.name || 'Unknown'}
                                 </p>
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                                  <span className="text-xs bg-blue-200 text-blue-800 px-1.5 py-0.5 rounded">
                                     x{item.quantity}
                                   </span>
                                   {item.product?.weight && (
@@ -965,14 +1141,14 @@ export default function DashboardPage() {
 
       {/* Recently Completed Batch Section */}
       {recentCompletedBatch && !activeBatch && (
-        <Card className="border-2 border-green-200 bg-green-50">
+        <Card className="border-2 border-blue-200 bg-blue-50">
           <CardContent className="p-6">
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 className="text-xl font-bold text-gray-900 mb-2">Recently Completed</h2>
                 <p className="text-sm text-gray-600">Batch #{recentCompletedBatch.id.slice(0, 8)}</p>
               </div>
-              <div className="px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+              <div className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
                 ✅ Completed
               </div>
             </div>
@@ -1006,7 +1182,7 @@ export default function DashboardPage() {
                 <Package className="h-5 w-5 text-gray-500" />
                 <div>
                   <p className="text-sm text-gray-600">Revenue Earned</p>
-                  <p className="font-semibold text-green-600">
+                  <p className="font-semibold text-blue-600">
                     {formatCurrency(recentCompletedBatch.orders.reduce((sum, order) => sum + order.total, 0))}
                   </p>
                 </div>
@@ -1016,12 +1192,12 @@ export default function DashboardPage() {
             {/* Delivery Summary */}
             <div className="bg-white rounded-lg p-4 mb-4">
               <h3 className="font-semibold mb-3 flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-green-600" />
+                <CheckCircle className="h-5 w-5 text-blue-600" />
                 Delivery Summary
               </h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-green-600">
+                  <p className="text-2xl font-bold text-blue-600">
                     {recentCompletedBatch.orders.filter(order => order.delivery_status === 'delivered').length}
                   </p>
                   <p className="text-sm text-gray-600">Successfully Delivered</p>
@@ -1043,16 +1219,16 @@ export default function DashboardPage() {
 
             {/* Action Buttons */}
             <div className="flex gap-3">
-              <button
+                <button
                 onClick={handleRefreshDashboard}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
               >
                 <RefreshCw className="h-5 w-5" />
                 Refresh Dashboard
               </button>
               <button
                 onClick={() => navigate('/driver/route')}
-                className="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                className="flex-1 bg-blue-400 hover:bg-blue-500 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
               >
                 <MapPin className="h-5 w-5" />
                 View Route History
@@ -1073,7 +1249,7 @@ export default function DashboardPage() {
             <div className="mt-4">
               <button
                 onClick={handleRefreshDashboard}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg flex items-center justify-center gap-2 mx-auto transition-colors"
+                className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg flex items-center justify-center gap-2 mx-auto transition-colors"
               >
                 <RefreshCw className="h-4 w-4" />
                 Check for New Assignments

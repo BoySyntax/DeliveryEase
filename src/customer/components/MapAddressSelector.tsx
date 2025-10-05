@@ -262,46 +262,81 @@ export default function MapAddressSelector({
     setIsLoading(true);
     
     if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const coords = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          };
-          
-          setCurrentLocation(coords);
-          
-          if (mapInstanceRef.current) {
-            const latLng = new google.maps.LatLng(coords.lat, coords.lng);
-            updateMarkerPosition(latLng);
-            reverseGeocode(latLng);
-          }
-          
-          setIsLoading(false);
-        },
-        (error) => {
-          console.error('Error getting location:', error);
-          
-          // Handle different error types with mobile-specific messaging
-          let errorMessage = 'Could not get your location. ';
-          let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-          
-          switch(error.code) {
-            case error.PERMISSION_DENIED:
-              if (isMobile && location.protocol === 'http:') {
-                errorMessage += 'Mobile devices require HTTPS for location access. Please use HTTPS or manually select your location on the map.';
-              } else {
-                errorMessage += 'Location access was denied. Please allow location access and try again.';
-              }
-              break;
-            case error.POSITION_UNAVAILABLE:
-              errorMessage += 'Location information is unavailable.';
-              break;
-            case error.TIMEOUT:
-              errorMessage += 'Location request timed out.';
-              break;
-            default:
-              if (isMobile && location.protocol === 'http:') {
+      // Try multiple geolocation strategies for better accuracy
+      const tryGeolocation = (config: any, attempt: number) => {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude, accuracy } = position.coords;
+            
+            console.log(`📍 Location attempt ${attempt}:`, {
+              lat: latitude,
+              lng: longitude,
+              accuracy: `${Math.round(accuracy || 0)}m`,
+              config: config.description
+            });
+            
+            // Only accept location if accuracy is reasonable (less than 200m)
+            if (accuracy && accuracy > 200 && attempt < 3) {
+              console.log(`⚠️ Location accuracy poor (${Math.round(accuracy)}m), trying again...`);
+              tryGeolocation({
+                enableHighAccuracy: true,
+                timeout: 20000,
+                maximumAge: 0,
+                description: `High accuracy retry ${attempt + 1}`
+              }, attempt + 1);
+              return;
+            }
+            
+            const coords = {
+              lat: latitude,
+              lng: longitude,
+            };
+            
+            setCurrentLocation(coords);
+            
+            if (mapInstanceRef.current) {
+              const latLng = new google.maps.LatLng(coords.lat, coords.lng);
+              updateMarkerPosition(latLng);
+              reverseGeocode(latLng);
+            }
+            
+            setIsLoading(false);
+          },
+          (error) => {
+            console.error(`Location attempt ${attempt} failed:`, error);
+            
+            // Try fallback strategy if first attempt fails
+            if (attempt === 1) {
+              console.log('🔄 Trying fallback geolocation strategy...');
+              tryGeolocation({
+                enableHighAccuracy: false,
+                timeout: 15000,
+                maximumAge: 0,
+                description: 'Network-based fallback'
+              }, 2);
+              return;
+            }
+            
+            // Handle different error types with mobile-specific messaging
+            let errorMessage = 'Could not get your location. ';
+            let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            
+            switch(error.code) {
+              case error.PERMISSION_DENIED:
+                if (isMobile && location.protocol === 'http:') {
+                  errorMessage += 'Mobile devices require HTTPS for location access. Please use HTTPS or manually select your location on the map.';
+                } else {
+                  errorMessage += 'Location access was denied. Please allow location access and try again.';
+                }
+                break;
+              case error.POSITION_UNAVAILABLE:
+                errorMessage += 'Location information is unavailable.';
+                break;
+              case error.TIMEOUT:
+                errorMessage += 'Location request timed out.';
+                break;
+              default:
+                if (isMobile && location.protocol === 'http:') {
                 errorMessage += 'For mobile devices, please access via HTTPS (https://...) for location features, or manually tap on the map to select your location.';
               } else {
                 errorMessage += 'Please manually enter your address or click on the map to select your location.';
@@ -313,17 +348,23 @@ export default function MapAddressSelector({
           toast.error(errorMessage);
           setIsLoading(false);
         },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000,
-        }
+        config
       );
-    } else {
-              toast.error('Geolocation is not supported by this browser. Please enter your address manually or click on the map to select your location.');
-      setIsLoading(false);
-    }
-  };
+    };
+    
+    // Start with high accuracy GPS
+    tryGeolocation({
+      enableHighAccuracy: true,
+      timeout: 25000,
+      maximumAge: 0,
+      description: 'High accuracy GPS'
+    }, 1);
+    
+  } else {
+    toast.error('Geolocation is not supported by this browser. Please enter your address manually or click on the map to select your location.');
+    setIsLoading(false);
+  }
+};
 
   const handleAddressSearch = () => {
     if (!address.trim() || !mapInstanceRef.current) return;

@@ -382,15 +382,26 @@ export default function CheckoutPage() {
           return;
         }
         
-        // Check if user has already reordered this specific order
-        const reorderKey = `reordered_${reorderFromEmail}`;
-        const hasReordered = sessionStorage.getItem(reorderKey);
-        
-        if (hasReordered) {
-          console.log('⚠️ User has already reordered this order');
-          toast.info('You have already reordered this order. Check your recent orders.');
-          navigate('/customer/orders');
-          return;
+        // Check if user has already reordered this specific order from database
+        try {
+          const { data: reorderCheck, error: reorderError } = await supabase
+            .from('orders')
+            .select('id, created_at')
+            .eq('customer_id', user.id)
+            .eq('original_order_id', reorderFromEmail)
+            .order('created_at', { ascending: false })
+            .limit(1);
+          
+          if (reorderError) {
+            console.error('Error checking reorder status:', reorderError);
+          } else if (reorderCheck && reorderCheck.length > 0) {
+            console.log('⚠️ User has already reordered this order');
+            toast.info('You have already reordered this order. Check your recent orders.');
+            navigate('/customer/orders');
+            return;
+          }
+        } catch (error) {
+          console.error('Error checking reorder status:', error);
         }
         console.log('📧 Reorder from email - loading order:', reorderFromEmail);
         console.log('🔄 Setting reorder flow state immediately');
@@ -797,6 +808,7 @@ export default function CheckoutPage() {
             selected_address_id: selectedAddress.id,
             delivery_address: deliveryAddress,
             notes: data.notes,
+            original_order_id: finalIsReorder ? finalOriginalOrderId : null,
             created_at: new Date().toISOString()
           }])
           .select()
@@ -986,12 +998,8 @@ export default function CheckoutPage() {
           console.log('Payment proof details saved to database.');
           if (finalIsReorder) {
             toast.success('Order updated successfully! Your order is now pending approval.');
-            // Mark this order as reordered to prevent future reorders
-            if (finalOriginalOrderId) {
-              const reorderKey = `reordered_${finalOriginalOrderId}`;
-              sessionStorage.setItem(reorderKey, 'true');
-              console.log('✅ Marked order as reordered:', finalOriginalOrderId);
-            }
+            // The original_order_id is already saved in the database during order creation
+            console.log('✅ Reorder completed for original order:', finalOriginalOrderId);
           } else {
             toast.success('Order placed and payment proof uploaded successfully!');
           }
@@ -1006,12 +1014,8 @@ export default function CheckoutPage() {
         // No file selected, just place the order
         if (finalIsReorder) {
           toast.success('Order updated successfully! Your order is now pending approval.');
-          // Mark this order as reordered to prevent future reorders
-          if (finalOriginalOrderId) {
-            const reorderKey = `reordered_${finalOriginalOrderId}`;
-            sessionStorage.setItem(reorderKey, 'true');
-            console.log('✅ Marked order as reordered:', finalOriginalOrderId);
-          }
+          // The original_order_id is already saved in the database during order creation
+          console.log('✅ Reorder completed for original order:', finalOriginalOrderId);
         } else {
           toast.success('Order placed successfully!');
         }

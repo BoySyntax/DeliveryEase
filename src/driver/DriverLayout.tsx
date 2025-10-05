@@ -43,7 +43,7 @@ export default function DriverLayout() {
         <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
           <div className="flex justify-between h-14 sm:h-16 items-center">
             <div className="flex items-center">
-              <img src={logo} alt="fordaGO Logo" className="w-10 h-10 sm:w-12 sm:h-12 object-contain" />
+              <img src={logo} alt="fordaGO Logo" className="w-14 h-14 sm:w-18 sm:h-18 object-contain" />
             </div>
             
             <div className="hidden md:flex space-x-2 lg:space-x-4">
