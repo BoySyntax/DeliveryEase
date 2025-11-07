@@ -822,6 +822,7 @@ export default function DashboardPage() {
               driver_name: driverName,
               driver_id: profile?.id || '',
               driver_avatar_url: profile?.avatar_url || undefined,
+              driver_phone: (profile as any)?.phone || undefined,
               address: location.address,
               latitude: location.lat,
               longitude: location.lng,
@@ -1043,13 +1044,26 @@ export default function DashboardPage() {
                   Start Delivery
                 </button>
               )}
-              <button 
-                onClick={handleViewRoute}
-                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm sm:text-base"
-              >
-                <Route className="h-4 w-4 sm:h-5 sm:w-5" />
-                View Route
-              </button>
+              {activeBatch.status === 'delivering' && (
+                <button 
+                  onClick={handleViewRoute}
+                  className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm sm:text-base"
+                >
+                  <Route className="h-4 w-4 sm:h-5 sm:w-5" />
+                  View Route
+                </button>
+              )}
+              {activeBatch.status === 'assigned' && (
+                <button 
+                  onClick={handleViewRoute}
+                  className="flex-1 bg-gray-400 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm sm:text-base cursor-not-allowed"
+                  disabled
+                  title="Start delivery first to view route"
+                >
+                  <Route className="h-4 w-4 sm:h-5 sm:w-5" />
+                  View Route (Start Delivery First)
+                </button>
+              )}
             </div>
 
             {/* Orders Preview */}

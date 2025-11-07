@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Card, CardContent } from '../../ui/components/Card';
 import Loader from '../../ui/components/Loader';
-import { AlertTriangle, MapPin, Clock, RefreshCw, CheckCircle, XCircle } from 'lucide-react';
+import { AlertTriangle, MapPin, Clock, RefreshCw, CheckCircle, XCircle, Phone } from 'lucide-react';
 import Button from '../../ui/components/Button';
+import EmergencyModal from '../components/EmergencyModal';
 
 // Helper function to get initials from name
 const getInitials = (name: string): string => {
@@ -20,6 +21,7 @@ interface EmergencyRequest {
   driver_name: string;
   driver_id?: string;
   driver_avatar_url?: string;
+  driver_phone?: string;
   address: string;
   latitude: number;
   longitude: number;
@@ -34,6 +36,18 @@ export default function EmergencyRequestsPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'acknowledged' | 'resolved'>('all');
+  const [selectedRequest, setSelectedRequest] = useState<EmergencyRequest | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  const handleRequestClick = (request: EmergencyRequest) => {
+    setSelectedRequest(request);
+    setModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setModalOpen(false);
+    setSelectedRequest(null);
+  };
 
   const loadEmergencyRequests = useCallback(async () => {
     setRefreshing(true);
@@ -50,6 +64,33 @@ export default function EmergencyRequestsPage() {
         console.error('Error loading emergency requests:', error);
         setRequests([]);
         return;
+      }
+
+      // Get unique driver IDs to fetch phone numbers
+      const driverIds = [...new Set((data || [])
+        .map(notification => (notification.data as any)?.driver_id)
+        .filter(Boolean))];
+
+      // Fetch phone numbers for all drivers
+      let driverPhones: { [key: string]: string } = {};
+      if (driverIds.length > 0) {
+        try {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, phone')
+            .in('id', driverIds);
+          
+          if (profiles) {
+            driverPhones = profiles.reduce((acc, profile) => {
+              if ((profile as any).phone) {
+                acc[profile.id] = (profile as any).phone;
+              }
+              return acc;
+            }, {} as { [key: string]: string });
+          }
+        } catch (phoneError) {
+          console.log('Could not fetch phone numbers:', phoneError);
+        }
       }
 
       const emergencyRequests = (data || []).map(notification => {
@@ -70,6 +111,7 @@ export default function EmergencyRequestsPage() {
           driver_name: data?.driver_name || 'Unknown Driver',
           driver_id: data?.driver_id,
           driver_avatar_url: data?.driver_avatar_url,
+          driver_phone: data?.driver_phone || (data?.driver_id ? driverPhones[data.driver_id] : undefined),
           address: data?.address || 'Unknown Location',
           latitude: data?.latitude || 0,
           longitude: data?.longitude || 0,
@@ -261,7 +303,7 @@ export default function EmergencyRequestsPage() {
       ) : (
         <div className="grid gap-4 sm:gap-6">
           {filteredRequests.map((request) => (
-            <Card key={request.id} className="overflow-hidden">
+            <Card key={request.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow" onClick={() => handleRequestClick(request)}>
               <CardContent className="p-0">
                 <div className={`p-4 sm:p-6 border-l-4 ${getStatusColor(request.status).split(' ')[2]}`}>
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4 gap-3">
@@ -272,9 +314,7 @@ export default function EmergencyRequestsPage() {
                           alt={request.driver_name}
                           className="h-12 w-12 sm:h-16 sm:w-16 rounded-full object-cover border-2 sm:border-3 border-gray-200 shadow-md flex-shrink-0"
                           style={{
-                            imageRendering: 'high-quality',
-                            imageRendering: '-webkit-optimize-contrast',
-                            imageRendering: 'crisp-edges'
+                            imageRendering: 'crisp-edges, -webkit-optimize-contrast, high-quality'
                           }}
                           onError={(e) => {
                             // Fallback to initials if image fails to load
@@ -301,6 +341,14 @@ export default function EmergencyRequestsPage() {
                           <p className="text-xs text-gray-500">
                             ID: {request.driver_id.slice(0, 8)}
                           </p>
+                        )}
+                        {request.driver_phone && (
+                          <div className="flex items-center gap-1 mt-1">
+                            <Phone className="h-3 w-3 text-gray-500" />
+                            <p className="text-xs text-gray-600 font-medium">
+                              {request.driver_phone}
+                            </p>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -369,6 +417,13 @@ export default function EmergencyRequestsPage() {
           ))}
         </div>
       )}
+
+      {/* Emergency Modal */}
+      <EmergencyModal
+        isOpen={modalOpen}
+        onClose={handleCloseModal}
+        request={selectedRequest}
+      />
     </div>
   );
 }

@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef, memo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { GeneticRouteOptimizer, DeliveryLocation, OptimizedRoute, DepotLocation } from '../../lib/genetic-route-optimizer';
 import { Card, CardContent } from '../../ui/components/Card';
@@ -8,19 +7,12 @@ import { toast } from 'react-hot-toast';
 import { 
   MapPin, 
   Route as RouteIcon, 
-  Truck, 
-  Target,
   RotateCcw,
-  Play,
-  Pause,
   CheckCircle,
-  Clock,
-  TrendingUp,
-  Maximize,
-  Minimize,
   Home,
-  Eye,
-  Package
+  Package,
+  Zap,
+  Map
 } from 'lucide-react';
 import truckIcon from '../../assets/truck-icon.png';
 
@@ -47,6 +39,13 @@ interface RouteMetrics {
   routeComparisonData?: any;
 }
 
+interface SimpleRouteMetrics {
+  totalDistance: number;
+  totalDuration: number;
+  waypointOrder: number[];
+  optimizationScore: number;
+}
+
 // Extended DeliveryLocation with order items
 interface ExtendedDeliveryLocation extends DeliveryLocation {
   order_items?: {
@@ -69,20 +68,25 @@ interface GoogleMapsWindow extends Window {
 declare const window: GoogleMapsWindow;
 
 const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRouteOptimized }: DeliveryMapProps) {
-  const navigate = useNavigate();
   const [deliveryLocations, setDeliveryLocations] = useState<ExtendedDeliveryLocation[]>([]);
   const [optimizedOrder, setOptimizedOrder] = useState<string[]>([]);
-  const [isOptimizing, setIsOptimizing] = useState(false);
-  const [isNavigating, setIsNavigating] = useState(false);
   const [currentStopIndex, setCurrentStopIndex] = useState(0);
   const [completedStops, setCompletedStops] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [mapLoading, setMapLoading] = useState(true);
-  const [isMapExpanded, setIsMapExpanded] = useState(false);
   const [driverLocation, setDriverLocation] = useState<{lat: number, lng: number, name: string, address: string} | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [isTrackingLocation, setIsTrackingLocation] = useState(false);
-  const [isGpsLoading, setIsGpsLoading] = useState(false);
+  const [useSimpleRoute, setUseSimpleRoute] = useState(false); // Default to genetic algorithm
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [isCalculatingSimpleRoute, setIsCalculatingSimpleRoute] = useState(false);
+  const [userHasSelectedRouteType, setUserHasSelectedRouteType] = useState(false);
+  const [simpleRouteMetrics, setSimpleRouteMetrics] = useState<SimpleRouteMetrics>({
+    totalDistance: 0,
+    totalDuration: 0,
+    waypointOrder: [],
+    optimizationScore: 0
+  });
   const [routeMetrics, setRouteMetrics] = useState<RouteMetrics>({
     totalDistance: 0,
     totalDuration: 0,
@@ -194,54 +198,7 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
     }
   }, []);
 
-  // Check if device is online before making geolocation requests
-  const isOnline = navigator.onLine;
 
-  // Retry geolocation with exponential backoff
-  const retryGeolocation = useCallback((retryCount = 0) => {
-    const maxRetries = 3;
-    const backoffDelay = Math.min(1000 * Math.pow(2, retryCount), 10000); // Max 10 second delay
-    
-    if (retryCount >= maxRetries) {
-      setLocationError('Location unavailable. Using approximate location.');
-      setDriverLocation({
-        lat: DEFAULT_LOCATION.lat,
-        lng: DEFAULT_LOCATION.lng,
-        name: "Driver Location (Fallback)",
-        address: DEFAULT_LOCATION.address
-      });
-      return;
-    }
-    
-    setTimeout(() => {
-      getCurrentLocation();
-    }, backoffDelay);
-  }, []);
-
-  // Enhanced error handling with connection checking
-  const handleGeolocationError = useCallback((error: GeolocationPositionError) => {
-    if (!isOnline) {
-      setLocationError('No internet connection. Using cached location.');
-      return;
-    }
-
-    switch (error.code) {
-      case error.PERMISSION_DENIED:
-        setLocationError('Location access denied. Please enable location services.');
-        break;
-      case error.POSITION_UNAVAILABLE:
-        setLocationError('GPS signal unavailable. Trying again...');
-        retryGeolocation();
-        break;
-      case error.TIMEOUT:
-        setLocationError('Location request timed out. Retrying...');
-        retryGeolocation();
-        break;
-      default:
-        setLocationError('Location error occurred. Using fallback.');
-        break;
-    }
-  }, [isOnline, retryGeolocation]);
 
   // Enhanced geolocation with progressive timeout and retry
   const getCurrentLocation = useCallback(async () => {
@@ -255,7 +212,6 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
       return;
     }
 
-    setIsGpsLoading(true);
     setLocationError(null);
     
     // Progressive timeout strategy: try high accuracy first, then fall back
@@ -316,7 +272,6 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
             address: `Your current position (±${Math.round(accuracy || 0)}m)`
           });
           setLocationError(null);
-          setIsGpsLoading(false);
           
           // Show success toast with accuracy info
           toast.success(`📍 GPS location acquired! Accuracy: ±${Math.round(accuracy || 0)}m`, {
@@ -347,8 +302,6 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
         duration: 5000,
         id: 'gps-fallback'
       });
-    } finally {
-      setIsGpsLoading(false);
     }
   }, []);
 
@@ -372,7 +325,7 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
     script.defer = true;
     
     // Add error handling for script loading
-    script.onerror = (error) => {
+    script.onerror = () => {
       setMapLoading(false);
       setLocationError('Failed to load Google Maps API. This could be due to: invalid API key, disabled APIs, network issues, or billing problems.');
     };
@@ -389,9 +342,9 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
           setMapLoading(false);
           setLocationError('Google Maps failed to initialize. Check API key permissions.');
         }
-      } catch (error) {
+      } catch (err) {
         setMapLoading(false);
-        setLocationError(`Google Maps initialization error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        setLocationError(`Google Maps initialization error: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
     };
     document.head.appendChild(script);
@@ -474,9 +427,15 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
   }, []);
 
   // Update map markers
-  const updateMapMarkers = useCallback(() => {
+  const updateMapMarkers = useCallback((overrideCompletedStops?: Set<string>) => {
     if (!mapInstanceRef.current || !window.google || !driverLocation) return;
 
+    // Use override state if provided, otherwise use current state
+    const currentCompletedStops = overrideCompletedStops || completedStops;
+    
+    console.log('🗺️  Updating map markers with completed stops:', Array.from(currentCompletedStops));
+    console.log('🗺️  Current stop index:', currentStopIndex);
+    
     // Clear existing markers (except driver marker for real-time tracking)
     markersRef.current.forEach(marker => {
       if (marker !== driverMarkerRef.current) {
@@ -523,23 +482,39 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
 
     // Get the sorted delivery locations to ensure consistency with delivery progress
     const sortedLocations = getSortedDeliveryLocations();
+    
+    // Debug: Find and log the current stop based on delivery progress
+    const firstUncompletedStop = sortedLocations.find(loc => !currentCompletedStops.has(loc.id));
+    console.log('🗺️  First uncompleted stop (should be current):', firstUncompletedStop?.customer_name || 'None');
 
     // Add delivery location markers with correct optimized sequence numbers
     sortedLocations.forEach((location, index) => {
       if (!location.latitude || !location.longitude) return;
 
-      const isCompleted = completedStops.has(location.id);
+      const isCompleted = currentCompletedStops.has(location.id);
       
       // The index in sorted locations IS the sequence number
       const sequenceNumber = index + 1;
-      const optimizedIndex = index; // Use the sorted index
       
-      // Use optimized index for current stop highlighting
-      const isCurrent = optimizedIndex === currentStopIndex && !isCompleted;
+      // Determine current stop based on delivery progress in the optimized route
+      // The current stop is the first uncompleted stop in the sorted/optimized order
+      const firstUncompletedStop = sortedLocations.find(loc => !currentCompletedStops.has(loc.id));
+      const isCurrent = firstUncompletedStop && location.id === firstUncompletedStop.id && !isCompleted;
       
       let markerColor = '#6b7280'; // gray for pending
       if (isCompleted) markerColor = '#10b981'; // green for completed
       else if (isCurrent) markerColor = '#f59e0b'; // yellow for current
+
+      console.log(`📍 Marker ${sequenceNumber}: ${location.customer_name} - completed: ${isCompleted}, current: ${isCurrent}, color: ${markerColor}`);
+      
+      // Additional debug for real-time updates
+      if (isCompleted) {
+        console.log(`✅ ${location.customer_name} marked as COMPLETED (green)`);
+      } else if (isCurrent) {
+        console.log(`🟡 ${location.customer_name} marked as CURRENT (yellow)`);
+      } else {
+        console.log(`⭕ ${location.customer_name} marked as PENDING (gray)`);
+      }
 
       const marker = new window.google.maps.Marker({
         position: { lat: location.latitude, lng: location.longitude },
@@ -618,6 +593,7 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
   const drawRouteOnMap = useCallback(async () => {
     if (!mapInstanceRef.current || !directionsServiceRef.current || !routeRendererRef.current || !driverLocation) return;
     if (deliveryLocations.length === 0) return;
+    if (optimizedOrder.length === 0) return; // Don't draw route until optimization is complete
 
     const validLocations = deliveryLocations.filter(loc => loc.latitude && loc.longitude);
     if (validLocations.length === 0) return;
@@ -689,7 +665,7 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
           }
         }
       });
-    } catch (error) {
+    } catch {
       // Handle error silently
     }
   }, [deliveryLocations, optimizedOrder, driverLocation]);
@@ -832,14 +808,211 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
         updateMapMarkers();
       }, 100);
       
-    } catch (error) {
+    } catch {
       // Handle error silently
     } finally {
       setLoading(false);
     }
   }, [batchId]);
 
-        // Route optimization with dual route comparison
+        // Simple Google Maps route calculation with retry mechanism
+  const calculateSimpleRoute = async (retryCount = 0) => {
+    if (!deliveryLocations.length || !driverLocation) {
+      console.log('Missing requirements for simple route:', { 
+        deliveryLocations: deliveryLocations.length, 
+        driverLocation: !!driverLocation 
+      });
+      return;
+    }
+    
+    setIsCalculatingSimpleRoute(true);
+    try {
+      const validLocations = deliveryLocations.filter(loc => loc.latitude && loc.longitude);
+      if (validLocations.length === 0) {
+        toast.error('No valid delivery locations found');
+        return;
+      }
+
+      if (!window.google || !directionsServiceRef.current) {
+        toast.error('Google Maps not loaded');
+        return;
+      }
+
+      console.log('🗺️ Calculating simple route for', validLocations.length, 'locations');
+
+      // Create waypoints for Google Maps - sort by distance from driver location for better optimization
+      const sortedLocations = [...validLocations].sort((a, b) => {
+        const distanceA = Math.sqrt(
+          Math.pow(a.latitude! - driverLocation.lat, 2) + 
+          Math.pow(a.longitude! - driverLocation.lng, 2)
+        );
+        const distanceB = Math.sqrt(
+          Math.pow(b.latitude! - driverLocation.lat, 2) + 
+          Math.pow(b.longitude! - driverLocation.lng, 2)
+        );
+        return distanceA - distanceB;
+      });
+
+      const waypoints = sortedLocations.map(loc => ({
+        location: new window.google.maps.LatLng(loc.latitude!, loc.longitude!),
+        stopover: true
+      }));
+
+      // Try different optimization strategies for more consistent results
+      const optimizationStrategies = [
+        {
+          name: 'Standard Optimization',
+          request: {
+            origin: new window.google.maps.LatLng(driverLocation.lat, driverLocation.lng),
+            destination: new window.google.maps.LatLng(driverLocation.lat, driverLocation.lng),
+            waypoints: waypoints,
+            optimizeWaypoints: true,
+            travelMode: window.google.maps.TravelMode.DRIVING,
+            unitSystem: window.google.maps.UnitSystem.METRIC,
+            avoidHighways: false,
+            avoidTolls: false,
+            provideRouteAlternatives: false
+          }
+        },
+        {
+          name: 'Distance Optimization',
+          request: {
+            origin: new window.google.maps.LatLng(driverLocation.lat, driverLocation.lng),
+            destination: new window.google.maps.LatLng(driverLocation.lat, driverLocation.lng),
+            waypoints: waypoints,
+            optimizeWaypoints: true,
+            travelMode: window.google.maps.TravelMode.DRIVING,
+            unitSystem: window.google.maps.UnitSystem.METRIC,
+            avoidHighways: true, // Avoid highways for more direct routes
+            avoidTolls: false,
+            provideRouteAlternatives: false
+          }
+        }
+      ];
+
+      // Start with the first strategy (standard optimization)
+
+      const tryRouteCalculation = (strategyIndex: number) => {
+        const strategy = optimizationStrategies[strategyIndex];
+        console.log(`🗺️ Trying ${strategy.name} (attempt ${strategyIndex + 1})`);
+        
+        directionsServiceRef.current.route(strategy.request, (result: any, status: any) => {
+          console.log(`🗺️ Google Maps route result for ${strategy.name}:`, status);
+          
+          if (status === window.google.maps.DirectionsStatus.OK) {
+            const route = result.routes[0];
+            
+            // Calculate total distance and duration
+            let totalDistance = 0;
+            let totalDuration = 0;
+            
+            route.legs.forEach((leg: any) => {
+              totalDistance += leg.distance.value;
+              totalDuration += leg.duration.value;
+            });
+
+            // Get optimized waypoint order - this is the key fix
+            const waypointOrder = route.waypoint_order || [];
+            console.log('🗺️ Waypoint order from Google:', waypointOrder);
+            console.log('🗺️ Sorted locations:', sortedLocations.map(loc => loc.id));
+            
+            // Create optimized order based on Google's waypoint order
+            let optimizedOrder: string[] = [];
+            if (waypointOrder.length > 0) {
+              // Use Google's optimized order with sorted locations
+              optimizedOrder = waypointOrder.map((index: number) => sortedLocations[index].id);
+            } else {
+              // Fallback to sorted order if no optimization
+              optimizedOrder = sortedLocations.map(loc => loc.id);
+            }
+            
+            console.log('🗺️ Optimized order:', optimizedOrder);
+            
+            setOptimizedOrder(optimizedOrder);
+            // Calculate additional metrics for fair comparison
+            const distanceKm = totalDistance / 1000;
+            const durationHours = totalDuration / 3600;
+            
+            // Calculate optimization score (0-100) based on distance efficiency
+            const baseDistance = validLocations.length * 1.5; // Expected minimum distance
+            const optimizationScore = Math.max(0, 100 - ((distanceKm - baseDistance) / baseDistance) * 50);
+            
+            setSimpleRouteMetrics({
+              totalDistance: distanceKm,
+              totalDuration: durationHours,
+              waypointOrder: waypointOrder,
+              optimizationScore: optimizationScore
+            });
+
+            // Draw the route on map
+            if (routeRendererRef.current) {
+              routeRendererRef.current.setDirections(result);
+              console.log('🗺️ Route drawn on map');
+            }
+
+            // Update markers to show optimized order
+            updateMapMarkers();
+
+            toast.success(`🗺️ Simple route calculated! Distance: ${(totalDistance / 1000).toFixed(1)}km, Time: ${(totalDuration / 3600).toFixed(1)}h`);
+          } else {
+            console.error(`🗺️ Google Maps route failed for ${strategy.name}:`, status);
+            
+            // Try the next strategy if available
+            if (strategyIndex < optimizationStrategies.length - 1) {
+              console.log(`🗺️ Trying next optimization strategy...`);
+              setTimeout(() => {
+                tryRouteCalculation(strategyIndex + 1);
+              }, 500);
+              return;
+            }
+            
+            // Retry mechanism for certain errors
+            if (retryCount < 2 && (status === window.google.maps.DirectionsStatus.OVER_QUERY_LIMIT || 
+                                   status === window.google.maps.DirectionsStatus.UNKNOWN_ERROR)) {
+              console.log(`🗺️ Retrying simple route calculation (attempt ${retryCount + 1}/2)...`);
+              setTimeout(() => {
+                calculateSimpleRoute(retryCount + 1);
+              }, 1000 * (retryCount + 1)); // Exponential backoff
+              return;
+            }
+            
+            let errorMessage = 'Failed to calculate simple route';
+            
+            switch (status) {
+              case window.google.maps.DirectionsStatus.ZERO_RESULTS:
+                errorMessage = 'No route found between locations';
+                break;
+              case window.google.maps.DirectionsStatus.OVER_QUERY_LIMIT:
+                errorMessage = 'Google Maps API quota exceeded';
+                break;
+              case window.google.maps.DirectionsStatus.REQUEST_DENIED:
+                errorMessage = 'Google Maps API request denied';
+                break;
+              case window.google.maps.DirectionsStatus.INVALID_REQUEST:
+                errorMessage = 'Invalid route request';
+                break;
+              case window.google.maps.DirectionsStatus.UNKNOWN_ERROR:
+                errorMessage = 'Unknown error occurred, please try again';
+                break;
+            }
+            
+            toast.error(errorMessage);
+          }
+        });
+      };
+
+      // Start with the first strategy
+      tryRouteCalculation(0);
+
+    } catch (err) {
+      console.error('Error calculating simple route:', err);
+      toast.error('Failed to calculate simple route');
+    } finally {
+      setIsCalculatingSimpleRoute(false);
+    }
+  };
+
+  // Route optimization with dual route comparison
   const optimizeRoute = async () => {
     if (!deliveryLocations.length) return;
     
@@ -910,23 +1083,16 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
       // Update markers to show optimized order
       updateMapMarkers();
       
-      // Try to draw route visualization (will show error if Directions API not enabled)
-      setTimeout(drawRouteOnMap, 500);
+      // Draw route immediately after optimization
+      drawRouteOnMap();
     } catch (error) {
-      // Handle error silently
+      console.error('Error optimizing route:', error);
+      toast.error('Failed to optimize route');
     } finally {
       setIsOptimizing(false);
     }
   };
 
-  // Navigation controls
-  const startNavigation = () => {
-    setIsNavigating(true);
-  };
-
-  const stopNavigation = () => {
-    setIsNavigating(false);
-  };
 
   const markStopCompleted = async (stopId: string) => {
     try {
@@ -973,7 +1139,12 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
       console.log('✅ Order status updated successfully:', data);
 
       // Update local state immediately
-      setCompletedStops(prev => new Set([...prev, stopId]));
+      const updatedCompletedStops = new Set([...completedStops, stopId]);
+      setCompletedStops(updatedCompletedStops);
+      
+      // Update map markers immediately with the new state for real-time experience
+      console.log('🗺️  Updating map markers with new completed stops:', Array.from(updatedCompletedStops));
+      updateMapMarkers(updatedCompletedStops);
       
       // Get sorted delivery locations
       const sortedLocations = getSortedDeliveryLocations();
@@ -983,48 +1154,47 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
       const currentStopLocation = sortedLocations[currentStopIndex];
       console.log('🎯 Current stop index:', currentStopIndex, 'Current stop:', currentStopLocation?.customer_name);
       
-      // Check if the completed stop is the current stop
-      if (currentStopLocation && currentStopLocation.id === stopId) {
-        console.log('✅ Completed stop matches current stop, advancing to next...');
+      // Always find the next uncompleted stop after completing any stop
+      console.log('🔍 Finding next uncompleted stop after completing:', stopId);
+      
+      // Find next uncompleted stop in the sorted order
+      let nextSortedIndex = 0;
+      while (nextSortedIndex < sortedLocations.length) {
+        const nextLocation = sortedLocations[nextSortedIndex];
+        const isNextCompleted = updatedCompletedStops.has(nextLocation.id);
         
-        // Create updated completed stops set including the just-completed stop
-        const updatedCompletedStops = new Set([...completedStops, stopId]);
-        
-        // Find next uncompleted stop
-        let nextIndex = currentStopIndex + 1;
-        while (nextIndex < sortedLocations.length) {
-          const nextLocation = sortedLocations[nextIndex];
-          const isNextCompleted = updatedCompletedStops.has(nextLocation.id);
+        if (!isNextCompleted) {
+          console.log(`➡️  Next uncompleted stop: ${nextLocation.customer_name} (sorted index: ${nextSortedIndex})`);
           
-          if (!isNextCompleted) {
-            console.log(`➡️  Advancing to next stop: ${nextLocation.customer_name} (index: ${nextIndex})`);
-            setCurrentStopIndex(nextIndex);
-            break;
+          // Find the corresponding index in the original deliveryLocations array
+          const originalIndex = deliveryLocations.findIndex(loc => loc.id === nextLocation.id);
+          if (originalIndex !== -1) {
+            setCurrentStopIndex(originalIndex);
+            console.log(`   Mapped to original index: ${originalIndex}`);
           }
-          nextIndex++;
+          break;
         }
+        nextSortedIndex++;
+      }
+      
+      // If no next uncompleted stop found, all are completed
+      if (nextSortedIndex >= sortedLocations.length) {
+        console.log('🎉 All stops completed!');
+        setCurrentStopIndex(sortedLocations.length);
         
-        // If no next uncompleted stop found, all are completed
-        if (nextIndex >= sortedLocations.length) {
-          console.log('🎉 All stops completed!');
-          setCurrentStopIndex(sortedLocations.length);
-          
-          // Update batch status to delivered
-          const { error: batchError } = await supabase
-            .from('order_batches')
-            .update({ 
-              status: 'delivered'
-            })
-            .eq('id', batchId);
+        // Update batch status to delivered
+        const { error: batchError } = await supabase
+          .from('order_batches')
+          .update({ 
+            status: 'delivered'
+          })
+          .eq('id', batchId);
 
-          if (batchError) {
-            console.error('Error updating batch status:', batchError);
-          } else {
-            toast.success('🎉 All deliveries completed! Batch marked as finished.');
-          }
+        if (batchError) {
+          console.error('Error updating batch status:', batchError);
+        } else {
+          toast.success('🎉 All deliveries completed! Batch marked as finished.');
         }
-      } else {
-        console.log('⚠️  Completed stop does not match current stop, no navigation change needed');
       }
       
 
@@ -1056,9 +1226,6 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
         }
       }
       
-      // Update map markers without full reload to preserve map state
-      console.log('🗺️  Updating map markers...');
-      updateMapMarkers();
       
     } catch (error) {
       console.error('Error completing stop:', error);
@@ -1112,14 +1279,6 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
     }
   };
 
-  const resetRoute = () => {
-    setCompletedStops(new Set());
-    setCurrentStopIndex(0);
-    setIsNavigating(false);
-    setOptimizedOrder([]);
-    updateMapMarkers();
-    drawRouteOnMap();
-  };
 
   // Helper function to get delivery locations sorted by optimized order
   const getSortedDeliveryLocations = () => {
@@ -1171,13 +1330,30 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
     
     if (!mapLoading && deliveryLocations.length > 0 && driverLocation) {
       updateMapMarkers();
-      drawRouteOnMap();
       // Auto-optimize route when locations are loaded - only once
       if (optimizedOrder.length === 0 && deliveryLocations.length > 1) {
-        optimizeRoute();
+        // Use the selected route type (genetic algorithm by default)
+        if (useSimpleRoute) {
+          calculateSimpleRoute();
+        } else {
+          optimizeRoute();
+        }
+      } else if (optimizedOrder.length > 0) {
+        // Only draw route after optimization is complete
+        drawRouteOnMap();
       }
     }
   }, [deliveryLocations.length, mapLoading, driverLocation?.lat, driverLocation?.lng, optimizedOrder.length]);
+
+  // Update map markers when completion status or current stop changes
+  useEffect(() => {
+    if (!mapLoading && deliveryLocations.length > 0 && driverLocation) {
+      console.log('🔄 Completion status or current stop changed, updating markers...');
+      console.log('   Completed stops:', Array.from(completedStops));
+      console.log('   Current stop index:', currentStopIndex);
+      updateMapMarkers();
+    }
+  }, [completedStops, currentStopIndex, updateMapMarkers, mapLoading, deliveryLocations.length, driverLocation]);
 
   // Auto-redirect when all orders are completed
   useEffect(() => {
@@ -1204,11 +1380,18 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
     }
   }, [completedStops.size, getSortedDeliveryLocations().length]);
 
+
   // Force re-optimization when delivery locations change significantly
   useEffect(() => {
     // Don't re-optimize if we're in the middle of completing a stop
     if (isCompletingStopRef.current) {
       console.log('⏸️  Skipping re-optimization during stop completion');
+      return;
+    }
+    
+    // Don't auto-re-optimize if user has manually selected a route type
+    if (userHasSelectedRouteType) {
+      console.log('👤 User has selected route type, skipping auto re-optimization');
       return;
     }
     
@@ -1226,7 +1409,7 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
         console.log('✅ Delivery locations unchanged, keeping current optimization');
       }
     }
-  }, [deliveryLocations, optimizedOrder]);
+  }, [deliveryLocations, optimizedOrder, userHasSelectedRouteType]);
 
   if (loading) {
     return (
@@ -1280,33 +1463,226 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
                     </div>
                   </div>
                 )}
-                {!mapLoading && !locationError && (
-                  <div className="absolute top-4 left-4 bg-white rounded-lg shadow-lg p-3">
-                    <div className="flex items-center gap-2 text-sm">
-                      <div className="flex items-center gap-1">
-                        <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                        <span>Driver</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                        <span>Current</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                        <span>Completed</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
-                        <span>Pending</span>
-                      </div>
-                    </div>
+            {!mapLoading && !locationError && (
+              <div className="absolute top-4 left-4 bg-white rounded-lg shadow-lg p-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                    <span>Driver</span>
                   </div>
-                )}
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                    <span>Current</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                    <span>Completed</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
+                    <span>Pending</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Route Loading Overlay */}
+            {(isOptimizing || isCalculatingSimpleRoute) && (
+              <div className="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center">
+                <div className="bg-white rounded-lg p-6 text-center shadow-lg">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-3"></div>
+                  <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                    {isOptimizing ? '🧬 Optimizing Route' : '🗺️ Calculating Route'}
+                  </h3>
+                  <p className="text-gray-600">
+                    {isOptimizing ? 'Genetic algorithm is finding the most efficient path...' : 'Google Maps is calculating the route...'}
+                  </p>
+                </div>
+              </div>
+            )}
               </>
             )}
           </div>
         </CardContent>
       </Card>
+
+      {/* Route Control Panel */}
+      {getSortedDeliveryLocations().length > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold flex items-center gap-2 mb-2">
+                  <RouteIcon className="h-5 w-5" />
+                  Route Optimization
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Choose between genetic algorithm optimization or simple Google Maps routing
+                </p>
+              </div>
+              
+              <div className="flex flex-col sm:flex-row gap-3">
+                {/* Route Type Toggle */}
+                <div className="flex bg-gray-100 rounded-lg p-1">
+                  <button
+                    onClick={() => {
+                      setUseSimpleRoute(false);
+                      setUserHasSelectedRouteType(true);
+                      setOptimizedOrder([]); // Clear to trigger re-optimization
+                    }}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                      !useSimpleRoute
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                  >
+                    <Zap className="h-4 w-4 mr-2 inline" />
+                    Genetic Algorithm
+                  </button>
+                  <button
+                    onClick={() => {
+                      setUseSimpleRoute(true);
+                      setUserHasSelectedRouteType(true);
+                      setOptimizedOrder([]); // Clear to trigger re-optimization
+                      // Immediately calculate simple route
+                      setTimeout(() => {
+                        calculateSimpleRoute();
+                      }, 100);
+                    }}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                      useSimpleRoute
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                  >
+                    <Map className="h-4 w-4 mr-2 inline" />
+                    Simple Route
+                  </button>
+                </div>
+
+                {/* Recalculate Button */}
+                <Button
+                  onClick={() => {
+                    setOptimizedOrder([]);
+                    if (useSimpleRoute) {
+                      calculateSimpleRoute();
+                    } else {
+                      optimizeRoute();
+                    }
+                  }}
+                  variant="outline"
+                  className="border-blue-600 text-blue-600 hover:bg-blue-50"
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Recalculate
+                </Button>
+              </div>
+            </div>
+
+            {/* Optimization Loading State */}
+            {(isOptimizing || isCalculatingSimpleRoute) && (
+              <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-center gap-3">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                  <div>
+                    <h4 className="font-semibold text-blue-800">
+                      {isOptimizing ? '🧬 Genetic Algorithm Optimizing...' : '🗺️ Calculating Simple Route...'}
+                    </h4>
+                    <p className="text-sm text-blue-600">
+                      {isOptimizing ? 'Finding the most efficient route for your deliveries' : 'Using Google Maps to calculate the route'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Route Comparison Metrics */}
+            {(routeMetrics.totalDistance > 0 || simpleRouteMetrics.totalDistance > 0) && !isOptimizing && !isCalculatingSimpleRoute && (
+              <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-semibold text-gray-800 mb-3">📊 Route Comparison</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Genetic Algorithm Metrics */}
+                  <div className={`p-3 rounded-lg border-2 ${!useSimpleRoute ? 'border-blue-200 bg-blue-50' : 'border-gray-200 bg-white'}`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Zap className="h-4 w-4 text-blue-600" />
+                      <span className="font-medium text-gray-800">Genetic Algorithm</span>
+                      {!useSimpleRoute && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Active</span>}
+                    </div>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Distance:</span>
+                        <span className="font-medium">{routeMetrics.totalDistance.toFixed(1)} km</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Time:</span>
+                        <span className="font-medium">{routeMetrics.totalDuration.toFixed(1)} hours</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Efficiency:</span>
+                        <span className="font-medium text-green-600">{routeMetrics.optimizationScore.toFixed(1)}%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Simple Route Metrics */}
+                  <div className={`p-3 rounded-lg border-2 ${useSimpleRoute ? 'border-blue-200 bg-blue-50' : 'border-gray-200 bg-white'}`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Map className="h-4 w-4 text-blue-600" />
+                      <span className="font-medium text-gray-800">Simple Route</span>
+                      {useSimpleRoute && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Active</span>}
+                    </div>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Distance:</span>
+                        <span className="font-medium">{simpleRouteMetrics.totalDistance.toFixed(1)} km</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Time:</span>
+                        <span className="font-medium">{simpleRouteMetrics.totalDuration.toFixed(1)} hours</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Efficiency:</span>
+                        <span className="font-medium text-green-600">{simpleRouteMetrics.optimizationScore.toFixed(1)}%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Comparison Summary */}
+                {routeMetrics.totalDistance > 0 && simpleRouteMetrics.totalDistance > 0 && (
+                  <div className="mt-3 p-3 bg-white rounded-lg border">
+                    <h5 className="font-medium text-gray-800 mb-2">📈 Performance Comparison</h5>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-600">Distance Difference:</span>
+                        <span className={`font-medium ml-2 ${
+                          routeMetrics.totalDistance < simpleRouteMetrics.totalDistance 
+                            ? 'text-green-600' 
+                            : 'text-red-600'
+                        }`}>
+                          {routeMetrics.totalDistance < simpleRouteMetrics.totalDistance ? '-' : '+'}
+                          {Math.abs(routeMetrics.totalDistance - simpleRouteMetrics.totalDistance).toFixed(1)} km
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Time Difference:</span>
+                        <span className={`font-medium ml-2 ${
+                          routeMetrics.totalDuration < simpleRouteMetrics.totalDuration 
+                            ? 'text-green-600' 
+                            : 'text-red-600'
+                        }`}>
+                          {routeMetrics.totalDuration < simpleRouteMetrics.totalDuration ? '-' : '+'}
+                          {Math.abs(routeMetrics.totalDuration - simpleRouteMetrics.totalDuration).toFixed(1)} hours
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* All Orders Completed Success Screen */}
       {getSortedDeliveryLocations().length > 0 && completedStops.size === getSortedDeliveryLocations().length && (
@@ -1392,11 +1768,11 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
                 // For sorted list, the index IS the sequence number
                 const sequenceNumber = index + 1;
                 
-                // Find the next uncompleted stop to highlight
-                const nextUncompletedIndex = getSortedDeliveryLocations().findIndex(loc => 
-                  !completedStops.has(loc.id)
-                );
-                const isNextToDeliver = index === nextUncompletedIndex && !isCompleted;
+                // Find the next uncompleted stop to highlight (same logic as map markers)
+                const firstUncompletedStop = getSortedDeliveryLocations().find(loc => !completedStops.has(loc.id));
+                const isNextToDeliver = firstUncompletedStop && location.id === firstUncompletedStop.id && !isCompleted;
+                
+                console.log(`📋 Card ${sequenceNumber}: ${location.customer_name} - completed: ${isCompleted}, nextToDeliver: ${isNextToDeliver}`);
                 
 
                 
@@ -1472,15 +1848,11 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
                       </div>
                     )}
                     
-                    {!isCompleted && (
+                    {!isCompleted && isNextToDeliver && (
                       <Button
                         size="sm"
                         onClick={() => markStopCompleted(location.id)}
-                        className={`mt-3 w-full ${
-                          isNextToDeliver 
-                            ? 'bg-green-600 hover:bg-green-700 text-white' 
-                            : 'bg-blue-600 hover:bg-blue-700 text-white'
-                        }`}
+                        className="mt-3 w-full bg-green-600 hover:bg-green-700 text-white"
                       >
                         <CheckCircle className="h-3 w-3 mr-1" />
                         Complete Stop

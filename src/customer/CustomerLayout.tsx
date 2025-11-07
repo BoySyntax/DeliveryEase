@@ -34,12 +34,22 @@ const CustomerLayout = memo(function CustomerLayout() {
     '/customer/edit-address'
   ];
 
+  // Pages where header should be hidden
+  const hideHeaderOnPages = [
+    '/customer/add-address',
+    '/customer/edit-address'
+  ];
+
   // Check if bottom navigation should be hidden on current page
   const shouldHideBottomNav = hideBottomNavOnPages.some(page => location.pathname.startsWith(page));
+
+  // Check if header should be hidden on current page
+  const shouldHideHeader = hideHeaderOnPages.some(page => location.pathname.startsWith(page));
 
   const [cartCount, setCartCount] = useState(0);
   const [cartId, setCartId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [ordersCount, setOrdersCount] = useState(0);
 
   async function refreshCartCount(currentCartId: string) {
     try {
@@ -71,10 +81,13 @@ const CustomerLayout = memo(function CustomerLayout() {
             setUserId(null);
             setCartId(null);
             setCartCount(0);
+            setOrdersCount(0);
           }
           return;
         }
         if (isMounted) setUserId(user.id);
+        // Initialize Orders badge count
+        await refreshOrdersCount(user.id);
         const { data: carts } = await supabase
           .from('carts')
           .select('id')
@@ -150,6 +163,46 @@ const CustomerLayout = memo(function CustomerLayout() {
       .subscribe();
     return () => {
       supabase.removeChannel(cartsChannel);
+    };
+  }, [userId]);
+
+  // Orders badge: count non-delivered, non-rejected orders
+  async function refreshOrdersCount(currentUserId: string) {
+    try {
+      const { count, error } = await supabase
+        .from('orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('customer_id', currentUserId)
+        .neq('approval_status', 'rejected')
+        .neq('delivery_status', 'delivered');
+      if (error) {
+        setOrdersCount(0);
+        return;
+      }
+      setOrdersCount(count || 0);
+    } catch (_) {
+      setOrdersCount(0);
+    }
+  }
+
+  // Subscribe to order changes for this user
+  useEffect(() => {
+    if (!userId) return;
+    // Initial load to be safe if userId appears later
+    refreshOrdersCount(userId);
+    const ordersChannel = supabase
+      .channel(`orders-for-${userId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'orders',
+        filter: `customer_id=eq.${userId}`
+      }, () => {
+        refreshOrdersCount(userId);
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ordersChannel);
     };
   }, [userId]);
 
@@ -252,7 +305,8 @@ const CustomerLayout = memo(function CustomerLayout() {
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm sticky top-0 z-[100] sm:z-[100] relative">
+      {!shouldHideHeader && (
+        <header className="bg-white shadow-sm sticky top-0 z-[100] sm:z-[100] relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 sm:h-18">
             {/* Logo */}
@@ -369,6 +423,11 @@ const CustomerLayout = memo(function CustomerLayout() {
                           {cartCount}
                         </span>
                       )}
+                    {(item.label === 'Orders' && ordersCount > 0) && (
+                      <span className="absolute -top-1 -right-2 min-w-[1.1rem] h-5 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold shadow z-10">
+                        {ordersCount > 99 ? '99+' : ordersCount}
+                      </span>
+                    )}
                     </span>
                     <span className="text-xs mt-1 whitespace-nowrap">{item.label}</span>
                   </NavLink>
@@ -377,7 +436,8 @@ const CustomerLayout = memo(function CustomerLayout() {
             </div>
           </div>
         </div>
-      </header>
+        </header>
+      )}
 
       {/* Animated Search Panel - Mobile Only */}
       {(location.pathname === '/customer' || location.pathname.startsWith('/customer/products')) && (
@@ -469,6 +529,11 @@ const CustomerLayout = memo(function CustomerLayout() {
                   {(item.label === 'Cart' && cartCount > 0) && (
                     <span className="absolute -top-1 -right-2 min-w-[1.1rem] h-5 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold shadow z-10">
                       {cartCount}
+                    </span>
+                  )}
+                  {(item.label === 'Orders' && ordersCount > 0) && (
+                    <span className="absolute -top-1 -right-2 min-w-[1.1rem] h-5 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold shadow z-10">
+                      {ordersCount > 99 ? '99+' : ordersCount}
                     </span>
                   )}
                 </span>

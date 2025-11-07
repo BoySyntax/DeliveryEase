@@ -74,11 +74,12 @@ export default function HomePage() {
           setCategories(categoriesData);
         }
 
-        // Fetch all featured products (unlimited)
+        // Fetch all featured products (unlimited) - filter out out of stock items
         const { data: productsData } = await supabase
           .from('products')
           .select('*')
           .eq('featured', true)
+          .gt('quantity', 0) // Only show products with quantity > 0
           .order('created_at', { ascending: false });
         
         if (productsData) {

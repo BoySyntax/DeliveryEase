@@ -209,6 +209,52 @@ function SwipeableNotification({
   );
 }
 
+function normalizeTitleForStatus(originalTitle: string, currentStatus?: string) {
+  const lowerTitle = originalTitle.toLowerCase();
+  if (!currentStatus) return originalTitle;
+  if (lowerTitle.includes('rejected') && currentStatus !== 'rejected') {
+    return 'Pending';
+  }
+  return originalTitle;
+}
+
+function normalizeMessageForStatus(originalMessage: string, currentStatus?: string) {
+  if (!currentStatus) return originalMessage;
+  const lowerMsg = (originalMessage || '').toLowerCase();
+  // If message talks about rejection but status is no longer rejected, make it a generic pending message
+  if (lowerMsg.includes('rejected') && currentStatus !== 'rejected') {
+    return 'Your order is pending. We will notify you once it is reviewed.';
+  }
+  return originalMessage;
+}
+
+async function adjustNotificationsForCurrentOrderStatus(notifs: OrderNotification[]): Promise<OrderNotification[]> {
+  const orderIds = notifs
+    .map(n => n?.data?.orderId)
+    .filter((id: string | undefined): id is string => !!id);
+  if (orderIds.length === 0) return notifs;
+
+  const { data: orders, error } = await supabase
+    .from('orders')
+    .select('id, approval_status')
+    .in('id', orderIds);
+  if (error || !orders) return notifs;
+
+  const orderIdToStatus = new Map<string, string>();
+  for (const o of orders) {
+    orderIdToStatus.set(o.id, o.approval_status);
+  }
+
+  return notifs.map(n => {
+    const orderId = n?.data?.orderId as string | undefined;
+    const status = orderId ? orderIdToStatus.get(orderId) : undefined;
+    const normalizedTitle = normalizeTitleForStatus(n.title, status);
+    const normalizedMessage = normalizeMessageForStatus(n.message, status);
+    if (normalizedTitle === n.title && normalizedMessage === n.message) return n;
+    return { ...n, title: normalizedTitle, message: normalizedMessage };
+  });
+}
+
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<OrderNotification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -216,15 +262,50 @@ export default function NotificationsPage() {
   const [markingAsRead, setMarkingAsRead] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [swipedNotification, setSwipedNotification] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
+
+  const isAllSelected = selectedIds.size > 0 && selectedIds.size === notifications.filter(n => (filter === 'unread' ? !n.read : filter === 'read' ? n.read : true)).length;
+
+  const toggleSelectAll = () => {
+    const filtered = notifications.filter(n => (filter === 'unread' ? !n.read : filter === 'read' ? n.read : true));
+    if (isAllSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(n => n.id)));
+    }
+  };
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    try {
+      // Delete in parallel for now
+      await Promise.all(ids.map(id => orderNotificationService.deleteNotification(id)));
+      setNotifications(prev => prev.filter(n => !selectedIds.has(n.id)));
+      setSelectedIds(new Set());
+      setSwipedNotification(null);
+    } catch (error) {
+      console.error('Error bulk deleting notifications:', error);
+    }
+  };
 
   useEffect(() => {
     loadNotifications();
 
     // Subscribe to real-time notifications
     const setupSubscription = async () => {
-      const subscription = await orderNotificationService.subscribeToNotifications((newNotification) => {
-        setNotifications(prev => [newNotification, ...prev]);
+      const subscription = await orderNotificationService.subscribeToNotifications(async (newNotification) => {
+        const adjusted = await adjustNotificationsForCurrentOrderStatus([newNotification]);
+        setNotifications(prev => [adjusted[0], ...prev]);
       });
     };
 
@@ -239,7 +320,8 @@ export default function NotificationsPage() {
     setLoading(true);
     try {
       const data = await orderNotificationService.getNotifications();
-      setNotifications(data);
+      const adjusted = await adjustNotificationsForCurrentOrderStatus(data);
+      setNotifications(adjusted);
     } catch (error) {
       console.error('Error loading notifications:', error);
     } finally {
@@ -316,15 +398,27 @@ export default function NotificationsPage() {
         <div className="max-w-2xl mx-auto px-4">
           <div className="flex items-center justify-between -mt-5 py-3">
             <h1 className="text-2xl font-semibold">Notifications</h1>
-            {unreadCount > 0 && (
+            <div className="flex items-center gap-2">
+              {unreadCount > 0 && (
+                <button
+                  onClick={handleMarkAllAsRead}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-lg transition-colors"
+                >
+                  <Check size={16} />
+                  Mark all as read
+                </button>
+              )}
               <button
-                onClick={handleMarkAllAsRead}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-lg transition-colors"
+                onClick={handleBulkDelete}
+                disabled={selectedIds.size === 0}
+                className={cn(
+                  'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+                  selectedIds.size === 0 ? 'text-gray-400 bg-gray-100 cursor-not-allowed' : 'text-red-700 bg-red-100 hover:bg-red-200'
+                )}
               >
-                <Check size={16} />
-                Mark all as read
+                Delete selected
               </button>
-            )}
+            </div>
           </div>
         </div>
       </div>
@@ -357,6 +451,16 @@ export default function NotificationsPage() {
               </button>
             ))}
           </div>
+          <div className="ml-auto flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={isAllSelected}
+              onChange={toggleSelectAll}
+              className="w-4 h-4"
+              aria-label="Select all"
+            />
+            <span className="text-sm text-gray-700">Select all</span>
+          </div>
         </div>
 
         {/* Notifications List */}
@@ -375,18 +479,29 @@ export default function NotificationsPage() {
             </p>
           </div>
         ) : (
-                     filteredNotifications.map((notification) => (
-             <SwipeableNotification
-               key={notification.id}
-               notification={notification}
-               isSwiped={swipedNotification === notification.id}
-               onSwipe={(isSwiped) => setSwipedNotification(isSwiped ? notification.id : null)}
-               onDelete={() => handleDeleteNotification(notification.id)}
-               onMarkAsRead={() => handleNotificationClick(notification)}
-               isDeleting={deleting === notification.id}
-               isMarkingAsRead={markingAsRead === notification.id}
-             />
-                       ))
+          filteredNotifications.map((notification) => (
+            <div key={notification.id} className="relative">
+              <div className="absolute left-3 top-3">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(notification.id)}
+                  onChange={() => toggleSelectOne(notification.id)}
+                  className="w-4 h-4"
+                  aria-label="Select notification"
+                />
+              </div>
+              <SwipeableNotification
+                key={notification.id}
+                notification={notification}
+                isSwiped={swipedNotification === notification.id}
+                onSwipe={(isSwiped) => setSwipedNotification(isSwiped ? notification.id : null)}
+                onDelete={() => handleDeleteNotification(notification.id)}
+                onMarkAsRead={() => handleNotificationClick(notification)}
+                isDeleting={deleting === notification.id}
+                isMarkingAsRead={markingAsRead === notification.id}
+              />
+            </div>
+          ))
         )}
         </div>
       </div>

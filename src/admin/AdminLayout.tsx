@@ -15,6 +15,7 @@ interface EmergencyRequest {
   driver_name: string;
   driver_id?: string;
   driver_avatar_url?: string;
+  driver_phone?: string;
   address: string;
   latitude: number;
   longitude: number;
@@ -145,11 +146,32 @@ export default function AdminLayout() {
       }
 
       const data = latestNotification.data as any;
+      
+      // Fetch phone number from profiles table if not in notification data
+      let driverPhone = data?.driver_phone;
+      
+      if (!driverPhone && data?.driver_id) {
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('phone')
+            .eq('id', data.driver_id)
+            .single();
+          
+          if ((profile as any)?.phone) {
+            driverPhone = (profile as any).phone;
+          }
+        } catch (phoneError) {
+          console.log('Could not fetch phone number:', phoneError);
+        }
+      }
+      
       const emergencyRequest: EmergencyRequest = {
         id: latestNotification.id,
         driver_name: data?.driver_name || 'Unknown Driver',
         driver_id: data?.driver_id,
         driver_avatar_url: data?.driver_avatar_url,
+        driver_phone: driverPhone,
         address: data?.address || 'Unknown Location',
         latitude: data?.latitude || 0,
         longitude: data?.longitude || 0,

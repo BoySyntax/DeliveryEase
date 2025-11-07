@@ -58,6 +58,8 @@ export default function CheckoutPage() {
   const [detectingReorder, setDetectingReorder] = useState(true);
   const [reorderProcessed, setReorderProcessed] = useState(false);
   const [originalOrderIdState, setOriginalOrderIdState] = useState<string | null>(null);
+  const [hasShownReorderBlocked, setHasShownReorderBlocked] = useState(false);
+  const [reorderBlocked, setReorderBlocked] = useState(false);
   const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<CheckoutForm>();
   
   // Get reorder parameter from URL
@@ -132,6 +134,38 @@ export default function CheckoutPage() {
           console.log('📧 Reorder from email detected for order:', reorderFromEmail);
           console.log('📧 Current state:', { reorderProcessed, isReorderFlow, cartItemsLength: cartItems.length });
           
+          // ✅ CRITICAL CHECK: Verify order is still rejected before proceeding
+          try {
+            const { data: orderCheck, error: checkError } = await supabase
+              .from('orders')
+              .select('id, approval_status')
+              .eq('id', reorderFromEmail)
+              .eq('customer_id', user.id)
+              .single();
+            
+            if (checkError || !orderCheck) {
+              console.error('❌ Error checking order status:', checkError);
+              toast.error('Unable to verify order status.');
+              navigate('/customer/orders');
+              return;
+            }
+            
+            // ✅ BLOCK if order is not rejected (was already reordered)
+            if (orderCheck.approval_status !== 'rejected') {
+              // console.log('🚫 Order was already reordered. Status:', orderCheck.approval_status);
+              setIsReorderFlow(true);
+              setReorderProcessed(true);
+              return;
+            }
+            
+            console.log('✅ Order is still rejected, proceeding with reorder');
+          } catch (checkErr) {
+            console.error('❌ Error in order status check:', checkErr);
+            toast.error('Unable to verify order status.');
+            navigate('/customer/orders');
+            return;
+          }
+          
           // Set reorder flow state immediately
           setIsReorderFlow(true);
           setReorderProcessed(true);
@@ -185,12 +219,21 @@ export default function CheckoutPage() {
               if (productsError) throw productsError;
 
               if (products && products.length > 0) {
-                const items = reorderItems
+                const items: CartItem[] = reorderItems
                   .map(reorderItem => {
                     const product = products.find(p => p.id === reorderItem.product_id);
-                    return product ? { product, quantity: reorderItem.quantity } : null;
+                    if (!product) return null;
+                    return {
+                      product: {
+                        id: product.id,
+                        name: product.name,
+                        price: product.price,
+                        quantity: product.quantity
+                      },
+                      quantity: reorderItem.quantity
+                    };
                   })
-                  .filter(Boolean);
+                  .filter((item): item is CartItem => item !== null);
 
                 if (items.length > 0) {
                   setCartItems(items);
@@ -382,26 +425,41 @@ export default function CheckoutPage() {
           return;
         }
         
-        // Check if user has already reordered this specific order from database
+        // ✅ CRITICAL CHECK: Verify order is still rejectable before allowing reorder
+        // This prevents duplicate reorders if the order was already reordered from email
         try {
-          const { data: reorderCheck, error: reorderError } = await supabase
+          const { data: orderCheck, error: orderError } = await supabase
             .from('orders')
-            .select('id, created_at')
+            .select('id, approval_status, created_at')
+            .eq('id', reorderFromEmail)
             .eq('customer_id', user.id)
-            .eq('original_order_id', reorderFromEmail)
-            .order('created_at', { ascending: false })
-            .limit(1);
+            .single();
           
-          if (reorderError) {
-            console.error('Error checking reorder status:', reorderError);
-          } else if (reorderCheck && reorderCheck.length > 0) {
-            console.log('⚠️ User has already reordered this order');
-            toast.info('You have already reordered this order. Check your recent orders.');
+          if (orderError) {
+            console.error('❌ Error checking order status:', orderError);
+            toast.error('Unable to verify order status.');
+            return;
+          }
+          
+          if (!orderCheck) {
+            console.log('⚠️ Order not found');
+            toast.error('Order not found.');
             navigate('/customer/orders');
             return;
           }
+          
+          // ✅ BLOCK REORDER: If order is not rejected, it means it was already reordered
+          if (orderCheck.approval_status !== 'rejected') {
+            // console.log('🚫 Order was already reordered. Current status:', orderCheck.approval_status);
+            setReorderBlocked(true);
+            return;
+          }
+          
+          console.log('✅ Order is still rejected, reorder is allowed');
         } catch (error) {
-          console.error('Error checking reorder status:', error);
+          console.error('❌ Error checking reorder status:', error);
+          toast.error('Unable to verify if order was already reordered.');
+          return;
         }
         console.log('📧 Reorder from email - loading order:', reorderFromEmail);
         console.log('🔄 Setting reorder flow state immediately');
@@ -546,6 +604,14 @@ export default function CheckoutPage() {
 
     handleReorderFromURL();
   }, [user, reorderProcessed, reorderFromEmail]);
+
+  useEffect(() => {
+    if (!hasShownReorderBlocked && reorderBlocked) {
+      setHasShownReorderBlocked(true);
+      toast.error('This order has already been reordered. Please check your order history.');
+      navigate('/customer/orders');
+    }
+  }, [hasShownReorderBlocked, reorderBlocked, navigate]);
 
   const total = cartItems.reduce(
     (sum, item) => sum + item.product.price * item.quantity,
@@ -731,6 +797,39 @@ export default function CheckoutPage() {
       let reorderHandledByRPC = false;
 
       if (finalIsReorder && finalOriginalOrderId) {
+        // ✅ FINAL CHECK: Verify order is still rejected before allowing submission
+        console.log('🔍 Final verification: Checking if order can be reordered...', finalOriginalOrderId);
+        try {
+          const { data: finalCheck, error: finalCheckError } = await supabase
+            .from('orders')
+            .select('id, approval_status, customer_id')
+            .eq('id', finalOriginalOrderId)
+            .single();
+          
+          console.log('📊 Final check result:', finalCheck);
+          
+          if (finalCheckError || !finalCheck) {
+            console.error('❌ Error in final check:', finalCheckError);
+            toast.error('Unable to verify order status.');
+            navigate('/customer/orders');
+            return;
+          }
+          
+          if (finalCheck.approval_status !== 'rejected') {
+            console.log('🚫 FINAL BLOCK: Order is no longer rejected. Status:', finalCheck.approval_status);
+            toast.error('This order has already been reordered. It is now in ' + finalCheck.approval_status + ' status.');
+            navigate('/customer/orders');
+            return;
+          }
+          
+          console.log('✅ Final check passed: Order is still rejected, proceeding with reorder');
+        } catch (err) {
+          console.error('❌ Error in final status check:', err);
+          toast.error('Unable to verify order status.');
+          navigate('/customer/orders');
+          return;
+        }
+        
         // Try RPC first to safely bypass RLS and update items atomically
         console.log('🔄 Attempting reorder via RPC for order:', finalOriginalOrderId);
         toast.loading('Updating your existing order...', { id: 'reorder-toast' });
@@ -768,6 +867,26 @@ export default function CheckoutPage() {
         if (!reorderHandledByRPC) {
           // Fallback: UPDATE EXISTING REJECTED ORDER manually
           console.log('🔄 Fallback: updating existing order to pending via standard update');
+          
+          // First check: Verify order is still rejected before allowing reorder
+          const { data: orderStatusCheck, error: statusCheckError } = await supabase
+            .from('orders')
+            .select('id, approval_status')
+            .eq('id', finalOriginalOrderId)
+            .single();
+          
+          if (statusCheckError || !orderStatusCheck) {
+            console.error('❌ Error checking order status:', statusCheckError);
+            throw new Error('Unable to verify order status: ' + (statusCheckError?.message || 'Unknown error'));
+          }
+          
+          // If order is not rejected (already reordered), prevent duplicate reorder
+          if (orderStatusCheck.approval_status !== 'rejected') {
+            console.error('❌ Order is no longer rejected. Status:', orderStatusCheck.approval_status);
+            toast.error('This order has already been reordered or is no longer in rejected status.');
+            navigate('/customer/orders');
+            return;
+          }
 
           const { data: updatedOrder, error: updateError } = await supabase
             .from('orders')
@@ -860,7 +979,7 @@ export default function CheckoutPage() {
         // UPDATE existing order items for reorder
         console.log('🔄 Updating order items for reorder...');
         
-        // First, delete existing order items
+        // First, delete existing order items from the ORIGINAL order
         const { error: deleteError } = await supabase
           .from('order_items')
           .delete()
@@ -868,9 +987,9 @@ export default function CheckoutPage() {
 
         if (deleteError) throw new Error('Error deleting old order items: ' + deleteError.message);
 
-        // Then insert new order items
+        // Then insert new order items into the SAME (updated) order
         const orderItems = itemsToOrder.map(item => ({
-          order_id: orderIdForThisCheckout!,
+          order_id: finalOriginalOrderId, // ✅ Use the ORIGINAL order ID, not the new one!
           product_id: item.product.id,
           quantity: item.quantity,
           price: item.product.price,
@@ -1270,13 +1389,19 @@ export default function CheckoutPage() {
           </div>
         </div>
         {/* QR Code and Payment Proof - Combined Modern Flex Container */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6 flex flex-row items-stretch gap-6 overflow-hidden">
-          {/* Left: QR Code and Payment Info */}
-          <div className="flex flex-col items-center justify-center w-1/2 relative overflow-hidden">
-            <div className="flex items-center bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 mb-4 w-full max-w-xs">
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6 flex flex-col gap-4 overflow-hidden">
+          {/* Full-width informational note */}
+          <div className="w-full">
+            <div className="flex items-center bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 w-full">
               <svg className="w-5 h-5 text-blue-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 20a8 8 0 100-16 8 8 0 000 16z" /></svg>
-              <span className="text-sm text-blue-800 font-medium">Scan the QR to pay. Please pay the exact amount.</span>
+              <span className="text-sm text-blue-800 font-medium">Scan the QR to pay. Please pay the exact amount based on your order summary.</span>
             </div>
+          </div>
+          {/* Two-column row: QR and Proof side-by-side always */}
+          <div className="flex flex-row items-stretch gap-6">
+            {/* Left: QR Code and Payment Info */}
+            <div className="flex flex-col items-center justify-center w-1/2 relative overflow-hidden">
+            
             <img
               src={instapayQR}
               alt="InstaPay QR Code"
@@ -1296,11 +1421,11 @@ export default function CheckoutPage() {
             </a>
             <p className="text-gray-500 text-sm">Transfer fees may apply.</p>
             <p className="text-primary-600 font-bold text-lg tracking-wider mt-1">JA****A O.</p>
-          </div>
-          {/* Divider for large screens */}
-          <div className="hidden md:block w-px bg-gray-200 mx-6"></div>
-          {/* Right: Proof of Payment Upload */}
-          <div className="flex flex-col justify-center w-1/2">
+            </div>
+            {/* Divider for large screens */}
+            <div className="hidden md:block w-px bg-gray-200"></div>
+            {/* Right: Proof of Payment Upload */}
+            <div className="flex flex-col justify-center w-1/2">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               Proof of Payment
             </h2>
@@ -1384,6 +1509,7 @@ export default function CheckoutPage() {
                   )}
                 </div>
               </div>
+            </div>
             </div>
           </div>
         </div>

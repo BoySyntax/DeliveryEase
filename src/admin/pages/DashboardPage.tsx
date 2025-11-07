@@ -6,6 +6,7 @@ import { formatCurrency } from '../../lib/utils';
 import { Package, ShoppingBag, Truck, Users } from 'lucide-react';
 import { salesAnalytics, DateRange, SalesAnalyticsData } from '../../lib/salesAnalytics';
 import { salesExport } from '../../lib/salesExport';
+import { startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns';
 import SalesMetricsCards from '../components/SalesMetricsCards';
 import CategoryChart from '../components/CategoryChart';
 import OrderStatusChart from '../components/OrderStatusChart';
@@ -75,10 +76,43 @@ export default function DashboardPage() {
     setCustomEnd(end);
   };
 
-  const handleExport = () => {
+  const handleExportCSV = () => {
+    console.log('handleExportCSV called', { salesData: !!salesData, currentRange, customStart, customEnd });
     if (salesData) {
       salesExport.exportToCSV(salesData, currentRange, customStart, customEnd);
+    } else {
+      console.error('No sales data available for export');
+      alert('No sales data available. Please wait for data to load.');
     }
+  };
+
+  const handleExportJSON = () => {
+    if (salesData) {
+      salesExport.exportToJSON(salesData, currentRange, customStart, customEnd);
+    }
+  };
+
+  const handleExportToday = () => {
+    if (salesData) {
+      const today = new Date();
+      const startOfToday = startOfDay(today);
+      const endOfToday = endOfDay(today);
+      salesExport.exportToCSV(salesData, 'custom', startOfToday, endOfToday);
+    }
+  };
+
+  const handleExportThisMonth = () => {
+    if (salesData) {
+      const now = new Date();
+      const startOfMonthDate = startOfMonth(now);
+      const endOfMonthDate = endOfMonth(now);
+      salesExport.exportToCSV(salesData, 'custom', startOfMonthDate, endOfMonthDate);
+    }
+  };
+
+  const handleExportDetailed = async () => {
+    console.log('handleExportDetailed called');
+    await salesExport.exportDetailedOrdersCSV(currentRange, customStart, customEnd);
   };
 
   const handleRefresh = () => {
@@ -185,7 +219,11 @@ export default function DashboardPage() {
       <SalesFilters
         currentRange={currentRange}
         onRangeChange={handleRangeChange}
-        onExport={handleExport}
+        onExportCSV={handleExportCSV}
+        onExportJSON={handleExportJSON}
+        onExportToday={handleExportToday}
+        onExportThisMonth={handleExportThisMonth}
+        onExportDetailed={handleExportDetailed}
         onRefresh={handleRefresh}
         loading={salesLoading}
       />

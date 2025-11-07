@@ -1,6 +1,7 @@
-import { format } from 'date-fns';
+import { format as formatDate } from 'date-fns';
 import { SalesAnalyticsData, DateRange } from './salesAnalytics';
 import { formatCurrency } from './utils';
+import { supabase } from './supabase';
 
 export interface ExportOptions {
   format: 'csv' | 'json';
@@ -9,35 +10,60 @@ export interface ExportOptions {
 
 class SalesExportService {
   private downloadFile(content: string, filename: string, mimeType: string) {
-    const blob = new Blob([content], { type: mimeType });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+    try {
+      console.log('Starting download:', { filename, contentLength: content.length, mimeType });
+      
+      const blob = new Blob([content], { type: mimeType });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.style.display = 'none';
+      
+      document.body.appendChild(link);
+      console.log('Link created and appended, clicking...');
+      
+      // Trigger download
+      link.click();
+      
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        console.log('Download cleanup completed');
+      }, 100);
+      
+    } catch (error) {
+      console.error('Download failed:', error);
+      alert('Download failed. Please try again.');
+    }
   }
 
-  private generateFilename(range: DateRange, format: string, customStart?: Date, customEnd?: Date): string {
-    const timestamp = format(new Date(), 'yyyy-MM-dd_HH-mm-ss');
+  private generateFilename(range: DateRange, fileFormat: string, customStart?: Date, customEnd?: Date): string {
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
     let rangeString = range;
     
     if (range === 'custom' && customStart && customEnd) {
-      rangeString = `${format(customStart, 'yyyy-MM-dd')}_to_${format(customEnd, 'yyyy-MM-dd')}`;
+      const startStr = customStart.toISOString().slice(0, 10);
+      const endStr = customEnd.toISOString().slice(0, 10);
+      rangeString = `${startStr}_to_${endStr}`;
     }
     
-    return `sales_report_${rangeString}_${timestamp}.${format}`;
+    return `sales_report_${rangeString}_${timestamp}.${fileFormat}`;
   }
 
   exportToCSV(data: SalesAnalyticsData, range: DateRange, customStart?: Date, customEnd?: Date): void {
-    const lines: string[] = [];
+    console.log('exportToCSV called with:', { range, customStart, customEnd, dataExists: !!data });
     
-    // Header
-    lines.push('fordaGO Sales Report');
-    lines.push(`Generated on: ${format(new Date(), 'yyyy-MM-dd HH:mm:ss')}`);
-    lines.push('');
+    try {
+      const lines: string[] = [];
+      
+      // Header
+      lines.push('fordaGO Sales Report');
+      lines.push(`Generated on: ${new Date().toLocaleString()}`);
+      lines.push(`Date Range: ${this.getDateRangeString(range, customStart, customEnd)}`);
+      lines.push('');
     
     // Metrics Section
     lines.push('SALES METRICS');
@@ -88,9 +114,37 @@ class SalesExportService {
       lines.push(`${hour.hour}:00,${hour.orders},${hour.revenue}`);
     });
     
-    const csvContent = lines.join('\n');
-    const filename = this.generateFilename(range, 'csv', customStart, customEnd);
-    this.downloadFile(csvContent, filename, 'text/csv;charset=utf-8;');
+      const csvContent = lines.join('\n');
+      const filename = this.generateFilename(range, 'csv', customStart, customEnd);
+      console.log('CSV content generated, starting download...', { filename, contentLength: csvContent.length });
+      this.downloadFile(csvContent, filename, 'text/csv;charset=utf-8;');
+    } catch (error) {
+      console.error('Error in exportToCSV:', error);
+      alert('Export failed. Please try again.');
+    }
+  }
+
+  private getDateRangeString(range: DateRange, customStart?: Date, customEnd?: Date): string {
+    if (range === 'custom' && customStart && customEnd) {
+      return `${customStart.toISOString().slice(0, 10)} to ${customEnd.toISOString().slice(0, 10)}`;
+    }
+    
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    switch (range) {
+      case '24h':
+        return `Last 24 hours (${today})`;
+      case '7d':
+        return `Last 7 days (ending ${today})`;
+      case '30d':
+        return `Last 30 days (ending ${today})`;
+      case '3m':
+        return `Last 3 months (ending ${today})`;
+      case '1y':
+        return `Last year (ending ${today})`;
+      default:
+        return range;
+    }
   }
 
   exportToJSON(data: SalesAnalyticsData, range: DateRange, customStart?: Date, customEnd?: Date): void {
@@ -160,6 +214,132 @@ class SalesExportService {
     } else {
       // Fallback to clipboard
       this.copyToClipboard(this.generateSummaryReport(data));
+    }
+  }
+
+  async exportDetailedOrdersCSV(range: DateRange, customStart?: Date, customEnd?: Date): Promise<void> {
+    try {
+      // Get date range
+      const { start, end } = this.getDateRange(range, customStart, customEnd);
+      
+      // Fetch detailed order data
+      const { data: orders, error } = await supabase
+        .from('orders')
+        .select(`
+          id,
+          created_at,
+          total,
+          delivery_status,
+          approval_status,
+          delivery_address,
+          customer:profiles!orders_customer_id_fkey(
+            name,
+            phone
+          ),
+          items:order_items(
+            quantity,
+            price,
+            product:products(
+              name,
+              categories!inner(
+                name
+              )
+            )
+          )
+        `)
+        .gte('created_at', start.toISOString())
+        .lte('created_at', end.toISOString())
+        .eq('approval_status', 'approved')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching orders:', error);
+        return;
+      }
+
+      const lines: string[] = [];
+      
+      // Header
+      lines.push('fordaGO Detailed Sales Report');
+      lines.push(`Generated on: ${new Date().toLocaleString()}`);
+      lines.push(`Date Range: ${this.getDateRangeString(range, customStart, customEnd)}`);
+      lines.push('');
+      
+      // Summary
+      const totalRevenue = orders?.reduce((sum, order) => sum + order.total, 0) || 0;
+      const totalOrders = orders?.length || 0;
+      lines.push('SUMMARY');
+      lines.push(`Total Orders,${totalOrders}`);
+      lines.push(`Total Revenue,${totalRevenue}`);
+      lines.push('');
+      
+      // Detailed Orders
+      lines.push('DETAILED ORDERS');
+      lines.push('Order ID,Date,Customer,Phone,Status,Total,Address,Products');
+      
+      orders?.forEach(order => {
+        const orderDate = new Date(order.created_at).toLocaleString();
+        const customerName = order.customer?.name || 'Unknown';
+        const customerPhone = order.customer?.phone || 'N/A';
+        const address = order.delivery_address ? 
+          `${order.delivery_address.street || ''}, ${order.delivery_address.barangay || ''}, ${order.delivery_address.city || ''}`.trim() : 
+          'N/A';
+        
+        // Format products
+        const products = order.items?.map(item => 
+          `${item.product.name} (${item.quantity}x ${item.price})`
+        ).join('; ') || 'No products';
+        
+        lines.push(`"${order.id}","${orderDate}","${customerName}","${customerPhone}","${order.delivery_status}","${order.total}","${address}","${products}"`);
+      });
+      
+      const csvContent = lines.join('\n');
+      const filename = this.generateFilename(range, 'csv', customStart, customEnd).replace('sales_report', 'detailed_orders');
+      this.downloadFile(csvContent, filename, 'text/csv;charset=utf-8;');
+    } catch (error) {
+      console.error('Error exporting detailed orders:', error);
+    }
+  }
+
+  private getDateRange(range: DateRange, customStart?: Date, customEnd?: Date) {
+    const now = new Date();
+    
+    switch (range) {
+      case '24h':
+        return {
+          start: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+          end: now
+        };
+      case '7d':
+        return {
+          start: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+          end: now
+        };
+      case '30d':
+        return {
+          start: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
+          end: now
+        };
+      case '3m':
+        return {
+          start: new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000),
+          end: now
+        };
+      case '1y':
+        return {
+          start: new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000),
+          end: now
+        };
+      case 'custom':
+        if (!customStart || !customEnd) {
+          throw new Error('Custom date range requires start and end dates');
+        }
+        return {
+          start: customStart,
+          end: customEnd
+        };
+      default:
+        throw new Error('Invalid date range');
     }
   }
 

@@ -23,6 +23,7 @@ export interface RescueRequestData {
   driverName: string;
   driverId: string;
   driverAvatarUrl?: string;
+  driverPhone?: string;
   address: string;
   latitude: number;
   longitude: number;
@@ -191,6 +192,7 @@ class DirectEmailService {
             driver_name: rescueData.driverName,
             driver_id: rescueData.driverId,
             driver_avatar_url: rescueData.driverAvatarUrl,
+            driver_phone: rescueData.driverPhone,
             address: rescueData.address,
             latitude: rescueData.latitude,
             longitude: rescueData.longitude,

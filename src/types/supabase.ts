@@ -377,18 +377,21 @@ export type Database = {
           avatar_url: string | null
           id: string
           name: string | null
+          phone: string | null
           role: Database["public"]["Enums"]["user_role"]
         }
         Insert: {
           avatar_url?: string | null
           id: string
           name?: string | null
+          phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
         }
         Update: {
           avatar_url?: string | null
           id?: string
           name?: string | null
+          phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
         }
         Relationships: []

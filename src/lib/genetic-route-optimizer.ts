@@ -13,10 +13,6 @@ export interface DeliveryLocation {
   total: number;
   delivery_status: string;
   priority?: number; // 1-5, with 1 being highest priority
-  time_window?: {
-    start_hour: number; // 9 for 9:00 AM
-    end_hour: number;   // 17 for 5:00 PM
-  };
 }
 
 export interface DepotLocation {
@@ -1331,11 +1327,10 @@ export class GeneticRouteOptimizer {
   private async evaluateFitness(population: DeliveryLocation[][]): Promise<number[]> {
     return population.map(route => {
       const distance = this.calculateRouteDistance(route);
-      const timeWindowPenalty = this.calculateTimeWindowPenalty(route);
       const priorityBonus = this.calculatePriorityBonus(route);
       
       // Fitness is inverse of cost (lower cost = higher fitness)
-      const totalCost = distance + timeWindowPenalty - priorityBonus;
+      const totalCost = distance - priorityBonus;
       return 1 / (totalCost + 1);
     });
   }
@@ -1462,24 +1457,6 @@ export class GeneticRouteOptimizer {
     return degrees * (Math.PI / 180);
   }
 
-  private calculateTimeWindowPenalty(route: DeliveryLocation[]): number {
-    let penalty = 0;
-    let currentTime = 9; // Start at 9 AM
-    
-    for (const location of route) {
-      if (location.time_window) {
-        if (currentTime < location.time_window.start_hour) {
-          penalty += (location.time_window.start_hour - currentTime) * 10; // Waiting penalty
-        } else if (currentTime > location.time_window.end_hour) {
-          penalty += (currentTime - location.time_window.end_hour) * 20; // Late penalty
-        }
-      }
-      
-      currentTime += 0.33; // 20 minutes per delivery
-    }
-    
-    return penalty;
-  }
 
   private calculatePriorityBonus(route: DeliveryLocation[]): number {
     let bonus = 0;

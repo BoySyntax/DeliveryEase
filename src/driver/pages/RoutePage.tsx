@@ -31,12 +31,40 @@ export default function RoutePage() {
   const [activeBatches, setActiveBatches] = useState<BatchInfo[]>([]);
   const [selectedBatch, setSelectedBatch] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deliveryStarted, setDeliveryStarted] = useState(false);
 
   useEffect(() => {
     if (profile?.id) {
       loadActiveBatches();
     }
   }, [profile?.id]);
+
+  // Check if delivery has been started for the selected batch
+  useEffect(() => {
+    if (selectedBatch) {
+      checkDeliveryStatus();
+    }
+  }, [selectedBatch]);
+
+  async function checkDeliveryStatus() {
+    if (!selectedBatch) return;
+    
+    try {
+      const { data: batch, error } = await supabase
+        .from('order_batches')
+        .select('status')
+        .eq('id', selectedBatch)
+        .single();
+
+      if (error) throw error;
+      
+      // Delivery is considered started if status is 'delivering'
+      setDeliveryStarted(batch.status === 'delivering');
+    } catch (error) {
+      console.error('Error checking delivery status:', error);
+      setDeliveryStarted(false);
+    }
+  }
 
   async function loadActiveBatches() {
     try {
@@ -187,11 +215,32 @@ export default function RoutePage() {
 
       {/* Main Content */}
       {selectedBatch ? (
-        <RealTimeDeliveryMap
-          batchId={selectedBatch}
-          driverId={profile?.id || ''}
-          onRouteOptimized={handleRouteOptimized}
-        />
+        deliveryStarted ? (
+          <RealTimeDeliveryMap
+            batchId={selectedBatch}
+            driverId={profile?.id || ''}
+            onRouteOptimized={handleRouteOptimized}
+          />
+        ) : (
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center py-12">
+                <Truck className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Delivery Not Started</h3>
+                <p className="text-gray-600 mb-6">
+                  Please start delivery from the dashboard before viewing the route.
+                </p>
+                <Button
+                  onClick={() => window.location.href = '/driver'}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Truck className="h-4 w-4 mr-2" />
+                  Go to Dashboard
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )
       ) : (
         <Card>
           <CardContent className="p-6">

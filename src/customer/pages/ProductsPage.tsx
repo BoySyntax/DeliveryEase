@@ -36,8 +36,7 @@ export default function ProductsPage() {
         // Build products query
         let query = supabase
           .from('products')
-          .select('*')
-          .order('name');
+          .select('*');
 
         // Apply category filter
         if (categoryId) {
@@ -52,7 +51,21 @@ export default function ProductsPage() {
         const { data: productsData } = await query;
         
         if (productsData) {
-          setProducts(productsData);
+          // Sort products: in-stock items first, then out-of-stock items at the bottom
+          const sortedProducts = productsData.sort((a, b) => {
+            const aInStock = (a.quantity ?? 0) > 0;
+            const bInStock = (b.quantity ?? 0) > 0;
+            
+            // If both have same stock status, sort by name
+            if (aInStock === bInStock) {
+              return a.name.localeCompare(b.name);
+            }
+            
+            // In-stock items come first
+            return aInStock ? -1 : 1;
+          });
+          
+          setProducts(sortedProducts);
         }
       } catch (error) {
         console.error('Error loading products:', error);

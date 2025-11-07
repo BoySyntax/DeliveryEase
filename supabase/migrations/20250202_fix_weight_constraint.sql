@@ -21,3 +21,20 @@ SELECT 'Constraint fixed - max_weight can now be up to 5000kg' as status;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

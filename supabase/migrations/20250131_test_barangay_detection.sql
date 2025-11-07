@@ -50,3 +50,20 @@ SELECT * FROM test_barangay_extraction();
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

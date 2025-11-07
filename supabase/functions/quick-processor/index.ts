@@ -4,6 +4,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 declare const Deno: any;
 
+// Base URL for reorder links - change this for your environment
+// For production: use https://www.fordago.site
+// For local dev: use http://localhost:3008 (or your vite port)
+const BASE_URL = Deno.env.get('BASE_URL') || 'http://localhost:3008'; // ✅ Changed to localhost for local dev
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, accept-profile',
@@ -627,10 +632,18 @@ serve(async (req) => {
                 ${status === 'verified'
                   ? 'Your payment has been verified and your order is being prepared for delivery.'
                   : status === 'rejected'
-                  ? 'Unfortunately, your payment has been rejected. Please contact our support team for assistance or try placing your order again.'
-                  : 'Your order is now out for delivery and will arrive soon!'
+                  ? 'Please reorder and ensure the proof of payment matches the order amount.'
+                  : 'Your order is out for delivery. Estimated arrival: 2–3 business days. Thank you for your patience!'
                 }
               </p>
+              
+              ${status === 'out_for_delivery' ? `
+              <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; margin: 20px 0; border-radius: 4px;">
+                <p style="margin: 0; color: #92400e; font-size: 14px; font-weight: 500;">
+                  <strong>Note:</strong> Delivery times may vary depending on weather and road conditions.
+                </p>
+              </div>
+              ` : ''}
             </div>
 
             <div class="order-details">
@@ -678,7 +691,7 @@ serve(async (req) => {
               
               ${status === 'rejected' ? `
                 <div style="text-align: center; margin: 20px 0;">
-                  <a href="https://www.fordago.site/customer/checkout?reorder=${orderId}" 
+                  <a href="${BASE_URL}/customer/checkout?reorder=${orderId}" 
                      style="display: inline-block; background-color: #3b82f6; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; font-weight: 500; font-size: 14px; transition: background-color 0.2s; box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);">
                     Reorder This Order
                   </a>

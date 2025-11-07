@@ -136,9 +136,17 @@ serve(async (req) => {
             <p style="margin: 0 0 20px 0; color: #475569; font-size: 16px;">
               ${status === 'verified' 
                 ? 'Great news! Your payment has been verified and your order is being prepared for delivery.'
-                : 'Your order is now out for delivery and will arrive soon!'
+                : 'Your order is out for delivery. Estimated arrival: 2–3 business days. Thank you for your patience!'
               }
             </p>
+            
+            ${status !== 'verified' ? `
+            <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; margin: 20px 0; border-radius: 4px;">
+              <p style="margin: 0; color: #92400e; font-size: 14px; font-weight: 500;">
+                <strong>Note:</strong> Delivery times may vary depending on weather and road conditions.
+              </p>
+            </div>
+            ` : ''}
 
             <div class="order-info">
               <h3 style="margin: 0 0 15px 0; color: #1e293b;">Order Details</h3>
@@ -216,6 +224,10 @@ serve(async (req) => {
     )
   }
 })
+
+
+
+
 
 
 

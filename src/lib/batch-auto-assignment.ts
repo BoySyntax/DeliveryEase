@@ -1,15 +1,6 @@
 import { supabase } from './supabase';
 import { toast } from 'react-hot-toast';
 
-interface BatchData {
-  id: string;
-  total_weight: number;
-  max_weight: number;
-  status: string;
-  driver_id: string | null;
-  orders: any[];
-}
-
 // Check if a batch should be auto-assigned after order approval
 export async function checkBatchAutoAssignment(orderId: string) {
   try {
@@ -102,9 +93,30 @@ function calculateBatchWeight(orders: any[]): number {
   }, 0);
 }
 
-// Auto-assign batch to available driver
+// Auto-assign batch to available driver with 8:00 PM schedule parameter
 async function autoAssignBatch(batchId: string, orders: any[]) {
   try {
+    // Get batch creation time for scheduling
+    const { data: batchData, error: batchError } = await supabase
+      .from('order_batches')
+      .select('created_at')
+      .eq('id', batchId)
+      .single();
+
+    if (batchError || !batchData) {
+      console.error('Error fetching batch data:', batchError);
+      return;
+    }
+
+    // Calculate delivery schedule based on 8:00 PM cutoff
+    const batchCreatedAt = new Date(batchData.created_at);
+    const batchHour = batchCreatedAt.getHours();
+    const deliveryScheduledDate = calculateDeliverySchedule(batchCreatedAt, batchHour);
+    
+    console.log(`📅 Batch created at: ${batchCreatedAt.toISOString()}`);
+    console.log(`🕗 Batch creation hour: ${batchHour}`);
+    console.log(`📦 Delivery scheduled for: ${deliveryScheduledDate.toISOString().split('T')[0]}`);
+
     // Find available driver (not assigned to any active batch)
     const { data: drivers, error: driversError } = await supabase
       .from('profiles')
@@ -139,18 +151,20 @@ async function autoAssignBatch(batchId: string, orders: any[]) {
 
     if (availableDrivers.length === 0) {
       console.log('❌ No available drivers for auto-assignment');
-      toast.error('Batch ready but no drivers available');
+      console.log('📅 Batch will remain pending until driver becomes available');
+      toast.error('Batch ready but no drivers available - will be scheduled for next available day');
       return;
     }
 
     const driver = availableDrivers[0];
 
-    // Assign batch to driver
+    // Assign batch to driver with delivery schedule
     const { error: assignError } = await supabase
       .from('order_batches')
       .update({ 
         driver_id: driver.id,
-        status: 'assigned'
+        status: 'assigned',
+        delivery_scheduled_date: deliveryScheduledDate.toISOString().split('T')[0]
       })
       .eq('id', batchId);
 
@@ -166,9 +180,11 @@ async function autoAssignBatch(batchId: string, orders: any[]) {
     //   .eq('id', driver.id);
 
     console.log(`✅ Batch ${batchId} auto-assigned to ${driver.name}`);
+    console.log(`📅 Delivery scheduled for: ${deliveryScheduledDate.toISOString().split('T')[0]}`);
     
-    // Show success message
-    toast.success(`🚚 Batch auto-assigned to driver ${driver.name}!`, {
+    // Show success message with schedule info
+    const scheduleInfo = batchHour < 20 ? 'next-day delivery' : 'following-day delivery';
+    toast.success(`🚚 Batch assigned to ${driver.name}! ${scheduleInfo}`, {
       duration: 5000,
       icon: '🚚'
     });
@@ -184,6 +200,23 @@ async function autoAssignBatch(batchId: string, orders: any[]) {
     console.error('Error in auto-assignment:', error);
     toast.error('Failed to auto-assign batch');
   }
+}
+
+// Calculate delivery schedule based on 8:00 PM cutoff
+function calculateDeliverySchedule(batchCreatedAt: Date, batchHour: number): Date {
+  const deliveryDate = new Date(batchCreatedAt);
+  
+  if (batchHour < 20) {
+    // Before 8:00 PM - schedule for next-day delivery
+    deliveryDate.setDate(deliveryDate.getDate() + 1);
+    console.log('🕗 Before 8:00 PM - scheduled for next-day delivery');
+  } else {
+    // After 8:00 PM - schedule for following-day delivery
+    deliveryDate.setDate(deliveryDate.getDate() + 2);
+    console.log('🕗 After 8:00 PM - scheduled for following-day delivery');
+  }
+  
+  return deliveryDate;
 }
 
 // Future: Route optimization placeholder

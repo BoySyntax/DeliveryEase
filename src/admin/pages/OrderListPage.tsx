@@ -5,6 +5,7 @@ import { Card, CardContent } from '../../ui/components/Card';
 import Loader from '../../ui/components/Loader';
 import { formatCurrency } from '../../lib/utils';
 import Button from '../../ui/components/Button';
+import CalendarComponent from '../../ui/components/Calendar';
 
 type Order = {
   id: string;
@@ -38,10 +39,18 @@ export default function OrderListPage() {
   const [activeTab, setActiveTab] = useState<string>('pending');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
+  const [highlightedDates, setHighlightedDates] = useState<string[]>([]);
+  const [loadingHighlightedDates, setLoadingHighlightedDates] = useState(false);
 
   useEffect(() => {
     loadOrdersForDate(selectedDate);
+    loadHighlightedDates();
   }, [selectedDate]);
+
+  // Load highlighted dates on component mount
+  useEffect(() => {
+    loadHighlightedDates();
+  }, []);
 
   // Handle escape key to close modal
   useEffect(() => {
@@ -54,6 +63,40 @@ export default function OrderListPage() {
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
   }, [showOrderModal]);
+
+  const loadHighlightedDates = async () => {
+    setLoadingHighlightedDates(true);
+    try {
+      // Get the last 3 months of data for calendar highlighting
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+      
+      const { data, error } = await supabase
+        .from('orders')
+        .select('created_at')
+        .gte('created_at', threeMonthsAgo.toISOString())
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading highlighted dates:', error);
+        return;
+      }
+
+      // Extract unique dates and format them as YYYY-MM-DD
+      const uniqueDates = new Set<string>();
+      data?.forEach(order => {
+        const date = new Date(order.created_at);
+        const dateString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        uniqueDates.add(dateString);
+      });
+
+      setHighlightedDates(Array.from(uniqueDates));
+    } catch (error) {
+      console.error('Error loading highlighted dates:', error);
+    } finally {
+      setLoadingHighlightedDates(false);
+    }
+  };
 
   const loadOrdersForDate = async (date: string) => {
     setLoading(true);
@@ -213,12 +256,12 @@ export default function OrderListPage() {
             <Calendar size={20} className="text-gray-600" />
             <h2 className="text-lg font-medium text-gray-900">Select Date</h2>
           </div>
-          <div className="max-w-xs">
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          <div className="max-w-md">
+            <CalendarComponent
+              selectedDate={selectedDate}
+              onDateSelect={setSelectedDate}
+              highlightedDates={highlightedDates}
+              className="w-full"
             />
           </div>
         </CardContent>

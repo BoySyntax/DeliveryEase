@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AlertTriangle, MapPin, X, CheckCircle, Clock, ExternalLink } from 'lucide-react';
+import { AlertTriangle, MapPin, X, CheckCircle, Clock, ExternalLink, Phone } from 'lucide-react';
 import Button from '../../ui/components/Button';
 
 interface EmergencyRequest {
@@ -7,6 +7,7 @@ interface EmergencyRequest {
   driver_name: string;
   driver_id?: string;
   driver_avatar_url?: string;
+  driver_phone?: string;
   address: string;
   latitude: number;
   longitude: number;
@@ -123,9 +124,7 @@ export default function EmergencyModal({
                     alt={request.driver_name}
                     className="h-20 w-20 rounded-full object-cover border-3 border-gray-200 shadow-md"
                     style={{
-                      imageRendering: 'high-quality',
-                      imageRendering: '-webkit-optimize-contrast',
-                      imageRendering: 'crisp-edges'
+                      imageRendering: 'crisp-edges, -webkit-optimize-contrast, high-quality'
                     }}
                     onError={(e) => {
                       // Fallback to initials if image fails to load
@@ -149,6 +148,14 @@ export default function EmergencyModal({
                     <p className="text-sm text-gray-500">
                       Driver ID: {request.driver_id.slice(0, 8)}
                     </p>
+                  )}
+                  {request.driver_phone && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <Phone className="h-4 w-4 text-gray-500" />
+                      <p className="text-sm text-gray-600 font-medium">
+                        {request.driver_phone}
+                      </p>
+                    </div>
                   )}
                 </div>
               </div>

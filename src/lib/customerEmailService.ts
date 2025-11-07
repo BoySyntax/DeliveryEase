@@ -48,7 +48,7 @@ class CustomerEmailService {
 
       const body = emailData.status === 'verified'
         ? `Hi ${emailData.customerName}, your order #${emailData.orderId} has been verified.`
-        : `Hi ${emailData.customerName}, your order #${emailData.orderId} is out for delivery and will arrive on ${emailData.estimatedDeliveryDate || 'the estimated delivery date'}.`;
+        : `Hi ${emailData.customerName}, your order #${emailData.orderId} is out for delivery. Estimated arrival: 2–3 business days. Thank you for your patience!`;
 
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -81,6 +81,13 @@ class CustomerEmailService {
                 </div>
                 <div class="content">
                   <p>${body}</p>
+                  ${emailData.status === 'out_for_delivery' ? `
+                  <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; margin: 20px 0; border-radius: 4px;">
+                    <p style="margin: 0; color: #92400e; font-size: 14px; font-weight: 500;">
+                      <strong>Note:</strong> Delivery times may vary depending on weather and road conditions.
+                    </p>
+                  </div>
+                  ` : ''}
                   <p>Thank you for choosing fordaGO!</p>
                 </div>
                 <div class="footer">

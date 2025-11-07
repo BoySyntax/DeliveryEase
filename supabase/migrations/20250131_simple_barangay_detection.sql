@@ -273,3 +273,20 @@ COMMENT ON FUNCTION fix_all_unknown_barangay_batches() IS 'Fixes all existing ba
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

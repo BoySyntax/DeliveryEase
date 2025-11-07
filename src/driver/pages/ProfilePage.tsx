@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
-import { User, Upload } from 'lucide-react';
+import { User, Upload, Phone } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../../ui/components/Button';
 import Input from '../../ui/components/Input';
@@ -13,6 +13,7 @@ import { cleanImageUrl } from '../../lib/utils';
 
 type ProfileFormData = {
   name: string;
+  phone?: string;
 };
 
 export default function ProfilePage() {
@@ -40,14 +41,32 @@ export default function ProfilePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: profile } = await supabase
+      // First try to load with phone field
+      const { data: profile, error } = await supabase
         .from('profiles')
-        .select('name')
+        .select('name, phone')
         .eq('id', user.id)
         .single();
 
-      if (profile) {
-        setValue('name', profile.name || '');
+      // If phone column doesn't exist, fallback to just name
+      if (error && error.message.includes('phone')) {
+        const { data: fallbackProfile, error: fallbackError } = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', user.id)
+          .single();
+        
+        if (fallbackError) throw fallbackError;
+        
+        if (fallbackProfile) {
+          setValue('name', fallbackProfile.name || '');
+          setValue('phone', '');
+        }
+      } else if (error) {
+        throw error;
+      } else if (profile) {
+        setValue('name', (profile as any).name || '');
+        setValue('phone', (profile as any).phone || '');
       }
     } catch (error) {
       console.error('Error loading profile:', error);
@@ -62,14 +81,32 @@ export default function ProfilePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      const updateData: any = {
+        name: data.name,
+      };
+      
+      if (data.phone) {
+        updateData.phone = data.phone;
+      }
+
       const { error } = await supabase
         .from('profiles')
-        .update({
-          name: data.name,
-        })
+        .update(updateData)
         .eq('id', user.id);
 
-      if (error) throw error;
+      if (error) {
+        // If phone column doesn't exist, try updating just the name
+        if (error.message.includes('phone')) {
+          const { error: nameError } = await supabase
+            .from('profiles')
+            .update({ name: data.name })
+            .eq('id', user.id);
+          
+          if (nameError) throw nameError;
+        } else {
+          throw error;
+        }
+      }
 
       toast.success('Profile updated successfully');
     } catch (error) {
@@ -387,6 +424,18 @@ export default function ProfilePage() {
                   icon={<User size={18} />}
                   error={errors.name?.message}
                   {...register('name', { required: 'Name is required' })}
+                />
+
+                <Input
+                  label="Phone Number"
+                  icon={<Phone size={18} />}
+                  error={errors.phone?.message}
+                  {...register('phone', { 
+                    pattern: {
+                      value: /^[0-9+\-\s()]*$/,
+                      message: 'Please enter a valid phone number'
+                    }
+                  })}
                 />
 
                 <div className="flex justify-end space-x-2">

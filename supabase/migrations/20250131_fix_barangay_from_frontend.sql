@@ -356,3 +356,20 @@ COMMENT ON FUNCTION force_fix_all_batches_frontend() IS 'Force fixes all batches
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
