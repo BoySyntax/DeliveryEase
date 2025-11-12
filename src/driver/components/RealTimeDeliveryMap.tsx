@@ -81,6 +81,7 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [isCalculatingSimpleRoute, setIsCalculatingSimpleRoute] = useState(false);
   const [userHasSelectedRouteType, setUserHasSelectedRouteType] = useState(false);
+  const [showRouteComparison, setShowRouteComparison] = useState(false);
   const [simpleRouteMetrics, setSimpleRouteMetrics] = useState<SimpleRouteMetrics>({
     totalDistance: 0,
     totalDuration: 0,
@@ -114,12 +115,6 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
     }
 
     setIsTrackingLocation(true);
-
-    // Show tracking start toast
-    toast.success('🔄 Real-time GPS tracking started!', {
-      duration: 3000,
-      id: 'tracking-start'
-    });
 
     // Get initial position
     getCurrentLocation();
@@ -191,10 +186,6 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
       navigator.geolocation.clearWatch(locationWatchIdRef.current);
       locationWatchIdRef.current = null;
       setIsTrackingLocation(false);
-      toast.success('🛑 Real-time GPS tracking stopped!', {
-        duration: 3000,
-        id: 'tracking-stop'
-      });
     }
   }, []);
 
@@ -272,12 +263,6 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
             address: `Your current position (±${Math.round(accuracy || 0)}m)`
           });
           setLocationError(null);
-          
-          // Show success toast with accuracy info
-          toast.success(`📍 GPS location acquired! Accuracy: ±${Math.round(accuracy || 0)}m`, {
-            duration: 3000,
-            id: 'gps-success'
-          });
           
           return; // Success, exit the loop
           
@@ -952,8 +937,6 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
 
             // Update markers to show optimized order
             updateMapMarkers();
-
-            toast.success(`🗺️ Simple route calculated! Distance: ${(totalDistance / 1000).toFixed(1)}km, Time: ${(totalDuration / 3600).toFixed(1)}h`);
           } else {
             console.error(`🗺️ Google Maps route failed for ${strategy.name}:`, status);
             
@@ -1314,6 +1297,9 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
   useEffect(() => {
     if (batchId) {
       console.log('🔄 Initial load of delivery locations for batch:', batchId);
+      // Reset optimized order to trigger automatic recalculation
+      setOptimizedOrder([]);
+      setUserHasSelectedRouteType(false);
       loadDeliveryLocations();
     }
   }, [batchId]); // Remove loadDeliveryLocations from dependencies to prevent infinite loops
@@ -1528,6 +1514,7 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
                     onClick={() => {
                       setUseSimpleRoute(false);
                       setUserHasSelectedRouteType(true);
+                      setShowRouteComparison(false); // Hide route comparison when genetic algorithm is clicked
                       setOptimizedOrder([]); // Clear to trigger re-optimization
                     }}
                     className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
@@ -1543,6 +1530,7 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
                     onClick={() => {
                       setUseSimpleRoute(true);
                       setUserHasSelectedRouteType(true);
+                      setShowRouteComparison(true); // Show route comparison when simple route is clicked
                       setOptimizedOrder([]); // Clear to trigger re-optimization
                       // Immediately calculate simple route
                       setTimeout(() => {
@@ -1559,23 +1547,6 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
                     Simple Route
                   </button>
                 </div>
-
-                {/* Recalculate Button */}
-                <Button
-                  onClick={() => {
-                    setOptimizedOrder([]);
-                    if (useSimpleRoute) {
-                      calculateSimpleRoute();
-                    } else {
-                      optimizeRoute();
-                    }
-                  }}
-                  variant="outline"
-                  className="border-blue-600 text-blue-600 hover:bg-blue-50"
-                >
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Recalculate
-                </Button>
               </div>
             </div>
 
@@ -1597,7 +1568,7 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
             )}
 
             {/* Route Comparison Metrics */}
-            {(routeMetrics.totalDistance > 0 || simpleRouteMetrics.totalDistance > 0) && !isOptimizing && !isCalculatingSimpleRoute && (
+            {showRouteComparison && (routeMetrics.totalDistance > 0 || simpleRouteMetrics.totalDistance > 0) && !isOptimizing && !isCalculatingSimpleRoute && (
               <div className="mt-4 p-4 bg-gray-50 rounded-lg">
                 <h4 className="font-semibold text-gray-800 mb-3">📊 Route Comparison</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1617,10 +1588,6 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
                         <span className="text-gray-600">Time:</span>
                         <span className="font-medium">{routeMetrics.totalDuration.toFixed(1)} hours</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Efficiency:</span>
-                        <span className="font-medium text-green-600">{routeMetrics.optimizationScore.toFixed(1)}%</span>
-                      </div>
                     </div>
                   </div>
 
@@ -1639,10 +1606,6 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
                       <div className="flex justify-between">
                         <span className="text-gray-600">Time:</span>
                         <span className="font-medium">{simpleRouteMetrics.totalDuration.toFixed(1)} hours</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Efficiency:</span>
-                        <span className="font-medium text-green-600">{simpleRouteMetrics.optimizationScore.toFixed(1)}%</span>
                       </div>
                     </div>
                   </div>
@@ -1848,7 +1811,7 @@ const RealTimeDeliveryMap = memo(function RealTimeDeliveryMap({ batchId, onRoute
                       </div>
                     )}
                     
-                    {!isCompleted && isNextToDeliver && (
+                    {!isCompleted && (
                       <Button
                         size="sm"
                         onClick={() => markStopCompleted(location.id)}

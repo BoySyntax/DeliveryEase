@@ -120,10 +120,7 @@ export default function RoutePage() {
   }
 
   const handleRouteOptimized = (optimizedRoute: OptimizedRoute) => {
-    toast.success(
-      `🎯 Route optimized! Distance reduced by ${(100 - optimizedRoute.optimization_score).toFixed(1)}%`,
-      { duration: 6000 }
-    );
+    // Route optimization notification removed
   };
 
   const getStatusIcon = (status: string) => {
