@@ -371,7 +371,7 @@ export default function HomePage() {
       <section className="mb-8 relative">
         <div className="max-w-6xl mx-auto">
           <div className="flex justify-center items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-800">Categories</h2>
+            <h2 className="text-xl font-bold text-gray-800">Shop by Categories</h2>
           </div>
           
           {/* Categories Container with Scroll */}

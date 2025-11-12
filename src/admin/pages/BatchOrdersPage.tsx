@@ -863,12 +863,11 @@ export default function BatchOrdersPage() {
 
       // Combine the data and check for completed batches
       const transformedBatches = (batchData || [])
-        .map((batch: any, index) => {
+        .map((batch: any) => {
           const batchOrders = ordersData.filter(order => order.batch_id === batch.id);
           
           return {
             ...batch,
-            batch_number: index + 1,
             barangay: batch.barangay || 'Unknown',
             delivery_scheduled_date: batch.delivery_scheduled_date || null,
             driver: null,
@@ -890,7 +889,12 @@ export default function BatchOrdersPage() {
           const hasOrders = batch.orders && batch.orders.length > 0;
           const hasWeight = batch.total_weight > 0;
           return hasOrders && hasWeight;
-        });
+        })
+        // Re-number batches after filtering so they stay consecutive
+        .map((batch, index) => ({
+          ...batch,
+          batch_number: index + 1,
+        }));
 
       // Check for batches where all orders are delivered and update batch status
       const batchesToUpdate = [];

@@ -31,7 +31,7 @@ export default function DriverLayout() {
   };
 
   const navItems = [
-    { icon: <LayoutDashboard size={24} />, label: 'Dashboard', path: '/driver' },
+    { icon: <LayoutDashboard size={24} />, label: 'Dashboard', path: '/driver', end: true },
     { icon: <Map size={24} />, label: 'Routes', path: '/driver/route' },
     { icon: <User size={24} />, label: 'Profile', path: '/driver/profile' },
   ];
@@ -51,6 +51,7 @@ export default function DriverLayout() {
                 <NavLink
                   key={item.path}
                   to={item.path}
+                  end={item.end}
                   className={({ isActive }) => cn(
                     'px-2 lg:px-3 py-2 rounded-md text-sm font-medium transition-colors',
                     isActive
@@ -87,6 +88,7 @@ export default function DriverLayout() {
             <NavLink
               key={item.path}
               to={item.path}
+              end={item.end}
               className={({ isActive }) => cn(
                 'flex flex-1 flex-col items-center py-2 px-1 min-w-0',
                 isActive
